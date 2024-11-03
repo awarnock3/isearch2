@@ -1,0 +1,68 @@
+<!doctype linuxdoc system>
+
+<article>
+
+<!-- Title information -->
+
+<title>Iindex
+<author>Archibald Warnock <htmlurl url="mailto:awww@home.com"
+  name="awww@home.com">, A/WWW Enterprises
+<date>v1.41, 15 May 1998
+
+<!-- Begin the document -->
+<p>
+<verb>
+Iindex -d dbname [-V][-t doctype][-m NN][-s "sep"][-r][-o opt][files|-f filelist|-f -]
+</verb>
+
+<p>
+
+<descrip>
+<tag/Examples:/Iindex -d POETRY *.doc *.txt
+<tag/ /Iindex -d WEBPAGES -t SGMLTAG *.html
+</descrip>
+
+<descrip>
+<tag/[-d (X)]/ Use (X) as the root name for database files.
+<tag/[-t (X)]/ Index as files of document type (X).
+<p>
+Document Types Supported:
+<itemize>
+<item>BIBTEX   
+<item>COLONDOC        
+<item>DIF     
+<item>EMACSINFO       
+<item>FGDC
+<item>FGDCSITE
+<item>FILENAME        
+<item>FILMLINE        
+<item>FIRSTLINE       
+<item>FTP     
+<item>GOPHER 
+<item>HTML 
+<item>IAFADOC         
+<item>IKNOWDOC   
+<item>IRLIST  
+<item>LISTDIGEST 
+<item>MAILDIGEST   
+<item>MAILFOLDER      
+<item>MEDLINE         
+<item>MEMODOC         
+<item>ONELINE         
+<item>PARA    
+<item>REFERBIB        
+<item>SGMLNORM        
+<item>SGMLTAG         
+<item>SIMPLE  
+<item>USMARC  
+</itemize>
+<tag/[-V]/ Print the version number.
+<tag/[-m (X)]/ Load (X) megabytes of data at a time for indexing (default=1).
+<tag/[-s (X)]/ Treat (X) as a separator for multiple documents within a single file.
+<tag/[-f (X)]/ Read list of file names to be indexed from file (X).
+<tag/[-r]/ Recursively descend subdirectories.
+<tag/[-o (X)]/ Document type specific option.
+<tag/(X) (Y) (...)/ Index files (X), (Y), etc.
+</descrip>
+<p>
+</article>

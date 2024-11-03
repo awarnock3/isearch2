@@ -1,0 +1,957 @@
+$Id: CHANGES,v 1.81 2001/02/23 17:38:17 cnidr Exp $
+
+Isearch Release Notes
+Version 1.47j
+- Fixed problem with parsing phrases containing colon characters
+- Added STRING::XmlCleanup() calls to zsearch, zpresent to ensure XML
+  compliance with buffers built in the main programs
+- Fixed coredumps associated with EXIT_ERROR macro calls in zsearch
+- Modified SQUERY::SetTerm and SQUERY::SetRpnTerm so that only the
+  first / in a query term is treated as a field delimiter.  This allows 
+  complex phrase searching.
+- Fixed minor bug in SQUERY::SetTerm which misidentified a field when
+  none was present.
+- Improved STRING::XmlCleanup translations to handle non-printable
+  characters
+- Fixed field parser in EOS_Guide to handle missing titles correctly
+- Fixed field parser in EOS_Guide to avoid problems when </TITLE> was
+  present, but <TITLE> was missing
+
+
+Version 1.47i
+- Added Isearch version numbers to zsearch, zpresent output
+- New program Iget to retrieve documents by docid
+- Fixed spurious output from Isearch -t option
+- Added XmlCleanup method to STRING class to clean up entities for
+  zpresent
+- Removed customized StrCaseCmp and StrNCaseCmp methods from STRING
+  class because they didn't work the same way as strcasecmp, strncasecmp
+- Fixed score calculation for Boolean searches
+- Working to improve XmlCleanup performance
+- Cleaned up casts in STRING class
+- Added -l parameter to zpresent to accept docids from a file
+- Fixed various compiling problems under NT
+- Added conditional compile to call stricmp, strincmp under Windows
+  instead of strcasecmp and strncasecmp.
+- Added new exit macro to fix exit problems under NT
+- Fixed a bad return state that caused a segfault when no files were
+  found to index.
+- Added improved entity replacement code to STRING class (J. Tyler)
+- Improved algorithm for generating URL from path in EOS_GUIDE doctype
+
+Version 1.47h
+- Added hook for VIDB KeyLookup method
+- Initial release of zpresent
+- Fixed bug in EOS_GUIDE doctype which caused searches to sometimes fail
+- Modified zpresent.dtd to stick the source field in the individual
+  result elements, rather than on the container results element.
+- Added method Result::GetVKey for virtual databases so you can tell
+  which constituent they came from.  It's an egregious hack which just
+  stuffs the database number at the front of the key so it can be
+  included in the outpu from zsearch and parsed by zpresent.
+
+
+Version 1.47g
+- Rearranged some of the XML presentation for the FGDC doctype Summary
+  element set
+- Added a path->URL translation to EOS_GUIDE doctype to facilitate links
+  back to original (crawled) source documents
+
+
+Version 1.47f
+- Cleaned XML text of characters which should be entities
+- Added zsearch program for XML search output
+- Added initial version of NASA EOS/Guide doctype
+- Removed some extraneous output from vidb.cxx
+
+
+Version 1.47e
+- Added CIPC doctype for NASA/CIP Collection metadata
+- Added delimiter to Isearch output (J. Millard)
+- Improved XML results presentation in FGDC doctype
+
+
+Version 1.47d
+- Modified FGDC doctype to return correct header on full record XML and
+  SGML record syntaxes
+
+
+Version 1.47c
+- Fixed loop limit error in idb.cxx which skipped the last field in
+  field list
+- Added ParseIsoDate routine to common.cxx to handle ISO-8601 dates
+- Added CIPP doctype for NASA/CIP Product metadata
+- Added calls to ParseIsoDate to CIPP doctype
+- Minor date searching bug fixes
+
+
+Version 1.47b
+- Minor changes to ease compiling on SGI
+
+
+Version 1.47a
+- Added taglist doctype (R. Shiels)
+- Minor fixes to enhance NT functionality and portability
+
+
+Version 1.47
+- Fixed Iindex append bug
+- Fixed Iindex to store relative paths when specified
+
+
+Version 1.46
+- Fixed IDB and INDEX objects to correctly determine doctype before
+  calls to ParseWords (fixes USMARC doctype)
+- Added support for thesaurus capability
+- Synonym expansion supported in SQUERY object, which makes it callable
+  from the SAPI interface.
+- Fixed bug in date searching related to virtual databases.
+- Replaced old USMARC doctype with version contributed by Bjorn
+  Thordarson
+- Modified DIF doctype to return S element set ala FGDC
+- Modified DIF doctype to add C element set for NBII (to be changed
+  later)
+- Added numeric and date centroids (histograms) to generation of GILS
+  locator records
+
+
+Version 1.45
+- Fixed bug in numeric searching related to virtual databases (had to
+  store the MDT pointer in the result record).
+
+
+Version 1.44
+- Eliminated iostreams calls
+- Added EXIT_ZERO and RETURN_EXIT macros to flush buffers on exit
+- Modified GILS template XML format
+- Revised GILSXML doctype
+- Made record syntax OID definitions global
+- Changed spatial term order in INDEX::Search() to canonical [N,W S,E] 
+- Added conditional compile flag to Isearch/Makefile.asf to handle
+  ASF-specific present method in GILSXML doctype
+- Added null filename tests to INDEX::GetIndirectBuffer()
+- Fixed ASCII/Binary file problem with NT in DFDT::LoadTable
+- Revised STRING::EraseBefore to fix potential buffer overflow
+- Minor changes for compiling under NT correctly
+- Optimization, by skipping putting FCT object in results.  It can
+  be conditionally compiled in with -DDO_HIGHLIGHTING
+- Added virtual database support
+- Minor cleanup of exit status codes
+- Fixed bug in multiterm.cxx version of Search which did too many loops
+  over hits - big speedup
+- Added methods to VIDB class to support calls through SAPI
+- Minor changes to compile under NT (M. Clarkson)
+- Updated locator record metadata generation.
+- Added URN generation for docs in Iutil.
+
+
+Version 1.43 (internal)
+
+
+Version 1.42
+
+- Removed the line of code that eliminates newlines in the brief
+  record output of Isearch.
+- Fixed search problem when query was longer than sistring length
+- Added MARCDUMP doctype to handle output from Yaz's marcdump program
+- Added definitions for new record syntaxes
+- Lots o' changes related to ASF, and to synchronize with Nassib's
+  master version
+- Support for XML export of GILS records
+- HTMLTAG doctype to only parse HTML head META tags
+- GILSXML doctype for prototype GILS locator records in XML (duh...)
+- Iindex now can export a GILS metadata record for an index
+- Iutil now can export a GILS metadata record for each file in an index 
+- Iutil can now check on a database status (is it being re-indexed?)
+- Added support for term highlighting in Present() methods
+- Changed to new (official) OIDs for HTML, SGML.
+
+
+Version 1.41
+
+- Fixed problem with sprintf format in Isearch.cxx; removed all
+  iostreams calls, since it's buggy under gcc 2.7.2 in Linux.
+
+
+Version 1.40
+
+- Merged all known freely-distributed Isearch versions.
+
+
+Version 1.30
+
+- This was a maintenance release that did not contain merged code from
+Isite.
+
+
+Version 1.21
+
+- Updated documentation in MS-Word format and exported text, HTML and
+  RTF 
+- Cleaned out some unused variables
+- Fixed search/index bug in NT port caused by opening doc files in text
+  mode
+
+
+Version 1.20 Official Release
+
+- Cleaned up system includes for consistency
+- Fixed various uninitialized variables
+
+
+Version 1.20.07
+
+- Split Isearch/src/index.cxx to put numeric, date and spatial search
+  methods into separate files to reduce compile time
+- Modified doctype/dtconf.cxx to use correct files and filenames for
+  Windows NT.  It creates src/dtreg.cxx and src/dtreg.hxx correctly, and
+  creates the Makefile for the src directory from Isearch0.mak.
+- Created working Makefiles for Windows NT, Visual C++ v4.2 and
+  Microsoft's nmake program.  See the files Isearch.mak.  Also created
+  some useful batch files, in case the Makefiles don't do the trick.
+- Added support for (STRING)<intvar> cast to STRING class (J. Wehle)
+- More work on date types.  Dates are now always stored in intervals.
+- Improved date search speed by bypassing unnecessary searches on
+  interval limits and result set Boolean operations.
+- Patch to FGDC doctype to also look for upper case filename extensions
+  for full record presentation.
+- Explicit type casts for Sun CC compiler
+- Patch to handle deleted records in TermSearch(), MultiTermSearch() and
+  Iutil.  Still need to update to handle numeric records correctly.
+- Buffer overflows fixed in STRING class (J. Wehle)
+- GetDbFileStem made virtual method in IDBOBJ (J. Mandel)
+- Reorder #include files in common.cxx for alleged BSD fix.
+- Added STRLIST::Split method to split on a single character
+- Added NULL to output buffer in Isearch-cgi/cgi-utils escape_url
+- Fixed a bunch of potentially uninitialized variables
+- Added extractor method to STRING class to read a line from a stream
+  into a STRING (used by zbatch)
+- Fixed sign mismatches in string.cxx
+- Added blocks to build Isearch-cgi under NT (in Isearch.mak)
+- Fixed #include for Unix & NT differences in <sys/time.h> vs <time.h> 
+- Change GDT_BOOLEAN from enum to typedef BOOL so it works like a
+  Boolean (for ease of debugging)
+- Major rewrite of date searching
+- Added DATE and DATERANGE classes
+- Start conversion of #defines to const INTs
+- Start conversion of INT flag values to enum for ease of debugging
+- Additional STRING constructor (J. Wehle)
+- Propagated changes to INTERVALLIST and date searching back to
+  NUMERICLIST and numeric searching
+- Fix to isrch_srch and isrch_html to eliminate segfault for SIMPLE
+  queries (M. Walls) 
+- Support WIN16 in addition to WIN32. (J. Wehle)
+- Changed all occurences of PINT to INT *.  Also removed PINT and PLONG
+  from Isearch/src/gdt.h as they conflict with the Microsoft headers.
+  (J. Wehle) 
+- ExpandFileSpec in src/common.cxx now recognizes that a path which
+  starts with a drive letter is in fact an absolute path. (J. Wehle)
+- The definition of NUMERICFLDMGR::Find in src/nfldmgr.cxx now matches 
+  the prototype in src/nfldmgr.hxx. (J. Wehle)
+- ExpandFileSpec now checks that there's a slash after the drive
+  letter. (J. Wehle)
+- Fixed paths for Windows in Isearch-cgi/isrch_srch and
+  Isearch-cgi/isrch_html
+- Renamed DATE class to SRCH_DATE to avoid conflict with VC++ class
+- Removed the unneeded fopen() method from string.cxx
+- Further repair to numeric searching to make the "equals" relation work
+  correctly.
+- Modified storage of dates and date ranges.  For date fields, values
+  are kept in the original input precision, and stored as intervals.
+  Single dates are stored as degenerate intervals (start-date =
+  end-date).  The date range data type was added back in.  Dates in
+  fields tagged as date ranges are converted to day precision (YYYYMMDD)
+  by extending (if necessary) to either the beginning or ending of the
+  interval, as appropriate.  So, for example, in a date range field,
+  something like <CALDATE>1990</CALDATE> will be stored as
+  start-date=19900101 and end-date=19901231.
+- Numeric indexes are now stored with data sorted twice - once by value 
+  to facilitate searches, and once by global pointer to facilitate
+  retrieving data.
+- Added conditional to define _NFILES in fpt.cxx if it's not otherwise
+  defined (needed for compiling under Win95 with GNU-Win32 g++).
+- Eliminated bogus "const P*"-type declarations - they didn't do what we
+  hoped they'd do.
+- Moved const strings from defs.hxx to defs.cxx (new file) and made
+  declarations in defs.hxx into externs.
+- Added support for retrieving numeric, interval, date and date range
+  values from the tables - used by doctype Present() methods.
+- Back to using enums at GDT_BOOLEAN for NT port
+- Added file manipulation IsFile and GetFileSize to common.cxx, and
+  modified the old GetFileSize to use stat() to get the size
+- Rewrote STRING::ReadFile to be smarter about the file size, and added 
+  STRING::ReadFile(CHR*)
+- Changes to FGDC doctype - it asks for field type file if you forget,
+  and it will try to run mp to convert the input SGML file to the
+  requested recsyntax if it can't find an existing file with the right
+  name to return as a full record.
+- Doctype options are now stored in the registry and in the *.dbi file,
+  so they can be specified at index time and used at search time.
+- Added USPAT doctype to support US patent Greenbook format
+- Added FGDCSITE doctype to support SGML-tagged remote server
+  descriptions.  Also illustrates the use of numeric fields.
+- Removed PCHR references from SGMLTAG doctype
+- Added new field type ("computed") so that new indexed values can be
+  derived from old ones.  The FGDC doctype uses this to provide a field 
+  called EXTENT, which is roughly the area defined by the spatial
+  coordinates.   Only numeric fields can be used (since the value is
+  computed at index time and doesn't occur in the document - it works for
+  numeric fields because the values themselves are stored in the field
+  tables). 
+- Made UsefulSearchField virtual so it gets inherited by derived classes
+  correctly.
+- Updated attributes (src/defs.hxx) to match revised GEO profile
+- Minor fix to "make install" to avoid hosing things with Isearch-cgi
+  (which has to be configured before installation)
+- Added TrimLeading method to STRING class to remove leading blanks
+- Fixed IDB::GetFieldData() to append multiple values with "+" character
+  (some fields occur more than once, and GetFieldData gets them all)
+- Fixed bug in indexing numeric fields under NT by actually opening
+  binary files as binary.
+- Rearranged code in USMARC doctype to permit deriving a new doctype
+- Added MARC::Print() method using a STRING buffer instead of a file
+
+
+Version 1.20.06
+
+- Fixed STRING class methods GetInt and GetFloat to return 0 when called
+  for empty string
+- Fixed Isearch terse output when no title is available
+- Modified USMARC doctype to return title when recsyntax=B
+- Modified USMARC doctype to delete temp files created by Present
+- fixed allocation problem with LockName filename buffer
+  (bbourdea@ciesin.org) 
+- added a sample RPN query, including spatial and temporal search terms,
+  to the bin directory
+- Added specific type casts to eliminate errors from Sun CC compiler
+
+
+Version 1.20.05
+
+- Fixed infix2rpn parser to have default Boolean operator to connect
+  words
+- Added Trim method to STRING class
+- Fixes to Isearch-cgi to fix "Previous N Hits" and to run from other
+  CGI directories (Randy Wood)
+- Tweaks to FGDC doctype to generate derived class ANZLIC more easily
+
+
+Version 1.20.04
+
+- Fixed bug with Iindex -s and multi-part indexes
+- Modified Iutil so that -debug works with multi-part indexes
+- Added a miniform to isrch_srch and isrch_html to get the previous N 
+  hits
+- Patched Isearch-cgi to make programs work with both POST and GET http
+  methods (Dave Witzel)
+- Forced Isearch-cgi Present methods to explicitly ask for HTML
+  recsyntax
+- Iindex now names the first index file *.inx if it's a one-part index,
+  and names it *.inx.1 if there are multiple parts.  It's the same file
+  but now the naming is done consistently.
+- Added -t (terse mode) flag to Isearch to make it callable inside shell
+  scripts.  It prints the score, filename, key and headline.  Use
+  isrch_fetch (in Isearch-cgi) to retrieve full records by key.
+
+
+Version 1.20.03
+
+- Fixed a memory-corrupting bug in WriteFieldData
+- Enabled Boolean ANDNOT and NEAR functions in Isearch-cgi
+- Added program isrch_html to Isearch-cgi.  It handles web sites of
+  HTML documents exclusively.
+- Modularized presentation from isrch_srch to facilitate customizing
+  results presentation.
+- Semi-permanently disabled Jim's result set cache code
+- Fixed segfaults in Isearch due to uninitialized variables
+- Fixed indexing and searching numeric fields.  Field types were not
+  being handled as uppercase or lowercase consistently.  
+- Fixed FGDC doctype to handle field names with consistent case.
+- Disabled (for now) file pointer cache in writing field indexes.
+- Fixed problems with trying to optimize single-part indexes
+- New FIRSTLINE doctype from Edward Zimmerman
+
+
+Version 1.20.02
+
+- Fixed compiler portability problem with declaration of MERGEUNIT
+- Fixed default for searching unsupported doctypes (now defaults to
+  DocType) 
+- Fixed bug in -startdoc and -enddoc handling, made calls to GetRset
+  and Fill consistent
+- Made calls to MergeIndexFiles consistent (the argument is bytes, not
+  MB) 
+- Fixed bug in searching multi-part indexes
+- Fixed bug in "Next N Results" in Isearch-cgi
+- Fixed memory size bug in Iutil optimize
+- Single part indexes are called *.inx instead of *.inx.1 (this was a
+  bug)
+- Fixed a mismatch between the HTML form variable name (LOGIC) and what
+  isrch_srch was looking for (OPERATOR)
+- Fixed limitation on file name length
+- Added locale fixes to Isearch-cgi
+- Iindex now follows symlinks (unless you're Ultrix)
+
+
+Version 1.20 - Prerelease (1.20.01)
+
+- Modified Iindex to read list of file from stdin (i.e., the output from
+  find)
+- Added method to convert long ints to STRING
+- Indexing and merging significantly speeded up (Jim Fullton)
+- Many memory leaks fixed
+- Simplified Makefile
+
+
+Version 1.14
+
+- Fixed bug in SIMPLE doctype which caused hang for headlines with no
+  newline
+- Fixed bug in AddRecordList affecting Iindex "-s" parameter
+- Added locale fixes to all main programs (Isearch, Iindex, Iutil,
+  zserver, zclient, izclient, zgate and zcon)
+- Added Isearch-cgi to this package
+- Added methods to SIMPLE doctype to add <pre> tags to presentation
+- Minor bug fixes to DIF doctype
+- Merged USMARC doctype with main distribution
+- Remove has to be call before rename since the MSDOS and WIN32 rename
+  is documented as failing if the new filename refers to a file which
+  exists (unlike UNIX rename which will simply remove the file). (John
+  Wehle) 
+- src/index.hxx was missing a const from the ValidateInField
+  declaration. (John Wehle) 
+- src/merge.cxx was missing an include for memory.h. (John Wehle)
+- src/merge.cxx tries to do arithmitic with a void pointer (it need to
+  be cast to char). (John Wehle)
+- INFIX2RPN::StandardizeOpName in src/infix2rpn.cxx was missing a return
+  to handle the case of an unknown operator (maybe this can't happen due
+  to how the code works, but the compiler didn't know that and was
+  unhappy). (John Wehle)
+- src/Iindex.cxx tried to use rm to remove the field data files. (John
+  Wehle) 
+- The Microsoft compilers had a fit with:
+       static const char *find_next_tag (const char *const *tag_list,
+         const char *const *tags)
+  However they accept:
+       static const char *find_next_tag (char *const *tag_list,
+         char *const *tags)
+  without any problems. (John Wehle)
+
+
+Version 1.13
+
+- merged infix2rpn.cxx and tokengen.cxx from Isearch-1.10.05 into
+  Isearch-1.13
+- fixed an init bug in the ATTR constructor (jem)
+- fixed a bug in parsing search term weights in tokengen.cxx (jem)
+
+
+Version 1.12
+
+- Improved Makefile for handling the configure script automatically
+
+
+Version 1.11.01
+
+- fixed a bug parsing documents which caused segfaults on a bogus malloc
+  for the first document in a file
+
+
+Version 1.11
+
+- fixed memory leak in ATTRLIST class
+- speed improvement in loading field definition table
+- numerous patches to help build Isearch under various flavors of Windows
+  IMPORTANT NOTE:  These have not been tested by CNIDR, so use at your
+                   own risk!  They have been generously contributed by
+                   John Wehle
+- improved Makefiles to correctly handle dependancies
+- added a bunch of documentation in HTML and MS-Word formats.  Most of
+  the documentation was written by Erik Scott for Isearch.
+- Minor tweaks to doctype files to make picky C++ compilers happy
+
+
+Version 1.10.02
+
+- added check for ANDNOT in sqery.cxx. This should make the rest of the
+  ANDNOT code actually run! Amazing concept.
+
+- extended the -debug switch in Iutil to take a parameter of the number
+  of sistrings to skip. (code contributed by gem@cnidr.org). I also
+  changed the -debug output to be a bit more useful.
+
+- small fix by Archie Warnock to the sgmlnorm doctype to keep it from
+  missing the last character of a document.
+
+- Changed the way Iindex checks to see if the user has given a valid
+  doctype.  now uses IDB::ValidateDocType(). I then changed
+  IDB::GetDocTypePtr() to its old behavior.
+
+- got a method call out of for loop in IRSET::Or
+
+- added the proper 'return' call to STRING::operator=
+
+- fixed off-by-one bug in the mmap-based separator code. the bug
+  generated totally bogus indices if there was a single character before
+  the first separator.
+
+- Code from Tim Gemma (stone@k12.cnidr.org) that lets REGISTRY objects
+  to write configuration profiles out to disk, as well as read them.
+
+- Minor Doctype changes from Russell East (reast@esri.com) to make
+  SunPRO CC happy.
+
+
+
+Version 1.10.01
+
+- First version by jem. Howdy Folks!
+
+- Removed -lc from Makefiles. Under Linux-Elf, this means link statically
+(which core dumps in iostreams- linux bug?)
+
+- Added boolean infix support. With the -infix option Isearch will take an
+infix (algebraic expression) instead of RPN. Expressions can either use
+keywords (AND,OR,ANDNOT (case-insensitive)) or C-Style operators(&&,||,&!).
+For C-Style operators, greedy lexical analysis is used, so you don't need
+spaces (great for lazy people like me!). All of this functionality is in
+the INFIX2RPN class (which uses the new TOKENGEN and STRSTACK classes).
+
+- Added code to check file pointers. I was pretty indiscriminate- if we
+try to open a file  and it doesn't exit, I print an error message and exit. 
+There are probably places where this isn't the Right Thing, but I'm counting
+on my loyal beta testers to find them for me. Thanks in Advance. :)
+
+- I've started a re-write of the STRING class. This class is used throughout
+Isearch and its inefficiencies were really dragging the whole package down
+(it was delete'ing and new'ing the buffer everytime the contents changed).
+I've added new metrics to the class that give us an idea of how STRING is being
+used, as well as some parameters to adjust its allocation policy. Right now,
+I'm being very conservative, but I'm playing around with the settings, and
+I encourage you (if you're curious) to do the same and share your results
+with the list.
+
+- Fixed buglet in STRING, if you tried to assign a string to itself.
+
+
+- I've changed the name of unlink(STRING) to StrUnlink(STRING). This fixed
+a linking problem on AIX. 
+
+- I added Glenn MacStravic's code to speed up boolean And operations (*much*
+faster) and his code to add an AndNot operator. A query like:
+	cat andnot dog
+would return documents that contain "cat" but don't contain "dog".
+
+- Added Eric Scott's new doctypes:
+
+	oneline		# one line per doc, like a phonebook
+	para		# paragraphs ending in "\n\n"
+	filename	# use the filename as the indexed text, present orig file
+	ftp			# present either first line only or rest of doc only
+	emacsinfo	# file with File: markers, GNU-style info files
+	gopher		# present the headline based on .cap file contents if avail
+	bibtex		# index BibTEX files and treat "author = " as a search field
+
+- Makefile changes from Archie Warnock to keep the library from being
+rebuild each time.
+
+- Fixed segfault if you gave Iindex an invalid doctype
+Version 1.10 (2/22/96)
+
+- Last version by NRN.  Beginning with the next version, Jonathan
+Magid (jem@cnidr.org) will be taking over development of Isearch.
+
+- The beginnings of a method for limiting what parts of a document get
+indexed.  Right now it's a DOCTYPE method prototype called
+SelectRegions() that doesn't actually do anything yet.
+
+Version 1.09.11 (2/20/96)
+
+- Now uses Gnu Autoconf.
+
+- Fixed fielded searching to handle repeating fields.  Also added
+IDB::GetFieldData(const RESULT&, const STRING&, STRLIST*).
+
+
+Version 1.09.10 (2/13/96)
+
+- Oops!  Fixed a big bug in fielded searching.  Present should now be
+*much* faster.
+
+- Fixed bug that caused searches with a single query term to core
+dump.  This had to do with byte alignment, and may fix other strange
+problems.
+
+- More speed optimizations.
+
+
+Version 1.09.09 (11/8/95)
+
+- More speed optimizations.
+
+- Fixed MDT so that it can open for reading only (for searching).
+
+
+Version 1.09.08 (11/8/95)
+
+- Added RSET::SortByKey() and RSET::SortByScore().
+
+
+Version 1.09.07 (11/6/95)
+
+- Some subtle bug fixes.
+
+
+Version 1.09.06 (11/3/95)
+
+- New on-disk MDT.  This should speed up searches and allow Isearch to
+handle many more documents (try a larger -m with Iindex).
+
+- Added STRLIST::SearchCase().
+
+- Lots of tiny changes to data types.
+
+
+Version 1.09.05 (10/28/95)
+
+- New VLIST class; now used by STRLIST.  Most of the other list-like
+classes will be converted to use VLIST as soon as it seems to be
+stable.
+
+
+Version 1.09.04 (10/27/95)
+
+- Fixed bug in StrNCaseCmp(), etc.
+
+- Added STRING::STRING(UCHR*) and STRING::NewUCString().
+
+
+Version 1.09.03 (10/26/95)
+
+- STRING class now uses UCHR buffers; it will probably need some
+adjusting but more or less seems to work.
+
+
+Version 1.09.02 (10/25/95)
+
+- Fixed WrongEndian bottleneck which was slowing down searching
+unnecessarily.
+
+
+Version 1.09.01 (10/20/95)
+
+- OPSTACK's are now built upside-down from previous versions.  This
+allows pushing (<<) OPOBJ's in RPN order (previous version required
+Polish notation - backwards RPN).  If you have already written code
+that builds OPSTACK's, you don't have to rewrite it - just call
+OPSTACK::Reverse() to flip the stack before you pass it to an SQUERY
+object.  Thanks to Jonathan Magid for spotting this problem.
+
+- Field names in the DFDT are now stored as attributes in the
+ATTRLIST.  The old methods DFD::SetFieldName() and DFD::GetFieldName()
+still work and are aliased to ATTRLIST::AttrSetFieldName() and
+ATTRLIST::AttrGetFieldName().
+
+
+Version 1.09 (10/15/95)
+
+- Added "Global Document Type," which is a Document Type associated
+with an Isearch database as a whole.  By default, the global doctype
+is set to the doctype of the first document indexed.  In a complex
+database handling multiple types of records, the global doctype might
+be a different doctype from the any of the documents indexed; it may
+even ideally be a base doctype class of the indexed documents'
+doctypes.
+
+- Added -vi, -vf, -gt, and -gt0 to Iutil.
+
+- Added BeforeIndexing(), AfterIndexing(), BeforeSearching(),
+AfterSearching(), BeforeRset(), and AfterRset() to DOCTYPE; called
+according to the Global Document Type.
+
+- Iindex/Isearch/Iutil now default to the database name ".ISEARCH" if
+none is specified.
+
+- Removed GetChanged() from REGISTRY; too complicated to maintain.
+
+
+Version 1.08.07 (10/12/95)
+
+- Added -newpaths option to Iutil to allow changing path names of
+indexed files, in case they have been moved.  This is needed in order
+to make portable databases practical, since otherwise it would be
+necessary to reproduce the exact paths to indexed files.
+
+
+Version 1.08.05 (10/12/95)
+
+- Isearch databases are now portable across platforms.  Byte-ordering
+is handled by IsBigEndian(), GpSwab(), IDB::WrongEndian(),
+IDB::GpFread(), and IDB::GpFwrite().  There may be bugs - please let
+me know.
+
+- Added REGISTRY::ProfileLoadFromFile() and
+REGISTRY::ProfileAddFromFile() to allow importing from the old
+INI-style config files.
+
+
+Version 1.08.04 (10/11/95)
+
+- Added DbInfo code.  Merged .mno into .dbi file.
+
+- Added REGISTRY(const PCHR) constructor, and REGISTRY::GetChanged().
+Also fixed a subtle pointer bug.
+
+- Added IsBigEndian(); first step toward portable indexes.
+
+
+Version 1.08.03 (10/10/95)
+
+- A small change to REGISTRY: SaveToFile(), LoadFromFile(), and
+AddFromFile() require you to specify a position within the registry.
+
+
+Version 1.08.02 (10/10/95)
+
+- Another small indexing optimization: the MDT is allocated only once.
+
+- Fixed Linux compilation bug (running ./configure).
+
+- Added REGISTRY object, mainly for use with Kevin's new Z39.50 code,
+but also will be used by Isearch to store database info.  This is
+untested code!
+
+
+Version 1.08 (10/5/95)
+
+- Indexing is now a bit faster and takes much less memory.  You should
+be able to use higher values for -m than in the past; maybe 3 or 4
+times higher.
+
+
+Version 1.07 (10/4/95)
+
+- Same as 1.06.05.
+
+
+Version 1.06.05 (10/3/95)
+
+- Added -startdoc and -enddoc to the Isearch utility, to allow
+printing a subset of the result set.
+
+- Fixed a bug in record deletion; the deletion count being returned
+was wrong.
+
+- Added OID's for attribute sets: Bib1AttributeSet, StasAttributeSet,
+IsearchAttributeSet.  Also for record syntaxes: SutrsRecordSyntax,
+UsmarcRecordSyntax, HtmlRecordSyntax (these should be used for passing
+into DOCTYPE::Present() as the RecordSyntax).  See src/defs.hxx for
+all definitions.  I don't have an OID for IsearchAttributeSet yet.
+
+
+Version 1.06.04 (10/2/95)
+
+- Full boolean support has been added internally to Isearch.  Adding a
+useful interface will take a little more work, but there is a minimal
+interface through Isearch; the -rpn option allows terms to be listed
+in reverse-Polish notation, e.g. cat dog and mouse or.
+
+
+Version 1.06.03 (10/2/95)
+
+- Fixed another backwards compatibility problem with IDB::Present().
+
+- More boolean stuff....almost there!
+
+
+Version 1.06.01 (10/2/95)
+
+- Started adding boolean classes from test modules.
+
+- Added IDB::GetDbFileStem().  See also IDB::ComposeDbFn().
+
+
+Version 1.06 (10/2/95)
+
+- Fixed the DOCTYPE::Present() stuff.  I seem to have broken it when I
+added RecordSyntax (1.05.12), in the process of trying to make it not
+break existing code.
+
+
+Version 1.05.15 (9/29/95)
+
+- Made some changes to how Isearch generates unique keys internally.
+
+- Converted all standard input/output to use iostream.  Since some
+compilers seem to have trouble with mixing the use of cout with printf
+(buffering is messed up and things get printed out of order), I
+recommend that you use iostream in your document types.
+
+- Note: the architecture of word highlighting is going to change a
+little (probably in the next version).
+
+
+Version 1.05.12 (9/21/95)
+
+- Added -c option to Iutil to clean out documents marked as deleted
+from the database.
+
+- Changed -list option in Iutil to -v, just for ease of typing.
+
+- Added RecordSyntax parameter to DOCTYPE::Present().  The old
+Present() is still there for temporary backwards compatibility (so as
+not to break your code immediately), but I'd like to phase it out.
+
+
+Version 1.05.11 (9/21/95)
+
+- Added -list option to Iutil to list the documents contained in an
+Isearch database.
+
+- Added -del and -undel options to Iutil to allow disabling of
+searches on specific documents.
+
+- Added "magic number" to Isearch to prevent mixing index formats from
+incompatible versions.  Not all versions are incompatible; only when
+the file formats change.  However, I recommend that you do use
+matching versions if possible.
+
+
+Version 1.05.10 (9/20/95)
+
+- Added -prefix and -suffix options to the Isearch command-line
+utility to enable rudimentary term highlighting.  Support for this is
+not yet in Isearch-cgi.
+
+
+Version 1.05.09 (9/19/95)
+
+- Added new document types: FIRSTLINE, MAILFOLDER, MAILDIGEST,
+LISTDIGEST, IRLIST, COLONDOC, IAFA, MEMODOC, MEDLINE, FILMLINE,
+SGMLNORM, HTML, REFERBIB.  Thanks to Edward Zimmermann of BSn for
+developing and contributing these document types.
+
+- Added STRLIST::GetValue(), STRING::SetChr().
+
+- FIRSTLINE has been renamed to SIMPLE, and now takes "-o LINES=[# of
+lines]" to specify how many lines to present.  This demonstrates the
+use of STRLIST::GetValue() to read -o options.
+
+
+Version 1.05.07 (9/19/95)
+
+- Added STRLIST::Split(), STRLIST::Reverse(), STRLIST::Join(),
+STRING::Replace(), StrCaseCmp() (for non-POSIX).
+
+
+Version 1.05.06 (9/18/95)
+
+- Disabled file pointer caching.  There is a bug somewhere.
+
+
+Version 1.05.05 (9/7/95)
+
+- During indexing, the initial record list is now built on disk
+instead of in memory.  That should get rid of the excess disk
+swapping.
+
+- File pointer caching has been implemented for parts of the indexing
+and searching process.
+
+- Some small changes to the internal DOCTYPE structure - more changes
+to come over the next week as I try to finalize and document the
+model.
+
+	- DOCTYPE::ParseRecords has changed in the way it builds the
+	record list.  Adding records for indexing is now done with
+	Db->DocTypeAddRecord(FileRecord) (see doctype.cxx).
+
+	- The `const' declaration has been removed from all DOCTYPE
+	methods.
+
+	- PDBOBJ has been changed to PIDBOBJ.
+
+- Some error checking added to SGMLTAG.
+
+
+Version 1.05.02 (8/30/95)
+
+- Maintenance release.  No need to download.
+
+
+Version 1.05.01 (8/29/95)
+
+- Added RESULT::GetHighlightedRecord() for term highlighting.  It is
+not very sophisticated but will do for now.
+
+- Added a secondary sort for result sets; when two results have the
+same score, they are sorted in the order they were indexed (MDT
+order).
+
+
+Version 1.05 (8/11/95)
+
+- Added FIRSTLINE document type for returning simple headlines as
+brief ("B") records.  Use this (`-t firstline') with Iindex when
+indexing plain text files.
+
+
+Version 1.04.07 (8/10/95)
+
+- Fixed a bug in dtconf.cxx that caused a core dump on some systems.
+
+
+Version 1.04.06 (8/10/95)
+
+- Changed Makefiles to compile Isearch into a library.
+
+- Changed format of dtconf.inf to require only the filename stem of the 
+document type class.
+
+- Added GDT_BOOLEAN/GDT_TRUE/GDT_FALSE.
+
+
+Version 1.04.05
+
+- Added dtconf utility for automatically configuring Isearch with document
+types.  See the file doctype/dtconf.inf. 
+
+
+Version 1.04.02
+
+- Fixed a bug in searching; searching on words that were in the stop
+word list while using -and would return 0 hits.  Even though stop
+words are not searched, it must be assumed that they may exist.
+
+- Fixed a bug in the indexer; some words were being incorrectly
+matched in the stop word list and getting ignored as stop words.
+
+- Separated files into a directory tree.
+
+
+Version 1.04
+
+- Minor changes to Makefile.
+
+- Fixed archaic wording of message about indexing files larger than
+available memory.
+
+- Fixed a major bug in searching; the first entry in the index was
+never being found.
+
+
+Version 1.03
+
+- Added IDB::GetVersionNumber().
+
+- Added DTREG::GetDocTypeList(), IDB::GetAllDocTypes, and printing out of 
+the list of supported document types.
+
+
+Version 1.02C (since 1.02)
+
+- Makefile fixed to run configure automatically.
+
+- MDTREC::MDTREC() fixed to initialize numeric values to 0.
+
+- Fixed fseek() problem in AddFile() that caused problems under OSF.

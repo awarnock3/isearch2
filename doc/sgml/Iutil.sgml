@@ -1,0 +1,47 @@
+<!doctype linuxdoc system>
+
+<article>
+
+<!-- Title information -->
+
+<title>Iutil
+<author>Archibald Warnock <htmlurl url="mailto:awww@home.com"
+  name="awww@home.com">, A/WWW Enterprises
+<date>v1.41, 15 May 1998
+
+<!-- Begin the document -->
+<p>
+<verb>
+Iutil -d dbname [-V][-vi][-vf][-v][-newpaths][-del][-undel][-c][-erase][-gt X][-gt0][-optimize][-m X][-o X]
+</verb>
+
+<p>
+
+<descrip>
+
+<tag/[-d (X)]/Use (X) as the root name for database files.
+<tag/[-V]/Print the version number.
+<tag/[-vi]/View summary information about the database.
+<tag/[-vf]/View list of fields defined in the database.
+<tag/[-v]/View list of documents in the database.
+<tag/[-newpaths]/Prompt for new pathnames for files.
+<tag/[-del]/Mark individual documents (by key) to be deleted from database.
+<tag/[-undel]/Unmark documents (by key) that were marked for deletion.
+<tag/[-c]/Cleanup database by removing unused data (useful after -del).
+<tag/[-erase]/Erase the entire database.
+<tag/[-gt (X)]/Set (X) as the global document type for the database.
+<tag/[-gt0]/Clear the global document type for the database.
+<tag/[-optimize]/Optimize database indexes.
+<tag/[-m (X)]/Load (X) megabytes of data at a time for optimizing
+<tag/[-o (X)]/Document type specific option.
+</descrip>
+
+<p>
+
+<descrip>
+<tag/Examples:/Iutil -d POETRY -erase
+</descrip>
+
+<p>
+
+</article>

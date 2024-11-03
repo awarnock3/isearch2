@@ -1,0 +1,603 @@
+			       [ParaSoft]
+
+		       C++ Defensive Programming:
+		  Firewalls and Debugging Information
+
+		 Michael Aivazis, ParaSoft Corporation
+
+-----------------------------------------------------------------------
+
+   * Introduction
+   * Firewalls
+          Design Goals
+          Use
+          Implementation
+          Improvements
+   * Debugging Information
+          Implementation
+          Use
+   * Conclusion
+
+-----------------------------------------------------------------------
+
+Introduction
+
+In this article, we present two proactive programming techniques that
+assist in producing more robust code with minimal overhead in both
+programmer effort and runtime performance. These techniques, "firewalls"
+and "debugging information", are natural extensions of proven
+programming practices.
+
+A firewall is a point in the logical flow of a program where the
+validity of logical constraints is checked. If the constraint is
+satisfied, execution proceeds. If the constraint is violated, the
+firewall triggers and generates an appropriate error message. The
+triggering of a firewall is a severe error that indicates that the
+program is logically inconsistent. There are two different ways one can
+recover from a firewall and both require modifications in the code. The
+first is to locate the part of the code that generated the constraint
+violation and rewrite it. The other possibility is that the constraint
+enforced by the firewall was improperly expressed, unduly restrictive or
+incorrect. The correct recovery in this situation is to rewrite the
+firewall so that it reflects the correct constraint more accurately. In
+either case, the modifications required lead to code that is cleaner and
+more maintainable.
+
+The debugging information system offers the advantages of inserting
+diagnostic output in appropriate places in the code and adds manifold
+flexibility. Traditionally, while a piece of code is first written, the
+programmer spends considerable time writing diagnostic code in order to
+monitor the program execution. Typically, these pieces of code are
+removed after the initial debugging session. The system presented here
+allows for the grouping of related pieces of information by name and
+places them under the control of an environment variable. In this
+manner, only the information relevant to the current debugging session
+is displayed and the effort that is expended in generating this
+information is not wasted. If desired, such statements can be
+automatically disabled for the production system, using specially
+constructed classes for C++ programs and the preprocessor for C
+programs.
+
+Firewalls
+
+As stated earlier, a firewall is a point in the logical flow of a
+program where the validity of the assumptions made by the code that
+follows is asserted. Verifying that these assumptions are indeed correct
+is distinct from normal error checking. Invalid user input or a bad
+return value from some system call are reasons to generate error
+message, throw exceptions or employ whatever error reporting mechanism
+the designer of the system has chosen, but are not reasons to trigger a
+firewall.
+
+The firing of a firewall is an alarm for the developer and indicates
+that the internal state of the program is inconsistent. It could happen,
+for example, if a function that expects its integer argument to be
+strictly positive receives either zero or a negative number. Another
+example is a function that expects a pointer argument that is implicitly
+assumed to be non-null. Such a function is very likely to dereference
+this argument without first checking whether it is a null pointer.
+
+There are two ways to recover from the firing of a firewall: either the
+constraint expressed in the firewall is bad, i.e. violating it is
+correct behavior for the program, or the code before the firewall must
+be modified so that the constraint is not violated.
+
+In some sense, a firewall is live documentation that must be maintained
+and can never be out of sync with the correct state of the program, so
+that it always reflects accurately the expectations of the designer. At
+first, most firewalls appear trivial and superfluous. However,
+experience with large projects shows that as software systems evolve and
+age, the implicit assumptions they make on their environment become more
+and more likely to be violated. In many cases, even the original
+designer of a piece of code will have a hard time reconstructing what
+constitutes proper use of a piece of code.
+
+Design Goals
+
+The ideal system for the validation of the internal consistency of a
+software system would generate firewalls automatically based on the
+surrounding code. Unfortunately, such a system is still outside the
+realm of the currently feasible and the burden of implementing and
+maintaining the consistency checks rests mainly with the programmer.
+
+A practical alternative is to provide a method by which expressing the
+system invariants is simple, easy to learn and has very high return
+value in exchange for a negligible overhead, both in terms of system
+performance and developer productivity.
+
+Firewalls should not alter the execution flow of a program. This
+requirement is important in order to ensure that the code being tested
+is in all respects identical to the shipping version. Firewall should
+have a negligible impact on the performance of the shipping version. For
+the in-house version, the overhead should still be small enough so that
+performance is not seriously compromised. The system should be simple to
+learn and maintain so that its use is effortless. The constraint
+validation should consist of simple checks that generally avoid
+allocating large memory blocks or calling expensive routines. Such
+testing is almost certainly useful, but it is beyond the scope of
+firewalls.
+
+Use
+
+One of the simplest cases of firewalls is validating that the parameters
+passed to a function satisfy trivial constraints. For example, if a
+function assumes that a pointer argument is non-null and the required
+check is deemed an unacceptable performance penalty for the production
+system, the check can be implemented as a firewall.
+
+Suppose that we are implementing a doubly linked circular list in terms
+of a ListNode class. ListNodes have two pointers to other ListNodes, the
+_next and _prev fields, and a few convenience functions.
+
+The ListNode class might look something like the following:
+
+        class ListNode
+        {
+        public:
+            ListNode() : _prev(this), _next(this) {}
+            void join(ListNode *);
+        // Other methods follow ...
+        // Implementation
+        private:
+            ListNode * _prev;
+            ListNode * _next;
+        };
+
+The method join takes a pointer to another ListNode and arranges the
+ListNode pointers so that the new node is inserted after it:
+
+        // join: insert newNode after me
+        // Assumes that newNode is not null
+        void ListNode::join(ListNode * newNode)
+        {
+            _newNode->_prev = this;
+            _newNode->_next = _next;
+            _next->_prev = newNode;
+            _next = newNode;
+
+            return;
+        }
+
+This piece of code contains three pointer dereferences and doesn't test
+any of them. The rationale is simple. The parameter newNode is not
+allowed to be null, by design; there is a comment right above the
+implementation that states this requirement very clearly. This implies
+that the first two lines in the method join are safe. Also, recall that
+this node is supposed to be part of a circular list, so _next and _prev
+always point to other ListNodes.
+
+The fundamental flaw in this argument is that these constraints are
+largely in the mind of the implementers of this class, or at best, is
+partly reflected in the overall design of the software
+system. Unfortunately, the comments surrounding a piece of code are
+tossed out by the preprocessor and do not turn into executable
+statements. In practice, it is easy to imagine how either or both of
+these assumptions could be violated.
+
+The above code could be made significantly more robust by using the
+assert macro, available with most modern C and C++ compilers. The assert
+macro takes an expression as an argument. If the expression evaluates to
+true, execution resumes with the statement that follows. If the
+expression is false, an error message is sent to stderr and the program
+is forced to terminate. On UNIX systems one gets an IO trap that results
+in the generation of a core file, which in turn allows the developer to
+pinpoint the reason for the assertion failure. The runtime check can be
+removed by merely recompiling the code with the symbol NODEBUG defined
+on the compiler command line, eliminating the runtime overhead for the
+production system. A more conscientious developer might use this
+facility and improve the above code as follows:
+
+        // join: insert newNode after me
+        // Assumes that newNode is not null
+        void ListNode::join(ListNode * newNode)
+        {
+
+        // Enforce a non-null newNode
+            assert(newNode != 0);
+
+            _newNode->_prev = this;
+            _newNode->_next = _next;
+
+        // Verify that my _next pointer is non-null
+            assert(_next != 0);
+
+            _next->_prev = newNode;
+            _next = newNode;
+
+            return;
+        }
+
+The assert macro succeeds very well in satisfying both design goals. It
+enforces the assumptions made by the designer and its impact on the
+performance is small for the in-house version and non-existent for the
+production system. It suffers from the following drawbacks:
+
+  1. It treats all constraint violations uniformly: it halts the
+     program, making it less likely to be used as often as possible.
+  2. It is cumbersome to use when the assertion is a lengthy expression
+     or an expression that must be evaluated in discrete steps.
+
+The class Firewall proposed here addresses both of these drawbacks. This
+class provides a static method assert that is a direct replacement of
+the assert macro. Using Firewalls, we would rewrite the above code as
+follows:
+
+        // join: insert newNode after me
+        // Assumes that newNode is not null
+
+        void ListNode::join(ListNode * newNode)
+        {
+        // Enforce a non-null newNode
+            Firewall::assert(
+                newNode != 0,
+                __HERE__,
+                "node 0x%08lx: appending null node", this
+                );
+
+        // Verify that my _next pointer is non-null
+            Firewall::assert(
+                _next != 0,
+                __HERE__,
+                "node 0x%08lx: null _next pointer", this
+                );
+
+        // Append newNode
+            _newNode->_prev = this;
+            _newNode->_next = _next;
+            _next->_prev = newNode;
+            _next = newNode;
+
+            return;
+        }
+
+The static method Firewall::assert takes a variable number of
+arguments. The first is an expression that should evaluate to a bool
+. The second, __HERE__, is a preprocessor macro that expands into as
+much information about the location of the firewall as is available from
+the preprocessor.  Generally, this means at least __FILE__ and __LINE__,
+giving filename and line number. Under gcc, __FUNCTION__ is also
+used. The third argument is a printf-style format string that is used to
+generate a message at runtime.  The subsequent arguments if any, obey
+the same rules as the arguments to printf. In this example, we have
+printed the address of the offending node, to assist in tracking down
+the problem with the debugger.
+
+For constraint validation that is a little more involved, Firewall
+offers the method active which evaluates to true when firewalls are
+enabled. Also the method hit provides an unconditional
+firewall. Examples of both are shown below, where we re-write join to
+include a check that this node is indeed part of a doubly linked list.
+
+   // join: insert newNode after me
+   // Assumes that newNode is not null
+
+   void ListNode::join(ListNode * newNode)
+   {
+   // Check assumptions
+       if (Firewall::active()) {
+       // Check _next pointer
+           if (!_next) {
+              Firewall::hit(
+                   __HERE__, "node 0x%08lx: null _next pointer", this 
+               );
+           }
+
+       // Check _prev pointer
+          if (!_prev) {
+               Firewall::hit(
+                   __HERE__, "node 0x%08lx: null _prev pointer", this
+               );
+           }
+
+       // Validate forward links
+           if (!_next->_prev != this) {
+               Firewall::hit(
+                   __HERE__, "node 0x%08lx: corrupt forward links", this
+               );
+           }
+
+       // Validate backward links
+           if (!_prev->_next != this) {
+               Firewall::hit(
+                   __HERE__, "node 0x%08lx: corrupt backward links", this
+               );
+           }
+
+       // Check newNode
+          if (!newNode) {
+               Firewall::hit(
+                   __HERE__, "node 0x%08lx: null _prev pointer", this
+               );
+           }
+       }
+
+   // Append newNode
+       _newNode->_prev = this;
+       _newNode->_next = _next;
+       _next->_prev = newNode;
+       _next = newNode;
+
+       return;
+   }
+
+In addition to the methods presented here, Firewall provides a lot of
+support for interactive use during a debugging session. For example,
+each method that generates a firewall hit calls the method
+Firewall::trap so that there is a convenient location for a break
+point. Firewalls can be enabled or disabled from the debugger by calling
+the method Firewall::active. Users whose debuggers cannot call functions
+can always set the underlying data members directly.
+
+Implementation
+
+The implementation of the class Firewall is very straightforward. If the
+symbol FIREWALL is not defined either in some header file or on the
+compiler command line, the class Firewall collapses into trivial inline
+functions that should be completely thrown away by the optimizing phase
+of the compiler.
+
+        class Firewall
+        {
+        public:
+            static bool active() { return false; }
+            static void hit(const char *, ...) { return; }
+            static void assert(bool cond, ...) { return; }
+        };
+
+Most compilers will evaluate the active method at compile time, since it
+is an inline that always return false and will not even generate code
+for the bodies of if statements that call Firewall::active().
+
+The same class looks as follows when the FIREWALL symbol is defined for
+the preprocessor:
+
+        class Firewall
+        {
+        public:
+            static void trap();
+            static bool active() { return _active; }
+
+            static void hit(
+                const char *file, long line, const char *fmt = "", ...
+                );
+
+            static void assert(
+                bool cond,
+                const char *file, long line, const char *fmt = "", ...
+                );
+
+        private:
+            static void _init();    // bootstrap the firewall system
+            static bool _active;    // true if firewalls are enabled
+            static bool _fatal;     // true if firewalls should halt 
+                                    // the program
+        };
+
+Improvements
+
+This facility can be extended in a variety of ways. For example, an
+obvious extension would allow firewalls to be controlled by the setting
+of an environment variable, e.g. FIREWALLS. The setting supported would
+be "off", "on" and "fatal" the latter causing the program to terminate
+as soon as any firewall hits.
+
+The messages generated by the firewall system should be made consistent
+with whatever error reporting mechanism is used by the rest of the
+application.  It is easy to extend the Firewall class to allow
+redirection of the firewall messages to an arbitrary stream. Other
+approaches are also equally easy. For example, the Firewall class
+currently in use at ParaSoft knows how to generate firewall messages
+that appear to our error reporting mechanisms as error messages with
+their own set of suppression fields. The can be sent to stderr or
+redirected to Insra, the GUI message collector for all ParaSoft tools.
+
+Another extension is generating stack traces when a firewall hits. At
+ParaSoft we have two implementations of this: one which relies on
+bookkeeping information maintained by the Firewall class itself, and
+another which unwinds the stack from the current program counter
+location.
+
+Debugging Information
+
+Consider a function that takes as an argument the name of an external
+program and is responsible for spawning it as a separate process and
+setting up a pipe so that the parent can control the child. For our
+purposes, we will set up a one-way communication channel; a more
+realistic example would set up a bi-directional pipe. The code might
+look something like this:
+
+   bool OS::spawn(string program, int & child_pid, int & channel)
+  {
+      int to_child[2];
+       if (pipe(to_child) < 0) {
+          return false;
+      }
+
+       child_pid = fork();
+
+   // Handle fork failure
+       if (child_pid < 0) {
+           return false;
+       }
+
+   // The parent process
+       if (child_pid > 0) {
+           close(to_child[0]);    // Close the unusable end of the pipe 
+           channel = to_child[1]; // Return the write side of the pipe
+            return true;
+       }
+
+   // The child process
+       close(to_child[1]);        // Close the unusable end of the pipe
+       close(0);
+       dup(to_child[0]);          // read-side -> stdin
+        OS::execvp(program);      // Spawn the program
+        exit(-1);                 // If we get here, OS::execvp failed!
+   }
+
+During the initial development of this code, it is very likely that the
+developer inserted code that generated appropriate messages as execution
+proceeded along the various stages of this code. These diagnostics might
+have included informational items such as the process id of the parent
+and the child and the actual file descriptor number assigned by the
+system to this pipe. It is also very likely that the error handling
+branches generated diagnostics as well, since knowing that the error
+handling code was not executed gives good feedback about the correctness
+of the code.
+
+However, the production system has no need for such verbose output.
+Therefore, the developer deleted all the carefully formatted and well
+thought out diagnostics leaving the code as shown above.
+
+Unfortunately, this effort will almost certainly be duplicated during a
+bug fix. The first time a developer experiences strange behavior while
+attempting to spawn an external utility, she will have to write
+diagnostic code very similar to the original ones.
+
+This problem can be solved permanently by designing a facility which
+allows the diagnostics to reside permanently in the code, forces the
+developers to maintain them and can selectively turn them on whenever
+needed. Just like firewalls, this system should collapse for the
+production system, although it might be useful to let select diagnostics
+remain available under a command line switch or the setting of some
+environment variable for debugging in the field.
+
+Implementation
+
+Such a facility is encapsulated in the class Debug shown below. At
+compile time, the symbol DEBUG determines which version of the code will
+be compiled. At runtime, individual categories of debugging information
+can be enabled by setting the environment variable DEBUG_OPT to a
+semicolon-delimited list of debug categories.
+
+When the DEBUG symbol is not defined, the class Debug reduces to the
+following:
+
+   class Debug
+   {
+   public:
+       Debug(const char *) {}
+       static bool active()               { return false; }
+       static void out(const char *, ...) { return; }
+   };
+
+whereas the fully functional version is given by
+
+   class Debug
+   {
+   public:
+       Debug(const char * category);
+       bool active() const { return _active; }
+       void out(const char *file, long line, const char * format, ...)
+		const; 
+
+   public:
+       static void trap();
+
+   private:
+       const char * _category; // Not a string, so no overhead until
+                               // used 
+       bool _active;
+        static bool _showAll;
+   };
+
+Use
+
+Let's revisit our OS::spawn method and sprinkle some diagnostics. We
+instantiate an object of class Debug with debugging category set to
+"OS::spawn" and then we will use this object to generate messages.
+
+   bool OS::spawn(string program, int & child_pid, int & channel)
+   {
+       int to_child[2];
+       Debug info("OS::spawn");       // Here is the Debug instance
+
+       if (pipe(to_child) < 0) {
+           info.out("OS::spawn: pipe() failed!");
+           return false;
+       }
+       info.out("OS::spawn: ready to fork()");
+       child_pid = fork();
+
+   // Handle fork failure
+       if (child_pid < 0) {
+           info.out("OS::spawn: fork() failed!");
+           return false;
+       }
+
+   // The parent process
+       if (child_pid > 0) {
+          info.out("OS::spawn: parent process: child_pid=%d", child_pid);
+
+           close(to_child[0]);        // Close the unusable end of the pipe
+           channel = to_child[1];     // Return the write side of the pipe
+           return true;
+       }
+
+   // The child process
+       close(to_child[1]);            // Close the unusable end of the pipe
+       close(0);
+       dup(to_child[0]);              // read end -> stdin
+
+       info.out("OS::spawn: child process: calling OS::execvp");
+       OS::execvp(program);           // Spawn the program
+
+       exit(-1);                      // If we get here, OS::execvp failed!
+   }
+
+This version of the code is much more stable than the previous one. It
+is much less likely that it will be modified during a debugging session
+since most of what it does can be observed and validated without even
+recompiling it. But it can be made even more useful. A typical problem
+encountered with code that sets up communication channels with other
+processes is testing the overall robustness of the code. For example, if
+the child process dies and the parent attempts to write to the pipe, a
+SIGPIPE is generated by most UNIX variants.
+
+Using the Debug class we can simulate this failure. Consider the
+following fragment
+
+   bool OS::spawn(string program, int & child_pid, int & channel)
+   {
+       .
+       .
+       .
+
+   // The child process
+       close(to_child[1]);    // Close the unusable end of the pipe
+       Debug fail("OS:spawn-fail");
+       if (fail.active()) {
+           fail.out("OS::spawn: simulating execvp failure ...");
+           close(to_child[0]);
+           exit(-1);
+       }
+
+       close(0);
+       dup(to_child[0]);      // Make the read end of the pipe our stdin
+       info.out("OS::spawn: child process: calling OS::execvp");
+       OS::execvp(program);   // Spawn the program
+       exit(-1);              // If we get here, OS::execvp failed!
+  }
+
+This way the user of this code can test how well their code behaves when
+this particular facility fails to perform as advertised.
+
+Conclusions
+
+The techniques presented here minimize the amount of wasted programming
+effort, maximize the functional code created and increase the internal
+code consistency. Programmers who learn to use these techniques will
+find themselves less likely to misuse their own code.
+
+Source code for the reference implementation described here can be
+obtained by sending email to Error! Bookmark not defined. with subject
+"Firewalls/Debug info source".
+
+-----------------------------------------------------------------------
+         For more information, call tollfree (888) 305-0041 or email
+                             info@parasoft.com
+
+[^] ParaSoft [>] Technical Papers
+-----------------------------------------------------------------------
+      Last revised: $Date: 1998/05/12 16:48:19 $ webmaster@parasoft.com 
+                 Copyright © 1996-1997 ParaSoft Corporation

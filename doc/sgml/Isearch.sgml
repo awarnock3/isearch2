@@ -1,0 +1,63 @@
+<!doctype linuxdoc system>
+
+<article>
+
+<!-- Title information -->
+
+<title>Isearch
+<author>Archibald Warnock <htmlurl url="mailto:awww@home.com"
+  name="awww@home.com">, A/WWW Enterprises
+<date>v1.41, 15 May 1998
+
+<!-- Begin the document -->
+<p>
+<verb>
+Isearch -d dbname [-V][-p X][-q][-t][-and][-rpn][-infix][-prefix X][-suffix X][-byterange][-startdoc X][-enddoc X][-o opt][-RECT{N S E W}] expression
+</verb>
+
+<p>
+
+<descrip>
+<tag/[-d (X)]/ Search database with root name (X)
+<tag/[-V]/ Print the version number.
+<tag/[-p (X)]/Present element set (X) with results.
+<tag/[-q]/Print results and quit immediately.
+<tag/[-t]/Print terse results and quit immediately.
+<tag/[-and]/Perform boolean "and" on results.
+<tag/[-rpn]/Interpret as an RPN query.
+<tag/[-infix]/Interpret as a boolean algebra query.
+<tag/[-prefix (X)]/Add prefix (X) to matched terms in document.
+<tag/[-suffix (X)]/Add suffix (X) to matched terms in document.
+<tag/[-byterange]/Print the byte range of each document within the file that contains it.
+<tag/[-startdoc (X)]/Display result set starting with the (X)th document in the list.
+<tag/[-enddoc (X)]/Display result set ending with the (X)th document in the list.
+<tag/[-RECT{North South West East}]/ Find targets that overlap this geographic rectangle.
+<tag/[-o (X)]/Document type specific option.
+<tag/(X) (Y) (...)/Search for words (X), (Y), etc.
+<p>
+<itemize>
+<item>[fieldname/]searchterm[*][:n]
+<item>Prefix with fieldname/ for fielded searching.
+<item>Append * for right truncation.
+<item>Append :n for term weighting (default=1).
+<item>(Use negative values to lower rank.)
+</itemize>
+</descrip>
+
+<p>
+<descrip>
+<tag/Examples:/ Isearch -d POETRY truth "beaut*" urn:2
+<tag/ /Isearch -d WEBPAGES title/library
+<tag/ /Isearch -d STORIES -rpn title/cat title/dog or title/mouse and
+<tag/ /Isearch -d STORIES -infix '(title/cat or title/dog) and title/mouse'
+<tag/ /Isearch -d PRUFROCK -infix '(ether and table) or mermaids'
+<tag/ /Isearch -d BIBLE -infix '(Saul||Goliath)&amp;&amp;David'
+</descrip>
+
+</article>
+
+
+
+
+
+
