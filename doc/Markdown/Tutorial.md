@@ -23,33 +23,33 @@ But freeWAIS had problems.  At its heart was the crippled stump of a search syst
 And it was good.
 
 # ISEARCH TUTORIAL TABLE OF CONTENTS
+```
+1. A Quick Example of Isearch Use.
 
-1\. A Quick Example of Isearch Use.
+2. Indexing Collections.
+   2.1 Arranging the Text.
+   2.2 Running the Indexer.
+   2.3 Deciding on Doctypes.
 
-2\. Indexing Collections.
-`   `2.1 Arranging the Text.
-`   `2.2 Running the Indexer.
-`   `2.3 Deciding on Doctypes.
+3. Searching.
+   3.1 Simple Searches.
+   3.2 Searching in Subfields.
+   3.3 Boolean Searches.
+   3.4 Notes on Ranking.
+   3.5 Wildcards
+   3.6 Prefixes and Suffixes
 
-3\. Searching.
-`   `3.1 Simple Searches.
-`   `3.2 Searching in Subfields.
-`   `3.3 Boolean Searches.
-`   `3.4 Notes on Ranking.
-`   `3.5 Wildcards
-`   `3.6 Prefixes and Suffixes
+4. Maintaining Your Data.
+   4.1 Removing old Files.
+   4.2 Adding new Files.
+   4.3 Moving Files Around.
+   4.4 Viewing Information.
 
-4\. Maintaining Your Data.
-`   `4.1 Removing old Files.
-`   `4.2 Adding new Files.
-`   `4.3 Moving Files Around.
-`   `4.4 Viewing Information.
-
-5\. Performance Issues.
-`   `5.1 Location of Files for Speed.
-`   `5.2 How Much RAM is Enough?
-`   `5.3 CPU Load vs. User Skill
-
+5. Performance Issues.
+   5.1 Location of Files for Speed.
+   5.2 How Much RAM is Enough?
+   5.3 CPU Load vs. User Skill
+```
 
 # 1. A Quick Example of Isearch Use.
 
@@ -70,11 +70,11 @@ sti-gw% Iindex -d /local/indexes/example1/EX1 /local/text/example1/\*
 Iindex 1.20
 Building document list ...
 Building database /local/indexes/example1/EX1:
-`   `Parsing files ...
-`   `Parsing /local/text/example1/COPYRIGHT ...
-`   `Parsing /local/text/example1/README ...
-`   `Indexing 1004 words ...
-`   `Merging index ...
+   Parsing files ...
+   Parsing /local/text/example1/COPYRIGHT ...
+   Parsing /local/text/example1/README ...
+   Indexing 1004 words ...
+   Merging index ...
 Database files saved to disk.
 sti-gw% ls -l /local/indexes/example1/
 total 16
@@ -90,8 +90,8 @@ Isearch -d /local/indexes/example1/EX1 fee
 Isearch 1.20
 Searching database /local/indexes/example1/EX1:
 1 document(s) matched your query, 1 document(s) displayed.
-`      `Score   File
-`   `1.   100   /local/text/example1/COPYRIGHT
+      Score   File
+   1.   100   /local/text/example1/COPYRIGHT
 Select file #: 
 ```
 The word "fee" occurs only in the file COPYRIGHT.
@@ -109,11 +109,11 @@ The Iindex command will need to be given a list of files to index and directorie
 Unix filesystems impose virtually no penalty for using subdirectories, so feel free to impose quite a bit of organization on your tree of text.
 
 Note that if you have a huge number of small files, you'll want to either use a lot of subdirectories or else combine the small files into larger ones.  Consider the case of 100,000 files of one line each (an extreme example, but we see it all the time).  If you put 100,000 files into one Unix directory, file access will be incredibly slow.  Consider one of two solutions:
-
-`   `1) Create 100 subdirectories and put 1000 files into each subdirectory.
-`   `-or-
-`   `2) Concatenate all the files into one 100,000 line file.  Index this file using the "ONELINE" doctype (discussed in Section 2.3).
-
+```
+   1) Create 100 subdirectories and put 1000 files into each subdirectory.
+   -or-
+   2) Concatenate all the files into one 100,000 line file.  Index this file using the "ONELINE" doctype (discussed in Section 2.3).
+```
 The second solution is strongly preferred.
 
 Do not put text or index files into a network-mounted filesystem.  These files will be hit hard and hit often, and can bring a network to its knees.  Don't let vendor claims of caching performance fool you either:  Isearch and AFS (or DFS) do not get along well (the files are accessed in ways generally guaranteed to \*not\* be cached).  So far, experiments with using CacheFS to back up accesses to NFS 3.0 mounted partitions hasn't been very promising either.  Cheap SCSI disks are below 30 cents per megabyte now. Consider dedicating two spindles, preferably on separate SCSI controllers, to Isearch alone and you'll see a lot better performance.
@@ -125,7 +125,6 @@ Iindex takes several command line options.  Here is a list of the flags along wi
 `-d (X)`   	This option specifies the name of the index.  The index name doesn't have to have anything to do with the textbase, but it's a good idea to make it descriptive.  For example, if you have a company phone book you want to make searchable, it would be a good idea to use a name like "PHONENUMBERS" or "DIRECTORY" instead of a name like "INDEX".  Index names may have mixed upper and lower case, as long as you use the cases consistently.  The indexes "Phone" and "phone" refer to entirely separate collections.  The index names may also (and very often will) contain path names to point to a directory.  An option like "-d /local/index/CompanyPhoneBook" is typical.  This option is required for every Iindex command.
 
 
-
 `-a`       	This option means "add to an existing textbase".  Use this if you want to add a few files later on.  Note that you should use this sparingly, since it can be a little slow.  Also avoid adding files one at a time if possible.  It's a lot better to add a whole bunch at once like:
 ```
 Iindex -d INDEXNAME -a newFile1 newFile2 newFile3
@@ -133,9 +132,7 @@ Iindex -d INDEXNAME -a newFile1 newFile2 newFile3
 instead of adding the files one command at a time.
 
 
-
 `-m (X)`   	This option tells Iindex how many megabytes of text to read and index in memory at once.  It doesn't tell Iindex how many megabytes total to use, so this figure should generally be about 4 megabytes less than the total amount of memory for an otherwise quiescent system.  If you're indexing 5.5 megabytes of text, use "-m 6".  It's a good idea from a performance standpoint to have at least as much RAM available as the size of the textbase to be indexed.  Searching is almost independent of the amount of RAM available, but indexing needs lots and lots of memory to go quickly. Note that this means you can lease/borrow/steal time on a Cray CS6400 with 4 gigs of RAM for indexing and then use those indexes on a modest SparcStation 5 for searching if you have to.  We've done it.  If you're short on RAM for indexing, then there will be a lot of disk activity while smaller indexes are merged.
-
 
 
 `-s (X)`   	This option informs Iindex that you have multiple logical documents per physical file, and that they are separated by something.  Consider this example file:
@@ -153,7 +150,6 @@ Iindex -d mySeparatorExample -s "###" exampleFile
 then you'll have two logical documents.  A search for "greetings" will match the second paragraph, but not the first.
 
 Use of the -s option can give you, in essence, a quick way to fake having new doctypes.
-
 
 
 `-t (X)`   	This option tells Iindex what doctype to use when indexing the files.  A doctype is a module that explains how to find logical documents and subfields within those documents.  It also has code to display documents that it finds.  For example, the "ONELINE" doctype tells Iindex that the file consists of a bunch of single line logical documents.  The "PARA" doctype says that each paragraph is a document.  The "SGMLTAG" doctype tells Isearch how to find the "\<title\>" fields and so forth inside an SGML document.
@@ -234,18 +230,18 @@ sti-gw% Iindex -d why -t sgmltag /local/text/testfile
 Iindex 1.20
 Building document list ...
 Building database why:
-`   `Parsing files ...
-`   `Parsing /local/text/testfile ...
-`   `Indexing 7 words ...
-`   `Merging index ...
+   Parsing files ...
+   Parsing /local/text/testfile ...
+   Indexing 7 words ...
+   Merging index ...
 Database files saved to disk.
 sti-gw% Isearch -d why web
 Isearch 1.20
 Searching database why:
 1 document(s) matched your query, 1 document(s) displayed.
-`      `Score   File
-`   `1.   100   /local/text/testfile
-` `Cool Page 
+      Score   File
+   1.   100   /local/text/testfile
+ Cool Page 
 Select file #: 
 sti-gw% Isearch -d why title/web
 Isearch 1.10
@@ -335,9 +331,9 @@ sti-gw% Isearch -d why -prefix "<large>" -suffix "</large>" cool
 Isearch 1.20
 Searching database why:
 1 document(s) matched your query, 1 document(s) displayed.
-`      `Score   File
-`   `1.   100   /local/text/testfile
-` `Cool Page 
+      Score   File
+   1.   100   /local/text/testfile
+ Cool Page 
 Select file #: 1
 <title> <large>Cool</large> Page </title>
 
@@ -358,7 +354,7 @@ To remove an old file from being considered for a search requires two steps.  Th
 sti-gw% Iutil -d huh -v
 Iutil 1.20
 DocType: [Key] (Start - End) File
-(\* indicates deleted record)
+(* indicates deleted record)
 USMARC: [10] (0 - 838) /local/text/marc/demomarc
 USMARC: [1839] (839 - 1577) /local/text/marc/demomarc
 ```
@@ -374,7 +370,7 @@ To see the deletion:
 sti-gw% Iutil -d huh -v
 Iutil 1.20
 DocType: [Key] (Start - End) File
-(\* indicates deleted record)
+(* indicates deleted record)
 USMARC: [10] (0 - 838) /local/text/marc/demomarc
 USMARC: [1839] (839 - 1577) /local/text/marc/demomarc \*
 ```
@@ -389,7 +385,7 @@ Cleaning up database (removing deleted documents) ...
 sti-gw% Iutil -d huh -v
 Iutil 1.20
 DocType: [Key] (Start - End) File
-(\* indicates deleted record)
+(* indicates deleted record)
 USMARC: [10] (0 - 838) /local/text/marc/demomarc
 ```
 You should NEVER remove an actual data file from the collection until you run Iutil -c to commit the changes. Otherwise, Isearch will display an error message when you try to search.
@@ -404,10 +400,10 @@ sti-gw% Iindex -d huh -a /local/text/example1/COPYRIGHT
 Iindex 1.20
 Building document list ...
 Adding to database huh:
-`   `Parsing files ...
-`   `Parsing /local/text/example1/COPYRIGHT ...
-`   `Indexing 5100 words ...
-`   `Merging index ...
+   Parsing files ...
+   Parsing /local/text/example1/COPYRIGHT ...
+   Indexing 5100 words ...
+   Merging index ...
 Database files saved to disk.
 ```
 As a general rule, you want to specify as many new files to add at once as possible.  Don't do this one at a time for even as little as two files because you'll be here for many minutes as it is.
@@ -438,7 +434,6 @@ DocType: [Key] (Start - End) File
 USMARC: [10] (0 - 838) /local/text/marc/demomarc
 USMARC: [1839] (839 - 1577) /local/text/marc/demomarc
 ```
-
 Pretty basic, right?  The "-vi" option shows some summary information:
 ```
 sti-gw% Iutil -d huh -vi
