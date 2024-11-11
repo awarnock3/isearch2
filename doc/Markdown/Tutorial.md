@@ -1,5 +1,7 @@
-﻿# **ISEARCH TUTORIAL**
-## **The Complete Guide to Using and Configuring the CNIDR Isearch System with Examples, Advice, and Editorial Comment**
+# ISEARCH TUTORIAL
+
+## The Complete Guide to Using and Configuring the CNIDR Isearch System with Examples, Advice, and Editorial Comment
+
 In the beginning, there was "grep".
 
 Grep was good, but it lacked subtlety.  It lacked speed.  And while grep was cheap and hence widely used, it wasn't a text searching system.
@@ -20,8 +22,8 @@ But freeWAIS had problems.  At its heart was the crippled stump of a search syst
 
 And it was good.
 
+# ISEARCH TUTORIAL TABLE OF CONTENTS
 
-# **ISEARCH TUTORIAL TABLE OF CONTENTS**
 1\. A Quick Example of Isearch Use.
 
 2\. Indexing Collections.
@@ -65,75 +67,57 @@ And it was good.
 `   `5.3 CPU Load vs. User Skill
 
 
-# **1. A Quick Example of Isearch Use.**
+# 1. A Quick Example of Isearch Use.
+
 This section assumes that Isearch has already been installed.  We'll assume that Isearch has been installed in the directory /local/project/Isearch-1.09.09.  Naturally, that name will change depending on the version number and the preferences of your site, so remember to substitute your own directory name.  If you haven't installed Isearch yet, see the file "QuickStart" in the Isearch documentation directory.
 
 In this example, we'll index two text files from the Isearch distribution, "COPYRIGHT" and "README".  We only picked these files because we know everyone has them.  Create a directory for the textbase:
-
+```
 sti-gw% mkdir /local/text/example1
-
 sti-gw% cp COPYRIGHT README /local/text/example1
-
+```
 Now create a directory to hold the indexes:
-
+```
 sti-gw% mkdir /local/indexes/example1
-
+```
 Now we can index the text:
-
+```
 sti-gw% Iindex -d /local/indexes/example1/EX1 /local/text/example1/\*
-
 Iindex 1.20
-
 Building document list ...
-
 Building database /local/indexes/example1/EX1:
-
 `   `Parsing files ...
-
 `   `Parsing /local/text/example1/COPYRIGHT ...
-
 `   `Parsing /local/text/example1/README ...
-
 `   `Indexing 1004 words ...
-
 `   `Merging index ...
-
 Database files saved to disk.
-
 sti-gw% ls -l /local/indexes/example1/
-
 total 16
-
 -rw-r--r--   1 escott   staff         85 Apr 11 12:24 EX1.dbi
-
 -rw-r--r--   1 escott   staff       4016 Apr 11 12:24 EX1.inx
-
 -rw-r--r--   1 escott   staff         24 Apr 11 12:24 EX1.mdg
-
 -rw-r--r--   1 escott   staff         40 Apr 11 12:24 EX1.mdk
-
 -rw-r--r--   1 escott   staff        520 Apr 11 12:24 EX1.mdt
-
+```
 That indexed the text in /local/text/example1 and created indexes in /local/indexes/example1.  Now we can use those indexes to search for text:
-
+```
 Isearch -d /local/indexes/example1/EX1 fee
-
 Isearch 1.20
-
 Searching database /local/indexes/example1/EX1:
-
 1 document(s) matched your query, 1 document(s) displayed.
-
 `      `Score   File
-
 `   `1.   100   /local/text/example1/COPYRIGHT
-
 Select file #: 
-
+```
 The word "fee" occurs only in the file COPYRIGHT.
-# **2. Indexing Collections.**
+
+# 2. Indexing Collections.
+
 This section will discuss the issues surrounding indexing of text with Isearch, including how to arrange the text, decide on a doctype to use, and actually run the indexer.
-## **2.1 Arranging the Text.**
+
+## 2.1 Arranging the Text.
+
 Arranging the text to be indexed is fairly straightforward.  Good practice dictates that the textbase be given its own directory hierarchy to make maintenance simple.  It's also a good idea to not mix up the text files with the indexes.  Maintenance is simpler when they are separate, and there is also some performance gain to be realized when the indexes and text files are on separate disks.
 
 The Iindex command will need to be given a list of files to index and directories to traverse.  If you give Iindex the "-r" option then it will recursively plunge headlong into subdirectories indexing everything it can find.  For simple collections this is probably a good thing, but for more subtle applications you'll probably want to do the filespace traversal yourself.  This is especially true if you are using some kind of version control system like SCCS or RCS.
@@ -151,7 +135,9 @@ Note that if you have a huge number of small files, you'll want to either use a 
 The second solution is strongly preferred.
 
 Do not put text or index files into a network-mounted filesystem.  These files will be hit hard and hit often, and can bring a network to its knees.  Don't let vendor claims of caching performance fool you either:  Isearch and AFS (or DFS) do not get along well (the files are accessed in ways generally guaranteed to \*not\* be cached).  So far, experiments with using CacheFS to back up accesses to NFS 3.0 mounted partitions hasn't been very promising either.  Cheap SCSI disks are below 30 cents per megabyte now. Consider dedicating two spindles, preferably on separate SCSI controllers, to Isearch alone and you'll see a lot better performance.
-## **2.2 Running the Indexer.**
+
+## 2.2 Running the Indexer.
+
 Iindex takes several command line options.  Here is a list of the flags along with a brief discussion of each:
 
 -d (X)   	This option specifies the name of the index.  The index name doesn't have to have anything to do with the textbase, but it's a good idea to make it descriptive.  For example, if you have a company phone book you want to make searchable, it would be a good idea to use a name like "PHONENUMBERS" or "DIRECTORY" instead of a name like "INDEX".  Index names may have mixed upper and lower case, as long as you use the cases consistently.  The indexes "Phone" and "phone" refer to entirely separate collections.  The index names may also (and very often will) contain path names to point to a directory.  An option like "-d /local/index/CompanyPhoneBook" is typical.  This option is required for every Iindex command.
