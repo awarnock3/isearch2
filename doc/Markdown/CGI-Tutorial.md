@@ -21,101 +21,51 @@ directory /pub/software/Isearch or /pub/software/Isite.
 From this point on, we\'re going to make some assumptions:
 
 1.  You have Isearch, and it\'s installed as /local/project/Isearch-1.20
-
-```{=html}
-<!-- -->
-```
-1.  You know how to use (at least) Isearch and Iindex
-
-```{=html}
-<!-- -->
-```
-1.  You already have NCSA\'s httpd installed (a \"web server\")
-
-```{=html}
-<!-- -->
-```
-1.  You pretty much just took the defaults when you installed httpd,
-    like placing your HTML files in /usr/local/etc/httpd/htdocs.
+2.  You know how to use (at least) Isearch and Iindex
+3.  You already have Apache's httpd installed (a \"web server\")
+4.  You pretty much just took the defaults when you installed httpd, like placing your HTML files in /usr/local/etc/httpd/htdocs.
 
 Note that if you\'re using one of Netscape\'s web servers, these
 instructions will probably be close, but not quite precisely correct.
 You were warned.
 
 So, let\'s get Isearch-cgi:
-
+```
 sti-gw% ftp ftp.cnidr.org
-
 Connected to kudzu.cnidr.org.
-
-220 kudzu FTP server (Version wu-2.4(1) Sun Jan 1 17:43:49 EST 1995)
-ready.
-
+220 kudzu FTP server (Version wu-2.4(1) Sun Jan 1 17:43:49 EST 1995) ready.
 Name (ftp.cnidr.org:escott): anonymous
-
 331 Guest login ok, send your complete e-mail address as password.
-
 Password:
-
 230- Welcome to kudzu.cnidr.org
-
 230-
-
 230- ftp logged in from sti-gw.sti-ext.com at Thu May 2 22:57:30 1996
-
 230-
-
 230- There are currently 20 users of the maximum 25 logged on.
-
 230-
-
-230- If you have trouble using this experimental FTP client, try
-including
-
-230- a dash in front of your username (as your login password). This
-will
-
+230- If you have trouble using this experimental FTP client, try including
+230- a dash in front of your username (as your login password). This will
 230- disable informational messages such as these.
-
 230-
-
 230- Comments??? Send mail to \`bmv@k12.cnidr.org\`
-
 230-
-
 230-
-
 230 Guest login ok, access restrictions apply.
-
 ftp\> cd /pub/software/Isearch
-
 250-Please read the file README
-
 250- it was last modified on Thu Feb 1 15:44:18 1996 - 91 days ago
-
 250 CWD command successful.
-
 ftp\> binary
-
 200 Type set to I.
-
 ftp\> get Isearch-1.20.tgz
-
 200 PORT command successful.
-
-150 Opening BINARY mode data connection for Isearch-1.20.tgz (22896
-bytes).
-
+150 Opening BINARY mode data connection for Isearch-1.20.tgz (22896 bytes).
 226 Transfer complete.
-
 local: Isearch-cgi-1.03.tar.Z remote: Isearch-1.20.tgz
-
 22896 bytes received in 9 seconds (2.5 Kbytes/s)
-
 ftp\> quit
-
 221 Goodbye.
-
+```
 What we just did was this: used ftp to connect to ftp.cnidr.org, logged
 in as \"anonymous\", typed our email address for a password (which of
 course didn\'t show up here), and changed directories to where Isearch
@@ -123,22 +73,20 @@ course didn\'t show up here), and changed directories to where Isearch
 \"binary\" mode, and we got the distribution.
 
 Now we need to uncompress the distribution:
-
+```
 sti-gw% gunzip Isearch-1.20.tgz
-
+```
 This creates a file named \"Isearch-1.20.tar\". Now, we\'ll move that
 tar file to a good place to work from:
-
+```
 sti-gw% mv Isearch-1.20.tar /local/project
-
 sti-gw% cd /local/project
-
+```
 Finally (for now) we\'ll unpack that tar file:
-
+```
 sti-gw% tar xf Isearch-1.20.tar
-
 sti-gw% cd Isearch-1.20
-
+```
 We\'re now ready to start the main part of building Isearch and
 Isearch-cgi.
 
@@ -150,11 +98,11 @@ Don\'t edit below that line unless you really know what you\'re doing.
 Now it\'s time to type \"make\". Don\'t be surprised if the compiler
 prints some warnings: no one is perfect. If all goes well, the Makefile
 will print:
-
+```
 Welcome to CNIDR Isearch!
 
 Read the README file for configuration and installation instructions
-
+```
 Which is pretty sound advice, even if you\'re armed with this guide,
 since small details change from time to time.
 
@@ -166,33 +114,30 @@ The Isearch indexes are the files created when you run Iindex, and the
 name was set by the \"-d\" option to Iindex. We\'re going to assume you
 have an index named \"tester\" in the directory
 \"/local/project/Isearch-1.20/db/\":
-
+```
 sti-gw% Configure /local/project/Isearch-1.20/db
-
+```
 That created the scripts "isearch", "ihtml" and "ifetch". Copy these two
 scripts to wherever you put your cgi-bin applications. This will quite
 likely be /usr/local/etc/httpd/htdocs/cgi-bin.
 
 Now, following the outline of the README, we\'ll take a moment to make
 an index to some interesting files:
-
+```
 sti-gw% cd /local/project/Isearch-1.20
-
 sti-gw% cd bin
-
-sti-gw% Iindex -d /local/project/Isearch-1.20/db/tester -t sgmltag
-/etc/motd
-
+sti-gw% Iindex -d /local/project/Isearch-1.20/db/tester -t sgmltag /etc/motd
+```
 That made a searchable index of the login banner. Boring example, yes,
 but one that anyone can handle.
 
 The one remaining step is to make a web page that contains the buttons
 and text fields and so forth we need to actually do the searching. The
 program \"search_form\" will do that for us. Here\'s a simple example:
-
+```
 sti-gw% search_form --simple /local/project/Isearch-1.20/db tester \>
 form.html
-
+```
 This creates a form named \"form.html\" that knows to use the \"tester\"
 textbase in the \"/local/project/Isearch-1.20/db\" directory. Copy
 form.html to your httpd document directory (probably
@@ -230,24 +175,21 @@ three other kinds of search forms, "html", "boolean" and "advanced".
 The HTML search form is specifically designed to handle textbases of
 HTML documents. To generate that kind of form, use the \"-html\" option
 to search_form:
-
-sti-gw% search_form -html /local/project/Isearch-1.20/db tester
-\>form2.html
-
+```
+sti-gw% search_form -html /local/project/Isearch-1.20/db tester \>form2.html
+```
 A Boolean search form lets you specify two search terms and whether they
 are \"and\"-ed, \"or\"-ed, or \"andnot\"-ed. To generate that kind of
 form, use the \"-boolean\" option to search_form:
-
-sti-gw% search_form -boolean /local/project/Isearch-1.20/db tester
-\>form2.html
-
+```
+sti-gw% search_form -boolean /local/project/Isearch-1.20/db tester \>form2.html
+```
 You can also create an advanced search form. This allows you to type
 free-form, infix boolean queries, like \"((cheese and wine) or caviar)
 andnot sherry\". To generate this kind of page, use:
-
-sti-gw% search_form -advanced /local/project/Isearch-1.20/db tester
-\>form3.html
-
+```
+sti-gw% search_form -advanced /local/project/Isearch-1.20/db tester \>form3.html
+```
 ### Better Looking Forms:
 
 The search forms that are generated are pretty plain. You\'ll probably
@@ -269,22 +211,16 @@ ifetch, but go straight to the html files that were indexed. This
 assumes, of course, that the files you indexed were part of your normal
 htdocs tree. If not, you\'re out of luck. But if you just indexed your
 web site, add the line:
-
+```
 \<input name=\"HTTP_PATH\" type=hidden value=\"/path/to/http/docs\"\>
-
+```
 to your search form (like form3.html, above, for instance). Make sure
 you edit the pathname, though. This technique will make the Isearch-cgi
 results point to the real files instead of always going through ifetch.
 This is good for two reasons:
 
-1.  It protects the integrity of the link. This is nice from a
-    philosophical standpoint.
-
-```{=html}
-<!-- -->
-```
-1.  It is much faster and places much less load on your server. This is
-    nice from a job security standpoint.
+1.  It protects the integrity of the link. This is nice from a philosophical standpoint.
+2.  It is much faster and places much less load on your server. This is nice from a job security standpoint.
 
 That concludes the Isearch-cgi Users\' Guide. Make sure you subscribe to
 the Isite mailing list (listproc@kudzu.cnidr.org) for the most current
