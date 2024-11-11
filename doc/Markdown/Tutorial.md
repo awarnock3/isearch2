@@ -27,43 +27,27 @@ And it was good.
 1\. A Quick Example of Isearch Use.
 
 2\. Indexing Collections.
-
 `   `2.1 Arranging the Text.
-
 `   `2.2 Running the Indexer.
-
 `   `2.3 Deciding on Doctypes.
 
 3\. Searching.
-
 `   `3.1 Simple Searches.
-
 `   `3.2 Searching in Subfields.
-
 `   `3.3 Boolean Searches.
-
 `   `3.4 Notes on Ranking.
-
 `   `3.5 Wildcards
-
 `   `3.6 Prefixes and Suffixes
 
 4\. Maintaining Your Data.
-
 `   `4.1 Removing old Files.
-
 `   `4.2 Adding new Files.
-
 `   `4.3 Moving Files Around.
-
 `   `4.4 Viewing Information.
 
 5\. Performance Issues.
-
 `   `5.1 Location of Files for Speed.
-
 `   `5.2 How Much RAM is Enough?
-
 `   `5.3 CPU Load vs. User Skill
 
 
@@ -127,9 +111,7 @@ Unix filesystems impose virtually no penalty for using subdirectories, so feel f
 Note that if you have a huge number of small files, you'll want to either use a lot of subdirectories or else combine the small files into larger ones.  Consider the case of 100,000 files of one line each (an extreme example, but we see it all the time).  If you put 100,000 files into one Unix directory, file access will be incredibly slow.  Consider one of two solutions:
 
 `   `1) Create 100 subdirectories and put 1000 files into each subdirectory.
-
 `   `-or-
-
 `   `2) Concatenate all the files into one 100,000 line file.  Index this file using the "ONELINE" doctype (discussed in Section 2.3).
 
 The second solution is strongly preferred.
@@ -160,7 +142,7 @@ instead of adding the files one command at a time.
 ```
 Hi, I'm the first document.
 
-\###
+###
 
 Greetings to all from the second document.
 ```
@@ -174,23 +156,18 @@ Use of the -s option can give you, in essence, a quick way to fake having new do
 
 
 
-`-t (X)`   	This option tells Iindex what doctype to use when indexing the files.  A doctype is a module that explains how to find logical documents and subfields within those documents.  It also has code to display documents that it finds.  For example, the "ONELINE" doctype tells Iindex that the file consists of a bunch of single line logical documents.  The "PARA" doctype says that each paragraph is a document.  The "SGMLTAG" doctype tells Isearch how to find the "<title>" fields and so forth inside an SGML document.
+`-t (X)`   	This option tells Iindex what doctype to use when indexing the files.  A doctype is a module that explains how to find logical documents and subfields within those documents.  It also has code to display documents that it finds.  For example, the "ONELINE" doctype tells Iindex that the file consists of a bunch of single line logical documents.  The "PARA" doctype says that each paragraph is a document.  The "SGMLTAG" doctype tells Isearch how to find the "\<title\>" fields and so forth inside an SGML document.
 
 If you don't specify a doctype, then the "SIMPLE" doctype is used by default.  SIMPLE doesn't really do much; it assumes that there is one document per file, no fields, and that presentation is handled by just dumping the contents of the file.
 
 For more information, see the files "dtconf.inf", "BSn.doc", and "STI.doc" in the doctype directory.
 
 
-
 `-f (X)`   	This option causes Iindex to read a list of file names to be indexed from a file.  For example:
-
-
 ```
 ls /local/text/example2 > myListOfFiles
 Iindex -d exampleIndex -f myListOfFiles
 ```
-
-
 causes Iindex to read the file "myListOfFiles" and then index every file it sees in there.  This is very useful for huge lists of files.  By default, older Unix systems can't pass command lines more than 10240 characters long.  If you have several thousand files to index, the command line could quickly become too long.
 
 (Note to the confused: No, you would never type a line that long.  But consider how big a command line can get through filename expansion with wildcards. Try this:
@@ -202,7 +179,6 @@ the wordcount utility reports that "echo /usr/man/\*/\* expanded into a line 122
 (Subnote to the cluefull: So, if that command expanded to 122K, how could it be passed to "echo" so I could wordcount it?  Simple.  I used Solaris 2.5, which allows 1 megabyte command lines.  Nonetheless, there are a lot of Ultrix boxes still in use so it's worth noting.)).
 
 
-
 `-r`       	This section says to recursively descend into subdirectories.  If you have a whole tree of text then you can use this option and just give the top level directory name to index.  Iindex will do the rest.  Do not use this option if you're using SCCS or RCS.  Iindex will blithely index the SCCS "s." files and will plunge into RCS directories and will just generally not do what you expected.  How to escape this dilemma?  Use "find".  Find is your friend.
 ```
 Iindex -d watchThisItsCool `find /deeptree -t f \! -name "s.\*""`
@@ -212,7 +188,6 @@ will cause Iindex to index all files below "/local/text/deeptree" except for tho
 If you're using the "sccs" convenience shell, then you'll want to ignore "SCCS" directories.
 
 Find is such a powerful command that you should spend a while getting to know it better if you haven't already.  It especially useful for maintaining collections of text by doing things like weeding out old versions of files automatically.
-
 
 
 `-o (X)`   	The -o option is used to pass information to specific doctypes.  Each doctype treats this option differently (if at all) so check the documentation for your specific doctype before worrying about this.
