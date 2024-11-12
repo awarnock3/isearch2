@@ -135,8 +135,7 @@ The one remaining step is to make a web page that contains the buttons
 and text fields and so forth we need to actually do the searching. The
 program \"search_form\" will do that for us. Here\'s a simple example:
 ```
-sti-gw% search_form --simple /local/project/Isearch-1.20/db tester \>
-form.html
+sti-gw% search_form --simple /local/project/Isearch-1.20/db tester form.html
 ```
 This creates a form named \"form.html\" that knows to use the \"tester\"
 textbase in the \"/local/project/Isearch-1.20/db\" directory. Copy
@@ -176,19 +175,19 @@ The HTML search form is specifically designed to handle textbases of
 HTML documents. To generate that kind of form, use the \"-html\" option
 to search_form:
 ```
-sti-gw% search_form -html /local/project/Isearch-1.20/db tester \>form2.html
+sti-gw% search_form -html /local/project/Isearch-1.20/db tester form2.html
 ```
 A Boolean search form lets you specify two search terms and whether they
 are \"and\"-ed, \"or\"-ed, or \"andnot\"-ed. To generate that kind of
 form, use the \"-boolean\" option to search_form:
 ```
-sti-gw% search_form -boolean /local/project/Isearch-1.20/db tester \>form2.html
+sti-gw% search_form -boolean /local/project/Isearch-1.20/db tester form2.html
 ```
 You can also create an advanced search form. This allows you to type
 free-form, infix boolean queries, like \"((cheese and wine) or caviar)
 andnot sherry\". To generate this kind of page, use:
 ```
-sti-gw% search_form -advanced /local/project/Isearch-1.20/db tester \>form3.html
+sti-gw% search_form -advanced /local/project/Isearch-1.20/db tester form3.html
 ```
 ### Better Looking Forms:
 
