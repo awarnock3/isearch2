@@ -1,6 +1,6 @@
 # Building, Configuring, and Using Isearch-cgi
 
-Isearch-cgi is an add-on for Isearch. Isearch-cgi lets you do all the
+**Isearch-cgi** is an add-on for **Isearch**. Isearch-cgi lets you do all the
 cool stuff that Isearch does, only you can do it from a page on the
 World Wide Web. This means your textbase can be accessed by anyone in
 the world who has a web browser (and these days, that\'s pretty much
@@ -51,19 +51,19 @@ Password:
 230-
 230-
 230 Guest login ok, access restrictions apply.
-ftp\> cd /pub/software/Isearch
+ftp> cd /pub/software/Isearch
 250-Please read the file README
 250- it was last modified on Thu Feb 1 15:44:18 1996 - 91 days ago
 250 CWD command successful.
-ftp\> binary
+ftp> binary
 200 Type set to I.
-ftp\> get Isearch-1.20.tgz
+ftp> get Isearch-1.20.tgz
 200 PORT command successful.
 150 Opening BINARY mode data connection for Isearch-1.20.tgz (22896 bytes).
 226 Transfer complete.
 local: Isearch-cgi-1.03.tar.Z remote: Isearch-1.20.tgz
 22896 bytes received in 9 seconds (2.5 Kbytes/s)
-ftp\> quit
+ftp> quit
 221 Goodbye.
 ```
 What we just did was this: used ftp to connect to ftp.cnidr.org, logged
@@ -90,12 +90,12 @@ sti-gw% cd Isearch-1.20
 We\'re now ready to start the main part of building Isearch and
 Isearch-cgi.
 
-The first thing to do is to edit the file \"Makefile\". Basically, load
+The first thing to do is to edit the file `Makefile`. Basically, load
 the Makefile in your favorite editor and follow the directions. At one
 point, you\'ll see a line that says \"That\'s all! Type \'make\'\".
 Don\'t edit below that line unless you really know what you\'re doing.
 
-Now it\'s time to type \"make\". Don\'t be surprised if the compiler
+Now it\'s time to type `make`. Don\'t be surprised if the compiler
 prints some warnings: no one is perfect. If all goes well, the Makefile
 will print:
 ```
@@ -106,14 +106,14 @@ Read the README file for configuration and installation instructions
 Which is pretty sound advice, even if you\'re armed with this guide,
 since small details change from time to time.
 
-At this point, you have built "isrch_fetch", "isrch_srch", "isrch_html"
-and "search_form". You\'ll need to build some shell scripts now, and
-you\'ll do it with the \"Configure\" script provided. Configure will
+At this point, you have built `isrch_fetch`, `isrch_srch`, `isrch_html`
+and `search_form`. You\'ll need to build some shell scripts now, and
+you\'ll do it with the `Configure` script provided. Configure will
 need one argument, the directory where your Isearch indexes are stored.
 The Isearch indexes are the files created when you run Iindex, and the
-name was set by the \"-d\" option to Iindex. We\'re going to assume you
-have an index named \"tester\" in the directory
-\"/local/project/Isearch-1.20/db/\":
+name was set by the `-d` option to Iindex. We\'re going to assume you
+have an index named `tester` in the directory
+`/local/project/Isearch-1.20/db/`:
 ```
 sti-gw% Configure /local/project/Isearch-1.20/db
 ```
@@ -211,7 +211,7 @@ assumes, of course, that the files you indexed were part of your normal
 htdocs tree. If not, you\'re out of luck. But if you just indexed your
 web site, add the line:
 ```
-\<input name=\"HTTP_PATH\" type=hidden value=\"/path/to/http/docs\"\>
+<input name="HTTP_PATH" type=hidden value="/path/to/http/docs">
 ```
 to your search form (like form3.html, above, for instance). Make sure
 you edit the pathname, though. This technique will make the Isearch-cgi
