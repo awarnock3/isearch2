@@ -45,7 +45,7 @@ DTCC=c++
 #
 # for Linux
 #
-CFLAGS=-O2 -DUNIX -fwritable-strings
+CFLAGS=-O2 -DUNIX
 #CFLAGS=-g -fwritable-strings -Wall -Wno-unused -DUNIX # -DVERBOSE -DDEBUG
 
 #
