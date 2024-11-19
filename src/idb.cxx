@@ -268,7 +268,7 @@ IDB::GetRecordDfdt(const STRING& Key, DFDT *DfdtBuffer) const {
     if (!Fp) {
       perror(Fn);
       //      EXIT_ERROR;
-      exit;
+      exit(1);
     }
     else {
       Done = 0;
@@ -882,7 +882,7 @@ IDB::AddRecord(const RECORD& NewRecord) {
   if (!fp) {
     perror(IndexingQueueFn);
     //    EXIT_ERROR;
-    exit;
+    exit(1);
   }
   fprintf(fp, "#\n");
   NewRecord.Write(fp);
@@ -899,7 +899,7 @@ IDB::DocTypeAddRecord(const RECORD& NewRecord) {
   if (!fp) {
     perror(IndexingQueueFn);
     //    EXIT_ERROR;
-    exit;
+    exit(1);
   }
   fprintf(fp, "#\n");
   NewRecord.Write(fp);
@@ -1001,7 +1001,7 @@ IDB::Index() {
     SetDbState(IsearchDbStateReady);
     fprintf(stderr,"No valid files found for indexing...\n");
     //    EXIT_ERROR;
-    exit;
+    exit(1);
   }
   MainIndex->AddRecordList(fp);
   IDB::ffclose(fp);
@@ -1373,12 +1373,12 @@ IDB::CleanupDb() {
 	{ continue; } 
       perror(Fn);
       //      EXIT_ERROR;
-      exit;
+      exit(1);
     }
     if ( (Fpn = fopen(TempFn, "wb")) == NULL) {
       perror(TempFn);
       //      EXIT_ERROR;
-      exit;
+      exit(1);
     }
     //should I bail if this doesnt work? -jem.
     GPTYPE Gp;

@@ -50,7 +50,7 @@ Author:		Archie Warnock (warnock@clark.net), derived from J. Fullton's
 
 #include <stdlib.h>
 #include <time.h>
-#include <iostream.h>
+#include <iostream>
 
 #include "gdt.h"
 #include "defs.hxx"

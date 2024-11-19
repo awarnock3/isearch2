@@ -170,7 +170,7 @@ AddFile(PIDB IdbPtr, STRING& PathName, STRING& FileName) {
 	}
       }
       if (Found) {
-	Offset = (GPTYPE)((UINT4)Found - (UINT4)Buffer);
+	Offset = (GPTYPE)(Found - Buffer);
 	/* the separator marks the beginning of the next 
 	   record. (offset - 1), then marks the end of 
 	   the current record. we must make sure that the

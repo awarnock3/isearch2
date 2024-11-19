@@ -40,7 +40,7 @@ Description:	Class GILS - SGML-like Text w/ static output files
 Author:		Archie Warnock, warnock@clark.net
 @@@*/
 
-#include <iostream.h>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

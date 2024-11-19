@@ -43,7 +43,7 @@ DTCC=g++
 # for Linux
 #
 #CFLAGS=-O2 -DUNIX -fwritable-strings
-LOCAL_FLAGS=-fwritable-strings -Wall -Wno-unused -DUNIX -DDO_HIGHLIGHTING # -DVERBOSE -DDEBUG
+LOCAL_FLAGS=-Wall -Wno-unused -DUNIX -DDO_HIGHLIGHTING # -DVERBOSE -DDEBUG
 COMPFLAGS=-O 
 CFLAGS=$(COMPFLAGS) $(LOCAL_FLAGS)
 

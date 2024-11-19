@@ -7,7 +7,7 @@ Author:		Archibald Warnock (warnock@clark.net), A/WWW Enterprises
 Copyright:	A/WWW Enterprises, Columbia, MD
 @@@-*/
 
-#include <iostream.h>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

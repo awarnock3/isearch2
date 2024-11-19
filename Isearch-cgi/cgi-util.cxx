@@ -49,6 +49,8 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 #include <ctype.h>
 #include "cgi-util.hxx"
 
+using namespace std;
+
 /*
 # Class: CGIAPP
 # Method: GetInput

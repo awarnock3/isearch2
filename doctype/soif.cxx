@@ -7,7 +7,7 @@ Description: Harvest SOIF records (derived from bibtex.cxx by Erik Scott)
 Author:      Peter Valkenburg
 */
 
-#include <iostream.h>
+#include <iostream>
 #include <ctype.h>
 #include "isearch.hxx"
 #include "soif.hxx"

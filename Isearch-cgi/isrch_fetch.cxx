@@ -43,7 +43,7 @@ Description:    CGI app that searches against Iindex-ed databases
 Author:         Kevin Gamiel, kgamiel@cnidr.org
 @@@*/
 
-#include <iostream.h>
+#include <iostream>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>

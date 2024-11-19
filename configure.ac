@@ -1,6 +1,6 @@
 dnl Process this file with autoconf to produce a configure script.
 
-AC_INIT()
+AC_INIT
 
 dnl Checks for programs.
 AC_PROG_CC
@@ -19,6 +19,9 @@ AC_CHECK_SIZEOF(long long int, 0)
 
 dnl Checks for library functions.
 
-AC_CONFIG_HEADER(src/conf.h)
+AC_CONFIG_HEADERS([src/conf.h])
+AC_CONFIG_FILES([src/Makefile.000])
+
+AC_OUTPUT
 
 echo "Isearch configuration complete."

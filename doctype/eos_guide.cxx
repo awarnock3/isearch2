@@ -10,7 +10,7 @@ Author:         Nassib Nassar <nassar@etymon.com>
 #include <stdio.h>
 #include <ctype.h>
 #include <string.h>
-#include <iostream.h>
+#include <iostream>
 #include "isearch.hxx"
 #include "eos_guide.hxx"
 

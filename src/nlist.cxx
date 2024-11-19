@@ -45,7 +45,7 @@ Author:		Jim Fullton, Jim.Fullton@cnidr.org
 @@@*/
 
 #include <stdlib.h>
-#include <iostream.h>
+#include <iostream>
 
 #include "nlist.hxx"
 

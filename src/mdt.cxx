@@ -112,7 +112,7 @@ MDT::MDT(const STRING& DbFileStem, const GDT_BOOLEAN WrongEndian)
       MdtFp = fopen(Fn, "rb");
       if (!MdtFp) {
 	perror(Fn);
-	exit;
+	exit(1);
       }
       ReadOnly = GDT_TRUE;
     }

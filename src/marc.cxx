@@ -381,7 +381,7 @@ char *
 format_field(MARC_FIELD *mf, DISP_FORMAT *format, CHR *buff, INT repeat)
 {
   MARC_SUBFIELD *subf;
-  register char *linend, *c;
+  char *linend, *c;
   INT pos, count, ok=0;
 	
   linend = buff;

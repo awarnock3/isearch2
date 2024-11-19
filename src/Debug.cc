@@ -2,7 +2,7 @@
 
 #include "Debug.h"
 
-#include <iostream.h>
+#include <iostream>
 
 #include <stdarg.h>
 #include <stdlib.h>

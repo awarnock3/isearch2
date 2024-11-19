@@ -112,7 +112,7 @@ Description:	Class FIRSTLINE - TEXT with headline as first line
 Author:		Edward C. Zimmermann, edz@bsn.com
 @@@-*/
 
-#include <iostream.h>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

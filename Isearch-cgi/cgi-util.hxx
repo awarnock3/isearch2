@@ -49,7 +49,7 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 #include "gdt.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include <iostream.h>
+#include <iostream>
 
 #define CGI_MAXENTRIES 100
 #define POST 0

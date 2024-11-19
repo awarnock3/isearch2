@@ -152,8 +152,8 @@ Author:         Edward C. Zimmermann, edz@bsn.com
 Modification:   Tim Gemma, stone@cnidr.org
 @@@-*/
 
-#include <iostream.h>
-#include <fstream.h>
+#include <iostream>
+#include <fstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

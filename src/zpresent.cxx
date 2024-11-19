@@ -76,7 +76,7 @@ XmlBail(const STRING& DBName, const STRING& error_message) {
   cout << "\t\t</isearch:error_block>" << endl;
   cout << "\t</isearch:present>" << endl;
   cout << "</zpresent>" << endl;
-  exit;
+  exit(1);
 }
 
 
