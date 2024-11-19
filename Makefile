@@ -117,7 +117,7 @@ CGI_DIR=Isearch-cgi
 
 RM = rm -f
 LDFLAGS=
-VER=1.47j
+VER=1.47k
 #DIST=Isearch-$(VER)
 DIST=Isearch
 BINDIST=$(DIST)-bin

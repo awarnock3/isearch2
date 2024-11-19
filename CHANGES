@@ -1,6 +1,10 @@
 $Id: CHANGES,v 1.81 2001/02/23 17:38:17 cnidr Exp $
 
 Isearch Release Notes
+Version 1.47k
+- First port in 20 years
+- Now tracked in Gitlab
+
 Version 1.47j
 - Fixed problem with parsing phrases containing colon characters
 - Added STRING::XmlCleanup() calls to zsearch, zpresent to ensure XML
