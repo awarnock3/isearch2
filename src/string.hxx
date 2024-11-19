@@ -53,6 +53,8 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include <time.h>
 #endif
 
+using namespace std;
+
 extern CHR *transcode (CHR *buffer, char **transarray);
 
 typedef size_t STRINGINDEX;
