@@ -23,9 +23,9 @@ SHELL=/bin/sh
 #
 # Compiler
 #
-CC=g++
+CC=c++
 
-DTCC=g++
+DTCC=c++
 #CC=/sw/CenterLine/bin/CC
 
 #
