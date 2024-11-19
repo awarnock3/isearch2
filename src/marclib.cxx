@@ -369,8 +369,8 @@ MARC_REC *GetMARC(char *buffer,INT4 lrecl,int copy)
 
 int fieldcopy(char *To, char *From)
 {
-  register char *t, *f;
-  register int count;
+  char *t, *f;
+  int count;
 
   t = To;
   f = From;
@@ -428,8 +428,8 @@ char charconvert(char c)
 
 int subfcopy(char *To, char *From,int flag)
 {
-  register char *t, *f;
-  register int count;
+  char *t, *f;
+  int count;
 
   t = To;
   f = From;

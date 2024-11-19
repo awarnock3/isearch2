@@ -552,9 +552,9 @@ GDT_BOOLEAN MAILFOLDER::IsMailFromLine (const char *line) const
 #define MAX_FIELDS 10
   char *fields[MAX_FIELDS];
   const char *sender_tail;
-  register const char *lp;
-  register char **fp;
-  register int n, i;
+  const char *lp;
+  char **fp;
+  int n, i;
   // Email (RFC822) has English language dates from 1 Jan 1970 on
   static char legal_day[] = "SunMonTueWedThuFriSat";
   static char legal_month[] = "JanFebMarAprMayJunJulAugSepOctNovDec";
