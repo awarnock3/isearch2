@@ -8,7 +8,7 @@ Description: class BIBTEX - index documents by paragraphs
 Author:      Erik Scott, Scott Technologies, Inc.
 */
 
-#include <iostream.h>
+#include <iostream>
 #include <ctype.h>
 #include "isearch.hxx"
 #include "bibtex.hxx"

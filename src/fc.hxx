@@ -8,7 +8,7 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #ifndef FC_HXX
 #define FC_HXX
 
-#include <iostream.h>
+#include <iostream>
 /*
 #include "defs.hxx"
 */

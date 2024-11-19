@@ -45,7 +45,7 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <fstream.h>
+#include <fstream>
 #include <ctype.h>
 #include <sys/stat.h>
 

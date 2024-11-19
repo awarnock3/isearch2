@@ -40,7 +40,7 @@ Description:	Class REGISTRY - Structured Profile Registry
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
-#include <fstream.h>
+#include <fstream>
 #include <stdlib.h>
 
 #include "registry.hxx"

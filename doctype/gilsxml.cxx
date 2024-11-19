@@ -43,7 +43,7 @@ Author:		Archie Warnock (awww@home.com), A/WWW Enterprises
 Originally by:  Kevin Gamiel, Kevin.Gamiel@cnidr.org
 @@@*/
 
-#include <iostream.h>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

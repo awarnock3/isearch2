@@ -113,7 +113,7 @@ Description:	Class MAILDIGEST - Internet Mail Digest Document Type
 Author:		Edward C. Zimmermann, edz@bsn.com
 @@@-*/
 
-#include <iostream.h>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

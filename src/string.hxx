@@ -44,7 +44,7 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #define STRING_HXX
 
 #include <string.h>
-#include <iostream.h>
+#include <iostream>
 #include "gdt.h"
 #include "defs.hxx"
 

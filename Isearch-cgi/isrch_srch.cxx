@@ -46,7 +46,7 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 		Archie Warnock, warnock@clark.net
 @@@*/
 
-#include <iostream.h>
+#include <iostream>
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>

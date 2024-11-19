@@ -115,7 +115,7 @@ Author:		Edward C. Zimmermann, edz@bsn.com
 Distribution:   Isite modifications by A. Warnock (warnock@clark.net)
 @@@-*/
 
-#include <iostream.h>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

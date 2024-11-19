@@ -113,7 +113,7 @@ Author:		Edward C. Zimmermann, edz@bsn.com
 Copyright:	Basis Systeme netzwerk, Munich
 @@@-*/
 
-#include <iostream.h>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

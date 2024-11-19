@@ -6,7 +6,7 @@ Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
 #include <stdlib.h>
-#include <iostream.h>
+#include <iostream>
 
 #include "defs.hxx"
 #include "string.hxx"

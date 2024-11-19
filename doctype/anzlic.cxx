@@ -116,7 +116,7 @@ Original:	Edward C. Zimmermann, edz@bsn.com
 Copyright:	A/WWW Enterprises, MCNC/CNIDR and USGS/ANZLIC
 @@@-*/
 
-#include <iostream.h>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <ctype.h>

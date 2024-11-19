@@ -47,7 +47,7 @@ Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 
 #include <stdlib.h>
 #include <time.h>
-#include <iostream.h>
+#include <iostream>
 
 #include "intlist.hxx"
 

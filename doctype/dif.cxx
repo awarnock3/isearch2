@@ -9,8 +9,8 @@ Author:		Archie Warnock, warnock@clark.net
 		Enhancements by Ken Lambert Hughes STX 3/97
 		Enhancements by Chris Gokey Hughes STX 3/98
 @@@*/
-#include <iostream.h>
-#include <fstream.h>
+#include <iostream>
+#include <fstream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

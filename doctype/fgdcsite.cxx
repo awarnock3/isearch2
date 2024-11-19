@@ -42,7 +42,7 @@ Description:	Class FGDCSITE - for FGDC Node descriptions
 Author:		Kevin Gamiel, Kevin.Gamiel@cnidr.org
 @@@*/
 
-#include <iostream.h>
+#include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

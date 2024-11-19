@@ -45,7 +45,7 @@ Author:		Nassib Nassar, nrn@cnidr.org
 
 /*
   #if defined(_MSC_VER) && _MSC_VER > 1010
-  #  include <iostream.h>
+  #  include <iostream>
   #else
   #  include <iostream.h>
   #endif
@@ -64,7 +64,7 @@ Author:		Nassib Nassar, nrn@cnidr.org
 static char DtName[MAXDT][MAXSTR];
 static char DtFn[MAXDT][MAXSTR];
 
-main() {
+int main() {
   printf("\nConfiguring Isearch for the following document types (see dtconf.inf):");
 
   // Read configuration
