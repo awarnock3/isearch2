@@ -334,7 +334,7 @@ void
 REGISTRY::fprint(FILE* fp, const INT level) const 
 #else
 void 
-REGISTRY::fprint(FILE* fp, const INT level = 0) const 
+REGISTRY::fprint(FILE* fp, const INT level) const 
 #endif
 
 #else
