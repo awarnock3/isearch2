@@ -1209,14 +1209,14 @@ char *transcode (char *buffer, char **transarray)
   ipnt=nbuf;
   maxipnt=nbuf+lennbuf-1;       // End of new buffer
 
-  while ((*obufscan != (char)NULL) && (ipnt<maxipnt)) {
+  while ((*obufscan != '\0') && (ipnt<maxipnt)) {
 
     // Is there a replacement for the *obufscan?
     if (transarray[(unsigned char)*obufscan]) {
       //Yes
       //      fprintf(stderr,"1. %d\n",(unsigned char)*obufscan);
       for (rscan=transarray[(unsigned char)*obufscan];
-	   *rscan != (char)NULL && ipnt<maxipnt; 
+	   *rscan != '\0' && ipnt<maxipnt; 
 	   rscan++,ipnt++) {
 	// copy the replacement to the insertion point
 	*ipnt=*rscan;
@@ -1233,7 +1233,7 @@ char *transcode (char *buffer, char **transarray)
 	//	fprintf(stderr,"3. %d\n",(unsigned char)*obufscan);
 	sprintf(entity,"&#%d;",(unsigned char)*obufscan);
 	for (rscan=entity;
-	   *rscan != (char)NULL && ipnt<maxipnt; 
+	   *rscan != '\0' && ipnt<maxipnt; 
 	   rscan++,ipnt++) {
 	  *ipnt = *rscan;
 	}
@@ -1242,7 +1242,7 @@ char *transcode (char *buffer, char **transarray)
     }
     obufscan++;
   }
-  *ipnt=(char)NULL; // terminate the new string
+  *ipnt='\0'; // terminate the new string
 
   return (nbuf);
 }
