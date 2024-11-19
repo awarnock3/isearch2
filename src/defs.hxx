@@ -229,7 +229,7 @@ const INT IndexingStatusKeySet          = 5;
 #endif
 
 #define COUT cout
-#define EXIT_ERROR {fflush(stdout); fflush(stderr); exit;}
+#define EXIT_ERROR {fflush(stdout); fflush(stderr); exit(1);}
 #define RETURN_ERROR {fflush(stdout); fflush(stderr); return(1);}
 #define RETURN_ZERO {fflush(stdout); fflush(stderr); return(0);}
 #endif
