@@ -48,6 +48,7 @@ Author:		Jim Fullton, MCNC/CNIDR
 #define MERGEUNIT_HXX
 
 #include "defs.hxx"
+#include "filemap.hxx"
 #include "idbobj.hxx"
 
 #define LIM 10000
