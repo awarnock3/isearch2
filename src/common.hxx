@@ -50,13 +50,13 @@ Notes:          Added RemoveFileExtension - aw3
 #include "defs.hxx"
 #include "string.hxx"
 
-#ifndef max
-#define max(a,b) (((a) > (b)) ? (a) : (b))
-#endif
-
-#ifndef min
-#define min(a,b) (((a) < (b)) ? (a) : (b))
-#endif
+// #ifndef max
+// #define max(a,b) (((a) > (b)) ? (a) : (b))
+// #endif
+//
+// #ifndef min
+// #define min(a,b) (((a) < (b)) ? (a) : (b))
+// #endif
 
 // PANIC is a combination of the definitions from Firewall class and
 // the macro from "POSIX Programmer's Guide" by Lewin
