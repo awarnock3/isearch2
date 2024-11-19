@@ -574,7 +574,7 @@ STRING::Print(PFILE FilePointer) const {
 
 // can this be const STRING& ?
 ostream& operator<<(ostream& os, const STRING& str) {
-  os.write(str.Buffer, str.Length);
+  os.write((const char *) str.Buffer, str.Length);
   return os;
 }
 
