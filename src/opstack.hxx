@@ -57,7 +57,7 @@ public:
 	OPSTACK& operator<<(OPOBJ* Op);
 	POPOBJ operator>>(POPOBJ& OpPtr);
  	PIRSET operator>>(PIRSET& OpPtr);
-	void OPSTACK::Reverse();
+	void Reverse();
 	~OPSTACK();
 private:
 	void Push(OPOBJ& Op);
