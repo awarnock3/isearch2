@@ -1,0 +1,11 @@
+image: gcc
+
+before_script:
+    # Install dependancies
+    - apt-get update
+
+isearch:
+    stage: build
+    script:
+        - ./configure
+        - make
