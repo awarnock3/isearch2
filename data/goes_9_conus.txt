@@ -1,0 +1,268 @@
+Identification_Information:
+  Citation:
+    Citation_Information:
+      Originator: Naval Research Lab., Monterey
+      Publication_Date: 19960104
+      Title: GOES_9
+      Edition: GOES_IMAGER
+      Geospatial_Data_Presentation_Form: remote-sensing images
+      Online_Linkage: Master Environmental Library:<URL:http://www-mel.nrlmry.navy.mil/homepage.html>
+      Online_Linkage: Marine Meteorology Division (NRL-Monterey):<URL:http://helium.nrlmry.navy.mil/>
+      Online_Linkage: Satellite Photos and Movies (NRL-Monterey):<URL:http://helium.nrlmry.navy.mil/photos.html>
+  Description:
+    Abstract:
+      GOES-9 Satellite Images generated in near real-time by the NRL-Monterey
+      SeaSpace TeraScan receiving station.  Routine images are produced on
+      a nominal 1/2 hour update schedule.   Visible images are only
+      generated during local daylight hours.
+    Purpose:
+      These images are generated for research purposes by NRL-Monterey.
+      Additional products may be added at a future date.
+  Time_Period_of_Content:
+    Time_Period_Information:
+      Range_of_Dates/Times:
+        Beginning_Date: 99999999
+        Beginning_Time: 00000000Z
+        Ending_Date: Present
+        Ending_Time: 00000000Z
+    Currentness_Reference: Start of satellite scan
+  Status:
+    Progress: Complete
+    Maintenance_and_Update_Frequency: Present -002 days, Continually, new data every 30 minutes, Time_Increment=0000000000.5
+  Spatial_Domain:
+    Bounding_Coordinates:
+      West_Bounding_Coordinate: -180.0
+      East_Bounding_Coordinate: -100.0
+      North_Bounding_Coordinate: 50.0
+      South_Bounding_Coordinate: 0.0
+  Keywords:
+    Theme:
+      Theme_Keyword_Thesaurus: None
+      Theme_Keyword: Satellite
+      Theme_Keyword: GOES_9
+      Theme_Keyword: GOES imager
+    Place:
+      Place_Keyword_Thesaurus: None
+      Place_Keyword: Continental United States
+      Place_Keyword: Central America
+      Place_Keyword: North America
+    Temporal:
+      Temporal_Keyword_Thesaurus: None
+      Temporal_Keyword: Current
+  Access_Constraints: None
+  Use_Constraints: None
+  Point_of_Contact:
+    Contact_Information:
+      Contact_Organization_Primary:
+        Contact_Organization: Naval Research Laboratory
+        Contact_Person:
+      Contact_Position:
+      Contact_Address:
+        Address_Type: mailing and physical address
+        Address: 7 Grace Hopper Rd.
+        City: Monterey
+        State_or_Province: CA
+        Postal_Code: 93943-5006
+        Country: US
+      Contact_Voice_Telephone:
+      Contact_Facsimile_Telephone: (408) 656-4769
+      Contact_Electronic_Mail_Address:
+  Browse_Graphic:
+    Browse_Graphic_File_Name: Latest INFRARED channel image:<URL:http://helium.nrlmry.navy.mil/satfoto/goes9_images/ir/LATEST.jpeg>
+    Browse_Graphic_File_Description:
+      512x768 JPEG of GOES-9 infrared (channel 4) generated every 1/2 hour.
+      Lambertian projectionof eastern Pacific and western USA.
+    Browse_Graphic_File_Type: jpeg
+  Browse_Graphic:
+    Browse_Graphic_File_Name: Latest INFRARED movie (Approx 3M):<URL:http://helium.nrlmry.navy.mil/sat/g9ir.mpg>
+    Browse_Graphic_File_Description:
+      512x512 MPEG of GOES-9 infrared generated every week. Stereographic projection onto
+      the CONUS and surrounding waters.
+    Browse_Graphic_File_Type: mpeg
+  Browse_Graphic:
+    Browse_Graphic_File_Name: Latest VISIBLE channel image:<URL:http://helium.nrlmry.navy.mil/satfoto/goes9_images/vis/LATEST.jpeg>
+    Browse_Graphic_File_Description:
+      512x768 JPEG of GOES-9 visible (channel 1) generated every 1/2 hour.
+      Lambertian projectionof eastern Pacific and western USA.
+    Browse_Graphic_File_Type: jpeg
+  Browse_Graphic:
+    Browse_Graphic_File_Name: Latest VAPOR channel image:<URL:http://helium.nrlmry.navy.mil/satfoto/goes9_images/vapor/LATEST.jpeg>
+    Browse_Graphic_File_Description:
+      512x768 JPEG of GOES-9 water vapor (channel 3) generated every 1/2 hour.
+      Lambertian projectionof eastern Pacific and western USA.
+    Browse_Graphic_File_Type: jpeg
+  Browse_Graphic:
+    Browse_Graphic_File_Name: Latest Water Vapor movie (Approx 3.2M):<URL:http://helium.nrlmry.navy.mil/sat/g9wv.mpg>
+    Browse_Graphic_File_Description:
+      512x512 MPEG of GOES-9 water vapor (channel 3) generated every week. Stereographic
+      projection onto the CONUS and surrounding waters.
+    Browse_Graphic_File_Type: mpeg
+  Data_Set_Credit: NRLMRY
+  Security_Information:
+    Security_Classification_System: Department of Defense Trusted Computer Systems Evaluation Criteria CSC-STD-001-83
+    Security_Classification: Unclassified
+    Security_Handling_Description:
+
+Data_Quality_Information:
+  Attribute_Accuracy:
+    Attribute_Accuracy_Report:
+  Logical_Consistency_Report:
+  Completeness_Report:
+  Lineage:
+    Process_Step:
+      Process_Description:
+      Process_Date:
+
+Spatial_Data_Organization_Information:
+  Indirect_Spatial_Reference: Continental U.S.
+  Direct_Spatial_Reference_Method: Raster
+  Raster_Object_Information:
+    Raster_Object_Type: Grid Cell
+    Row_Count: 512
+    Column_Count: 768
+    Vertical_Count:
+
+Spatial_Reference_Information:
+  Horizontal_Coordinate_System_Definition:
+    Planar:
+      Map_Projection:
+        Map_Projection_Name: Lambert Conformal Conic
+        Lambert_Conformal_Conic:
+          Standard_Parallel: 20.0
+          Standard_Parallel: 40.0
+          Longitude_of_Central_Meridian: -140.0
+          Latitude_of_Projection_Origin: 30.0
+          False_Easting: 0.0
+          False_Northing: 0.0
+      Planar_Coordinate_Information:
+        Planar_Coordinate_Encoding_Method: row and column
+        Coordinate_Representation:
+          Abscissa_Resolution: 11.96
+          Ordinate_Resolution: 11.96
+        Planar_Distance_Units: kilometers
+
+Entity_and_Attribute_Information:
+  Detailed_Description:
+    Entity_Type:
+      Entity_Type_Label: Satellite Channel
+      Entity_Type_Definition: Satellite Channel
+      Entity_Type_Definition_Source: NEONS
+    Attribute:
+      Attribute_Label: channel 1
+      Attribute_Definition: 0.63 micro m VISIBLE
+      Attribute_Definition_Source: NEONS
+      Attribute_Domain_Values:
+        Range_Domain:
+          Range_Domain_Minimum: 0
+          Range_Domain_Maximum: 100
+      Attribute_Units_of_Measure: percent albedo
+    Attribute:
+      Attribute_Label: channel 3
+      Attribute_Definition: 6.7 micro m WATER VAPOR
+      Attribute_Definition_Source: NEONS
+      Attribute_Domain_Values:
+        Range_Domain:
+          Range_Domain_Minimum: -80
+          Range_Domain_Maximum: 50
+      Attribute_Units_of_Measure: degrees C
+    Attribute:
+      Attribute_Label: channel 4
+      Attribute_Definition: 10.8 micro m INFRARED
+      Attribute_Definition_Source: NEONS
+      Attribute_Domain_Values:
+        Range_Domain:
+          Range_Domain_Minimum: -80
+          Range_Domain_Maximum: 50
+      Attribute_Units_of_Measure: degrees C
+
+Distribution_Information:
+  Distributor:
+    Contact_Information:
+      Contact_Organization_Primary:
+        Contact_Organization: Naval Research Laboratory
+        Contact_Person: Naim Alper
+      Contact_Position: NEONS Database Administrator
+      Contact_Address:
+        Address_Type: mailing and physical address
+        Address: 7 Grace Hopper Rd.
+        City: Monterey
+        State_or_Province: CA
+        Postal_Code: 93943-5006
+        Country: US
+      Contact_Voice_Telephone: (408) 656-4702
+      Contact_Facsimile_Telephone: (408) 656-4769
+      Contact_Electronic_Mail_Address: alper@nrlmry.navy.mil
+      Hours_of_Service: 0800 - 1700 PST Monday - Friday
+  Resource_Description:
+  Distribution_Liability:
+  Custom_Order_Process:
+    Via MEL system: Use MEL Query form to identify dataset.
+    Use order form to request data.
+    A MEL subset description follows:
+    <MEL>
+    <PROLOGUE>
+    ORDER_EMAIL = mel@eifel.nrlmry.navy.mil
+    </PROLOGUE>
+
+    <DATASET NAME = GOES_9_CONUS>
+
+    DELIV_FMT = HDF
+
+    <LOCAL>
+    Satellite_Name: GOES_9
+    Sensor_Name: GOES_IMAGER
+    Database: NEONS_IMAGE
+    Geog_Location: Continental United States
+    </LOCAL>
+
+    <ACTION NAME = SUBSET>
+
+    <DIMENSION NAME = CHANNEL_NUMBER>
+    UNITS = NULL
+    CHOICE_TYPE = MULTIPLE
+    #VALUES = 0.63 micro m VIS, 6.7 micro m VAP, 10.8 micro m IR
+    VALUES = 1, 3, 4
+    DEFAULTS = 1
+    </DIMENSION>
+
+    <DIMENSION NAME = TIME>
+    UNITS = YYYYMMDDhh.hh
+    CHOICE_TYPE = RANGE
+    </DIMENSION>
+
+    <DIMENSION NAME = LONGITUDE>
+    UNITS = deg.dd  #  decimal degrees + is E - is W
+    CHOICE_TYPE = RANGE
+    </DIMENSION>
+
+    <DIMENSION NAME = LATITUDE>
+    UNITS = deg.dd  #  decimal degrees + is N - is S
+    CHOICE_TYPE = RANGE
+    </DIMENSION>
+
+    </ACTION>  #  end of subsetting
+    </DATASET>
+    </MEL>  #  end of the message
+
+  Technical_Prerequisites: MEL requires an HTML Browser (e.g. Mosaic), an Internet connection, email, and a use delivery site (email or anonymous ftp).
+
+Metadata_Reference_Information:
+  Metadata_Date: 19960104
+  Metadata_Contact:
+    Contact_Information:
+      Contact_Organization_Primary:
+        Contact_Organization: Naval Research Laboratory
+      Contact_Position: MEL regional site admin
+      Contact_Address:
+        Address_Type: mailing and physical address
+        Address: 7 Grace Hopper Rd.
+        City: Monterey
+        State_or_Province: CA
+        Postal_Code: 93943-5006
+        Country: US
+      Contact_Voice_Telephone: (408) 656-4756
+      Contact_Facsimile_Telephone: (408) 656-4769
+      Contact_Electronic_Mail_Address: alper@nrlmry.navy.mil
+  Metadata_Standard_Name: FGDC - Content Standards for Digital Geospatial Metadata
+  Metadata_Standard_Version: June 8, 1994
+  Metadata_Time_Convention: universal time

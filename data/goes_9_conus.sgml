@@ -1,0 +1,331 @@
+<!DOCTYPE METADATA PUBLIC "-//FGDC//DTD METADATA 2.0//EN">
+<metadata>
+<idinfo>
+<citation>
+<citeinfo>
+<origin>Naval Research Lab., Monterey</origin>
+<pubdate>19960104</pubdate>
+<title>GOES_9</title>
+<edition>GOES_IMAGER</edition>
+<geoform>remote-sensing images</geoform>
+<onlink>Master Environmental Library:&lt;URL:http://www-mel.nrlmry.navy.mil/homepage.html&gt;</onlink>
+<onlink>Marine Meteorology Division (NRL-Monterey):&lt;URL:http://helium.nrlmry.navy.mil/&gt;</onlink>
+<onlink>Satellite Photos and Movies (NRL-Monterey):&lt;URL:http://helium.nrlmry.navy.mil/photos.html&gt;</onlink>
+</citeinfo>
+</citation>
+<descript>
+<abstract>
+GOES-9 Satellite Images generated in near real-time by the NRL-Monterey
+SeaSpace TeraScan receiving station.  Routine images are produced on
+a nominal 1/2 hour update schedule.   Visible images are only
+generated during local daylight hours.
+</abstract>
+<purpose>
+These images are generated for research purposes by NRL-Monterey.
+Additional products may be added at a future date.
+</purpose>
+</descript>
+<timeperd>
+<timeinfo>
+<rngdates>
+<begdate>99999999</begdate>
+<begtime>00000000Z</begtime>
+<enddate>Present</enddate>
+<endtime>00000000Z</endtime>
+</rngdates>
+</timeinfo>
+<current>Start of satellite scan</current>
+</timeperd>
+<status>
+<progress>Complete</progress>
+<update>Present -002 days, Continually, new data every 30 minutes, Time_Increment=0000000000.5</update>
+</status>
+<spdom>
+<bounding>
+<westbc>-180.0</westbc>
+<eastbc>-100.0</eastbc>
+<northbc>50.0</northbc>
+<southbc>0.0</southbc>
+</bounding>
+</spdom>
+<keywords>
+<theme>
+<themekt>None</themekt>
+<themekey>Satellite</themekey>
+<themekey>GOES_9</themekey>
+<themekey>GOES imager</themekey>
+</theme>
+<place>
+<placekt>None</placekt>
+<placekey>Continental United States</placekey>
+<placekey>Central America</placekey>
+<placekey>North America</placekey>
+</place>
+<temporal>
+<tempkt>None</tempkt>
+<tempkey>Current</tempkey>
+</temporal>
+</keywords>
+<accconst>None</accconst>
+<useconst>None</useconst>
+<ptcontac>
+<cntinfo>
+<cntorgp>
+<cntorg>Naval Research Laboratory</cntorg>
+<cntper></cntper>
+</cntorgp>
+<cntpos></cntpos>
+<cntaddr>
+<addrtype>mailing and physical address</addrtype>
+<address>7 Grace Hopper Rd.</address>
+<city>Monterey</city>
+<state>CA</state>
+<postal>93943-5006</postal>
+<country>US</country>
+</cntaddr>
+<cntvoice></cntvoice>
+<cntfax>(408) 656-4769</cntfax>
+<cntemail></cntemail>
+</cntinfo>
+</ptcontac>
+<browse>
+<browsen>Latest INFRARED channel image:&lt;URL:http://helium.nrlmry.navy.mil/satfoto/goes9_images/ir/LATEST.jpeg&gt;</browsen>
+<browsed>
+512x768 JPEG of GOES-9 infrared (channel 4) generated every 1/2 hour.
+Lambertian projectionof eastern Pacific and western USA.
+</browsed>
+<browset>jpeg</browset>
+</browse>
+<browse>
+<browsen>Latest INFRARED movie (Approx 3M):&lt;URL:http://helium.nrlmry.navy.mil/sat/g9ir.mpg&gt;</browsen>
+<browsed>
+512x512 MPEG of GOES-9 infrared generated every week. Stereographic projection onto
+the CONUS and surrounding waters.
+</browsed>
+<browset>mpeg</browset>
+</browse>
+<browse>
+<browsen>Latest VISIBLE channel image:&lt;URL:http://helium.nrlmry.navy.mil/satfoto/goes9_images/vis/LATEST.jpeg&gt;</browsen>
+<browsed>
+512x768 JPEG of GOES-9 visible (channel 1) generated every 1/2 hour.
+Lambertian projectionof eastern Pacific and western USA.
+</browsed>
+<browset>jpeg</browset>
+</browse>
+<browse>
+<browsen>Latest VAPOR channel image:&lt;URL:http://helium.nrlmry.navy.mil/satfoto/goes9_images/vapor/LATEST.jpeg&gt;</browsen>
+<browsed>
+512x768 JPEG of GOES-9 water vapor (channel 3) generated every 1/2 hour.
+Lambertian projectionof eastern Pacific and western USA.
+</browsed>
+<browset>jpeg</browset>
+</browse>
+<browse>
+<browsen>Latest Water Vapor movie (Approx 3.2M):&lt;URL:http://helium.nrlmry.navy.mil/sat/g9wv.mpg&gt;</browsen>
+<browsed>
+512x512 MPEG of GOES-9 water vapor (channel 3) generated every week. Stereographic
+projection onto the CONUS and surrounding waters.
+</browsed>
+<browset>mpeg</browset>
+</browse>
+<datacred>NRLMRY</datacred>
+<secinfo>
+<secsys>Department of Defense Trusted Computer Systems Evaluation Criteria CSC-STD-001-83</secsys>
+<secclass>Unclassified</secclass>
+<sechandl></sechandl>
+</secinfo>
+</idinfo>
+<dataqual>
+<attracc>
+<attraccr></attraccr>
+</attracc>
+<logic></logic>
+<complete></complete>
+<lineage>
+<procstep>
+<procdesc></procdesc>
+<procdate></procdate>
+</procstep>
+</lineage>
+</dataqual>
+<spdoinfo>
+<indspref>Continental U.S.</indspref>
+<direct>Raster</direct>
+<rastinfo>
+<rasttype>Grid Cell</rasttype>
+<rowcount>512</rowcount>
+<colcount>768</colcount>
+<vrtcount></vrtcount>
+</rastinfo>
+</spdoinfo>
+<spref>
+<horizsys>
+<planar>
+<mapproj>
+<mapprojn>Lambert Conformal Conic</mapprojn>
+<lambertc>
+<stdparll>20.0</stdparll>
+<stdparll>40.0</stdparll>
+<longcm>-140.0</longcm>
+<latprjo>30.0</latprjo>
+<feast>0.0</feast>
+<fnorth>0.0</fnorth>
+</lambertc>
+</mapproj>
+<planci>
+<plance>row and column</plance>
+<coordrep>
+<absres>11.96</absres>
+<ordres>11.96</ordres>
+</coordrep>
+<plandu>kilometers</plandu>
+</planci>
+</planar>
+</horizsys>
+</spref>
+<eainfo>
+<detailed>
+<enttyp>
+<enttypl>Satellite Channel</enttypl>
+<enttypd>Satellite Channel</enttypd>
+<enttypds>NEONS</enttypds>
+</enttyp>
+<attr>
+<attrlabl>channel 1</attrlabl>
+<attrdef>0.63 micro m VISIBLE</attrdef>
+<attrdefs>NEONS</attrdefs>
+<attrdomv>
+<rdom>
+<rdommin>0</rdommin>
+<rdommax>100</rdommax>
+<attrunit>percent albedo</attrunit>
+</rdom>
+</attrdomv>
+</attr>
+<attr>
+<attrlabl>channel 3</attrlabl>
+<attrdef>6.7 micro m WATER VAPOR</attrdef>
+<attrdefs>NEONS</attrdefs>
+<attrdomv>
+<rdom>
+<rdommin>-80</rdommin>
+<rdommax>50</rdommax>
+<attrunit>degrees C</attrunit>
+</rdom>
+</attrdomv>
+</attr>
+<attr>
+<attrlabl>channel 4</attrlabl>
+<attrdef>10.8 micro m INFRARED</attrdef>
+<attrdefs>NEONS</attrdefs>
+<attrdomv>
+<rdom>
+<rdommin>-80</rdommin>
+<rdommax>50</rdommax>
+<attrunit>degrees C</attrunit>
+</rdom>
+</attrdomv>
+</attr>
+</detailed>
+</eainfo>
+<distinfo>
+<distrib>
+<cntinfo>
+<cntorgp>
+<cntorg>Naval Research Laboratory</cntorg>
+<cntper>Naim Alper</cntper>
+</cntorgp>
+<cntpos>NEONS Database Administrator</cntpos>
+<cntaddr>
+<addrtype>mailing and physical address</addrtype>
+<address>7 Grace Hopper Rd.</address>
+<city>Monterey</city>
+<state>CA</state>
+<postal>93943-5006</postal>
+<country>US</country>
+</cntaddr>
+<cntvoice>(408) 656-4702</cntvoice>
+<cntfax>(408) 656-4769</cntfax>
+<cntemail>alper@nrlmry.navy.mil</cntemail>
+<hours>0800 - 1700 PST Monday - Friday</hours>
+</cntinfo>
+</distrib>
+<resdesc></resdesc>
+<distliab></distliab>
+<custom>
+Via MEL system: Use MEL Query form to identify dataset.
+Use order form to request data.
+A MEL subset description follows:
+&lt;MEL&gt;
+&lt;PROLOGUE&gt;
+ORDER_EMAIL = mel@eifel.nrlmry.navy.mil
+&lt;/PROLOGUE&gt;
+
+&lt;DATASET NAME = GOES_9_CONUS&gt;
+
+DELIV_FMT = HDF
+
+&lt;LOCAL&gt;
+Satellite_Name: GOES_9
+Sensor_Name: GOES_IMAGER
+Database: NEONS_IMAGE
+Geog_Location: Continental United States
+&lt;/LOCAL&gt;
+
+&lt;ACTION NAME = SUBSET&gt;
+
+&lt;DIMENSION NAME = CHANNEL_NUMBER&gt;
+UNITS = NULL
+CHOICE_TYPE = MULTIPLE
+#VALUES = 0.63 micro m VIS, 6.7 micro m VAP, 10.8 micro m IR
+VALUES = 1, 3, 4
+DEFAULTS = 1
+&lt;/DIMENSION&gt;
+
+&lt;DIMENSION NAME = TIME&gt;
+UNITS = YYYYMMDDhh.hh
+CHOICE_TYPE = RANGE
+&lt;/DIMENSION&gt;
+
+&lt;DIMENSION NAME = LONGITUDE&gt;
+UNITS = deg.dd  #  decimal degrees + is E - is W
+CHOICE_TYPE = RANGE
+&lt;/DIMENSION&gt;
+
+&lt;DIMENSION NAME = LATITUDE&gt;
+UNITS = deg.dd  #  decimal degrees + is N - is S
+CHOICE_TYPE = RANGE
+&lt;/DIMENSION&gt;
+
+&lt;/ACTION&gt;  #  end of subsetting
+&lt;/DATASET&gt;
+&lt;/MEL&gt;  #  end of the message
+</custom>
+<techpreq>MEL requires an HTML Browser (e.g. Mosaic), an Internet connection, email, and a use delivery site (email or anonymous ftp).</techpreq>
+</distinfo>
+<metainfo>
+<metd>19960104</metd>
+<metc>
+<cntinfo>
+<cntorgp>
+<cntorg>Naval Research Laboratory</cntorg>
+</cntorgp>
+<cntpos>MEL regional site admin</cntpos>
+<cntaddr>
+<addrtype>mailing and physical address</addrtype>
+<address>7 Grace Hopper Rd.</address>
+<city>Monterey</city>
+<state>CA</state>
+<postal>93943-5006</postal>
+<country>US</country>
+</cntaddr>
+<cntvoice>(408) 656-4756</cntvoice>
+<cntfax>(408) 656-4769</cntfax>
+<cntemail>alper@nrlmry.navy.mil</cntemail>
+</cntinfo>
+</metc>
+<metstdn>FGDC - Content Standards for Digital Geospatial Metadata</metstdn>
+<metstdv>FGDC-STD-001-1998</metstdv>
+<mettc>universal time</mettc>
+</metainfo>
+</metadata>

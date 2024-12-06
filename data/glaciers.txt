@@ -1,0 +1,528 @@
+Identification_Information:
+  Citation:
+    Citation_Information:
+      Originator: B.K. Lucchitta
+      Originator: J.M. Barrett
+      Originator: J.A. Bowell
+      Originator: J.G. Ferrigno
+      Originator: K.F. Mullins
+      Originator: C.E. Rosanova
+      Originator: R.S. Williams, Jr.
+      Publication_Date: 1995
+      Title:
+        Velocities of outlet glaciers, ice streams, and ice
+        shelves, Antarctica, from satellite images
+      Publication_Information:
+        Publication_Place: Flagstaff, Arizona
+        Publisher: U.S. Geological Survey
+      Other_Citation_Details:
+        Data contained in this data set are background information
+        supporting the following publications.  Refer to data set
+        documentation to determine which publication should be
+        cited for when referring to an element of this data set.
+
+        Ferrigno, J.G., Lucchitta, B.K., Mullins, K.F., Allison,
+        A.L., Allen, R.J., and Gould, W.G., 1993, Velocity
+        measurements and changes in position of Thwaites Glacier
+        Ice Berg Tongue from aerial photographs, Landsat images,
+        and NOAA AVHRR data: Annals of Glaciology, v.17, p. 239-
+        244.
+
+        Lucchitta, B.K., Mullins, K.F., Allison, A.L., and
+        Ferrigno, J.G., 1993, Antarctic glacial tongue velocities
+        from Landsat images: First results: Annals of Glaciology,
+        v. 17, p. 356-366.
+
+        Lucchitta, B.K., Smith, C.E., Bowell, J.A., and Mullins,
+        K.F., 1994, Velocities and mass balance of Pine Island
+        Glacier, West Antarctica, Derived from ERS-1 SAR images:
+        Proceedings, 2nd ERS-1 Symposium, Hamburg, Germany, 11-14
+        Oct. 1993, ESA SP-361, p. 147-151.
+
+        Lucchitta, B.K., Mullins, K.F., Smith, C.E., and Ferrigno,
+        J.G., in press, Velocities of Smith Glacier Ice Tongue and
+        Dotson Ice Shelf, Walgreen Coast, Marie Byrd Land, West
+        Antarctica: Annals of Glaciology, v. 20.
+
+        Lucchitta, B.K., Smith, C.E., and Mullins, K.F.,
+        Velocities and mass balance of Pine Island Glacier, West
+        Antarctica: Submitted to Annals of Glaciology.
+      Online_Linkage: <URL:http://geochange.er.usgs.gov/pub/antarctica/glacier-velocity/Core/meta/report.html>
+  Description:
+    Abstract:
+      This report summarizes the results of velocity measurements of
+      outlet glaciers, ice streams, and ice shelves around the
+      Antarctic periphery.  For some regions, where suitable images
+      were available, the same area was measured repeatedly to
+      validate the data or register changes in velocity with time.
+      The results given here are a compendium of published papers
+      and work in progress.  The results constitute a data base that
+      will be added to and amended as more velocity measurements
+      become available.
+    Purpose:
+      Changes in global climate and sea level are intricately linked
+      to changes in the area and volume of polar ice sheets.  Thus,
+      melting of the ice sheets may severely impact the densely
+      populated coastal regions on Earth.  Melting of the West
+      Antarctic ice sheet alone could raise sea level by
+      approximately 5 m.  In spite of their importance, the current
+      mass balances (the net gains or losses) of the Antarctic ice
+      sheets are not known.  Because of difficult logistic problems
+      in Antarctica, field research has focused on only a few major
+      ice streams and outlet glaciers.  Yet, to understand the ice
+      sheet dynamics fully, we must carefully document all of the
+      coastal changes associated with advance and retreat of ice
+      shelves, outlet glaciers, and ice streams.
+
+      A critical parameter of ice sheets is their velocity field,
+      which, together with ice thickness, allows the determination
+      of discharge rates.  Remote sensing, using moderate- to high-
+      resolution satellite images, permits glacier movement to be
+      measured on sequential images covering the same area; the
+      velocities can be measured quickly and relatively
+      inexpensively by tracking crevasses or other patterns that
+      move with the ice.  Especially important are velocities where
+      the ice crosses the glaciers grounding lines (locations along
+      the coast where the ice is no longer ground supported and
+      begins to float).
+  Time_Period_of_Content:
+    Time_Period_Information:
+      Range_of_Dates/Times:
+        Beginning_Date: 1972
+        Ending_Date: 19921204
+    Currentness_Reference:
+      Range specified indicates date of earliest image used and date
+      of latest image used.
+  Status:
+    Progress: Complete
+    Maintenance_and_Update_Frequency: As needed
+  Spatial_Domain:
+    Bounding_Coordinates:
+      West_Bounding_Coordinate: -142.0
+      East_Bounding_Coordinate: 130.0
+      North_Bounding_Coordinate: -67.0
+      South_Bounding_Coordinate: -76.0
+  Keywords:
+    Theme:
+      Theme_Keyword_Thesaurus: None
+      Theme_Keyword: Glacier
+      Theme_Keyword: Glacier tongues
+      Theme_Keyword: Glacier velocity
+    Place:
+      Place_Keyword_Thesaurus: None
+      Place_Keyword: Antarctica
+  Access_Constraints: none
+  Use_Constraints: none
+  Point_of_Contact:
+    Contact_Information:
+      Contact_Person_Primary:
+        Contact_Person: Baerbel K. Lucchitta
+        Contact_Organization: Branch of Astrogeology
+      Contact_Address:
+        Address_Type: mailing address
+        Address:
+          Mail Stop 9580
+          U.S. Geological Survey
+          2255 N. Gemini Drive
+        City: Flagstaff
+        State_or_Province: AZ
+        Postal_Code: 86001-1689
+        Country: USA
+      Contact_Voice_Telephone: (520) 556-7176
+      Contact_Facsimile_Telephone: (520) 556-7014
+      Contact_Electronic_Mail_Address: blucchitta@iflag2.wr.usgs.gov
+
+Data_Quality_Information:
+  Attribute_Accuracy:
+    Attribute_Accuracy_Report:
+      We use two methods to determine the glacial velocities:  an
+      interactive one in which we visually trace crevasse patterns
+      (Lucchitta and others, 1993) and an autocorrelation program
+      developed by Bindschadler and Scambos (1991) and Scambos and
+      others (1992).  First, we digitally co-register the images by
+      using a minimum of three well-dispersed fixed points (such as
+      nunataks or ice walls) to calculate a least-squares fit to a
+      first-order polynomial equation.  This insures that only a
+      rotational/translational correction is made and no new
+      internal error is introduced during the geometric resampling.
+      In the interactive technique, we then match and align the
+      crevasse patterns displaced with time, and record the starting/
+      ending image coordinates for each point.  To obtain the
+      distribution of average velocities over the length of the
+      glacier tongues, we also use the distance from the location of
+      each point on the earlier image to a base line drawn
+      perpendicular to glacier movement and ideally lying on the
+      grounding line; where the grounding line is complex, the base
+      line may only approximate its position. Next, a digitized file
+      is made, tracing the glacier ice movements and defining the
+      glacier's baseline (or grounding line).  This file is used to
+      calculate the velocity and distance statistics by measuring
+      the displacements along the curve that approximates the ices
+      movement per given time interval.  For each measured point, a
+      displacement vector is plotted on the image, commonly the
+      earlier one of the pair, to illustrate the relative velocities
+      between glaciers and time intervals.
+  Logical_Consistency_Report:
+    Because the velocity field may also change across the glacier
+    tongues, we divide the wider glaciers into several longitudinal
+    paths.  Next we obtain an estimate of the spread of measured
+    points by performing a regression analysis on the data.  This
+    includes an option to cull bad data points by inputting a variable
+    for the standard deviation.  If used, the mean absolute deviation
+    of the points about this line is calculated and any points lying
+    outside that distance are disregarded during the statistical
+    analysis.  Calculations are made for the entire glacier as well as
+    for each individual path.  The 95% confidence interval for the
+    regression coefficient is calculated along with the correlation
+    coefficient.
+  Completeness_Report:
+    The files contained in this data base are the output ASCII files
+    generated by this statistical software.  Each file identifies the
+    images used, their dates, and resolutions, the time interval
+    between image acquisitions and the statistical variables used to
+    make the calculations. These data are followed by a table of the
+    distance and velocity values for each point and the statistics
+    calculated per path. The measurement results are shown in graphs
+    that display average velocities per given time interval versus the
+    distance from the base line for all points in each field (not
+    included in this data base).
+
+    In the auto-correlation method we use the same techniques for
+    coregistration and graphic and statistical display.  However, we
+    may not divide the glaciers into segments and paths, but instead
+    combine all velocities and show variations across the glacier by
+    color contours (also not shown in this report).
+  Positional_Accuracy:
+    Horizontal_Positional_Accuracy:
+      Horizontal_Positional_Accuracy_Report:
+        Accuracy of point positions is limited by the digital
+        representation of the images.  The accuracy with which
+        individual features of the ice tongues are correlated
+        (from image to image) cannot be assessed, because it is
+        confounded with the spatial variation of the velocity
+        field.
+  Lineage:
+    Source_Information:
+      Source_Citation:
+        Citation_Information:
+          Originator: Ferrigno, J.G.
+          Originator: Lucchitta, B.K.
+          Originator: Mullins, K.F.
+          Originator: Allison, A.L.
+          Originator: Allen, R.J.
+          Originator: Gould, W.G.
+          Publication_Date: 1993
+          Title:
+            Velocity measurements and changes in position of
+            Thwaites Glacier Ice Berg Tongue from aerial
+            photographs, Landsat images, and NOAA AVHRR data
+          Series_Information:
+            Series_Name: Annals of Glaciology
+            Issue_Identification: v.17, p. 239-244
+      Type_of_Source_Media: paper
+      Source_Time_Period_of_Content:
+        Time_Period_Information:
+          Single_Date/Time:
+            Calendar_Date: 1993
+        Source_Currentness_Reference: publication date
+      Source_Citation_Abbreviation: Ferrigno et al., 1993
+      Source_Contribution: Velocity of Thwaites Glacier tongue
+
+    Source_Information:
+      Source_Citation:
+        Citation_Information:
+          Originator: Lucchitta, B.K.
+          Originator: Mullins, K.F.
+          Originator: Allison, A.L.
+          Originator: Ferrigno, J.G.
+          Publication_Date: 1993
+          Title:
+            Antarctic glacial tongue velocities from Landsat
+            images: First results
+          Series_Information:
+            Series_Name: Annals of Glaciology
+            Issue_Identification: v. 17, p. 356-366
+      Type_of_Source_Media: paper
+      Source_Time_Period_of_Content:
+        Time_Period_Information:
+          Single_Date/Time:
+            Calendar_Date: 1993
+        Source_Currentness_Reference: publication date
+      Source_Citation_Abbreviation: Lucchitta et al., 1993
+      Source_Contribution:
+        Velocities of Stancomb-Wills, Berg, Thwaites, Land,
+        Drygalski, Kaya, and Riiser-Larsen glacier tongues.
+
+    Source_Information:
+      Source_Citation:
+        Citation_Information:
+          Originator: Lucchitta, B.K.
+          Originator: Smith, C.E.
+          Originator: Bowell, J.A.
+          Originator: Mullins, K.F.
+          Publication_Date: 1994
+          Title:
+            Velocities and mass balance of Pine Island
+            Glacier, West Antarctica, Derived from ERS-1 SAR
+            images
+          Series_Information:
+            Series_Name: ESA SP
+            Issue_Identification: 361, p. 147-151
+          Other_Citation_Details:
+            Proceedings, 2nd ERS-1 Symposium, Hamburg,
+            Germany, 11-14 Oct. 1993
+      Type_of_Source_Media: paper
+      Source_Time_Period_of_Content:
+        Time_Period_Information:
+          Single_Date/Time:
+            Calendar_Date: 1994
+        Source_Currentness_Reference: publication date
+      Source_Citation_Abbreviation: Lucchitta et al., 1994a
+      Source_Contribution: Velocity of Pine Island Glacier
+
+    Source_Information:
+      Source_Citation:
+        Citation_Information:
+          Originator: Lucchitta, B.K.
+          Originator: Mullins, K.F.
+          Originator: Smith, C.E.
+          Originator: Ferrigno, J.G.
+          Publication_Date: 1994
+          Title:
+            Velocities of Smith Glacier Ice Tongue and Dotson
+            Ice Shelf, Walgreen Coast, Marie Byrd Land, West
+            Antarctica
+          Series_Information:
+            Series_Name: Annals of Glaciology
+            Issue_Identification: v. 20, p. 101-109
+      Type_of_Source_Media: paper
+      Source_Time_Period_of_Content:
+        Time_Period_Information:
+          Single_Date/Time:
+            Calendar_Date: 1994
+        Source_Currentness_Reference: publication date
+      Source_Citation_Abbreviation: Lucchitta et al., 1994b
+      Source_Contribution:
+        Velocity of Smith glacier ice tongue and Dotson Ice Shelf
+
+    Source_Information:
+      Source_Citation:
+        Citation_Information:
+          Originator: Lucchitta, B.K.
+          Originator: Smith, C.E.
+          Originator: Mullins, K.F.
+          Publication_Date: 1995
+          Title:
+            Velocities and mass balance of Pine Island
+            Glacier, West Antarctica
+          Series_Information:
+            Series_Name: Annals of Glaciology
+            Issue_Identification: v. 21
+          Other_Citation_Details: in press
+      Type_of_Source_Media: paper
+      Source_Time_Period_of_Content:
+        Time_Period_Information:
+          Single_Date/Time:
+            Calendar_Date: 1995
+        Source_Currentness_Reference: publication date
+      Source_Citation_Abbreviation: Lucchitta et al., 1995
+      Source_Contribution: Velocity of Pine Island glacier
+
+    Process_Step:
+      Process_Description:
+        For Landsat images, we obtain either computer-compatible
+        tapes (CCTs) of MSS images, or, where tapes are
+        nonexistent, the lowest generation transparency available
+        for band 7 (near-infrared).   These transparencies are
+        third- and fourth-generation negatives, which have lost
+        some image detail through the duplication process.  We use
+        only photographic products for TM images because of the
+        high cost of CCTs.  For TM images acquired before 1989 we
+        obtain fourth-generation negatives of band 4 (near-
+        infrared), and for images acquired after 1989 we use third-
+        generation color negatives (only color photographic
+        products are now available from the vending company).  The
+        quality of some of these images is poor, as they are not
+        especially processed for the high reflectivity of snow and
+        ice.  The transparencies are scanned at 50 micron to
+        obtain a digital data set.  The ground resolution of the
+        scanned images varies, depending on the size of the
+        original transparency.  To obtain the ground resolution
+        per pixel, the nominal Landsat image height on the ground,
+        in km, is scaled to the actual image height of the scanned
+        images.
+
+        We generally register Landsat 1, 2, and 3 images to
+        Landsat 4 and 5 images, because the latter have more
+        stable internal geometry and higher resolution than the
+        earlier images.  Several tests were made to compare the
+        internal geometry of 3rd and 4th generations negatives
+        with the original digital data.  All of these tests, as
+        well as several made between original and scanned images
+        of transparencies, showed an insignificant degree of
+        geometric error between products.  These tests demonstrate
+        that geometrical errors within the transparencies will
+        contribute little to statistical variance between
+        measurements.  Loss of resolution and misidentification of
+        features play a more important role in measurement error
+        made with these images. Borgeson and others (1985) found
+        that Landsat 5 images are accurate to about 0.4 pixels,
+        meeting national Horizontal Map Accuracy standards for
+        scales of 1:100,000 and smaller, and that Landsat 4 images
+        are accurate to 0.8 pixel levels.  Welch and others (1985)
+        reported that Landsat 4 and 5 images meet accuracy
+        standards for maps of 1:50,000 scale or smaller and are
+        well suited to maps of 1:100,000 scale.
+      Source_Used_Citation_Abbreviation: LANDSAT
+      Process_Date: 1994
+      Source_Produced_Citation_Abbreviation: Ferrigno et al., 1993
+      Source_Produced_Citation_Abbreviation: Lucchitta et al., 1993
+      Source_Produced_Citation_Abbreviation: Lucchitta et al., 1994a
+      Source_Produced_Citation_Abbreviation: Lucchitta et al., 1994b
+
+    Process_Step:
+      Process_Description:
+        For ERS images, we obtain CCTs of the geocoded version
+        (placed in Universal Polar Stereographic projection using
+        the WGS 1984 ellipsoid).  The pixel size is 12.5 m on the
+        ground (resolution approximately 30m).  The images are
+        coregistered by either (1) matching fixed points such as
+        nunataks (land masses projecting through the ice), or (2)
+        using the furnished coordinates based on orbital
+        parameters.  We obtained the same results by both methods,
+        increasing our confidence in the accuracy of the nominal
+        image location, which is supposed to be less than 50 m
+        (Roth and others, in press).  For a more detailed error
+        evaluation for Landsat images see Lucchitta and others
+        (1993 and 1994), and for ERS-1 images see Lucchitta
+        and others (1994 and 1995).
+      Process_Date: 1994
+      Source_Used_Citation_Abbreviation: ERS-1
+      Source_Produced_Citation_Abbreviation: Lucchitta et al., 1995
+
+Spatial_Data_Organization_Information:
+  Indirect_Spatial_Reference:
+    Point locations contained in the data files are not georeferenced
+    although in principle they could be if the corners of the images
+    from which they were digitized were georeferenced.
+
+Spatial_Reference_Information:
+  Horizontal_Coordinate_System_Definition:
+    Local:
+      Local_Description:
+        We generally register Landsat 1, 2, and 3 images to
+        Landsat 4 and 5 images, because the latter have more
+        stable internal geometry and higher resolution than the
+        earlier images.
+
+        We digitally co-register the images by using a minimum of
+        three well-dispersed fixed points (such as nunataks or ice
+        walls) to calculate a least-squares fit to a first-order
+        polynomial equation.  This insures that only a rotational/
+        translational correction is made and no new internal error
+        is introduced during the geometric resampling.  In the
+        interactive technique, we then match and align the
+        crevasse patterns displaced with time, and record the
+        starting/ending image coordinates for each point.  To
+        obtain the distribution of average velocities over the
+        length of the glacier tongues, we also use the distance
+        from the location of each point on the earlier image to a
+        base line drawn perpendicular to glacier movement and
+        ideally lying on the grounding line; where the grounding
+        line is complex, the base line may only approximate its
+        position. Next, a digitized file is made, tracing the
+        glacier ice movements and defining the glacier's baseline (
+        or grounding line).  This file is used to calculate the
+        velocity and distance statistics by measuring the
+        displacements along the curve that approximates the ices
+        movement per given time interval.  For each measured
+        point, a displacement vector is plotted on the image,
+        commonly the earlier one of the pair, to illustrate the
+        relative velocities between glaciers and time intervals.
+      Local_Georeference_Information:
+        Although in principle the images could be registered to
+        the earth's surface, for this exercise georeference is
+        not necessary, since the objective is merely to understand
+        ice movement through time and among paths within a glacier
+        tongue.  Hence the data are not explicitly georeferenced.
+
+Entity_and_Attribute_Information:
+  Overview_Description:
+    Entity_and_Attribute_Overview:
+      The velocity files are grouped within folders by name of
+      glacier or shelf and by year of the two image pairs used in
+      the calculations.  For example: in the landsat/thwaites
+      directory the file th7384.dst contains the velocity data for
+      the 1973/1984 image pair covering the Thwaites glacier
+      region.  For each pair, the following information is given:
+      (1) the displacement per given time interval for each point of
+      a path, segment, or the entire glacier, (2) the velocities per
+      year for the same points, (3) statistical parameters of
+      individual paths, segments, or entire glaciers, including
+      standard deviations, and (4) distance to grounding line for
+      each point.
+    Entity_and_Attribute_Detail_Citation: Lucchitta et al., 1993
+
+Distribution_Information:
+  Distributor:
+    Contact_Information:
+      Contact_Person_Primary:
+        Contact_Person: Peter N. Schweitzer
+      Contact_Address:
+        Address_Type: mailing address
+        Address:
+          Mail Stop 955 National Center
+          U.S. Geological Survey
+          12201 Sunrise Valley Drive
+        City: Reston
+        State_or_Province: VA
+        Postal_Code: 22092
+        Country: USA
+      Contact_Voice_Telephone: (703) 648-6533
+      Contact_Facsimile_Telephone: (703) 648-6647
+      Contact_Electronic_Mail_Address: pschweitzer@usgs.gov
+
+  Distribution_Liability:
+    This report is preliminary and has not been reviewed for
+    conformity with U.S. Geological Survey editorial standards (or
+    with the North American Stratigraphic Code).  Any use of trade,
+    product, or firm names is for descriptive purposes only and does
+    not imply endorsement by the U.S. Government.
+
+  Standard_Order_Process:
+    Digital_Form:
+      Digital_Transfer_Information:
+        Format_Name: TEXT
+        Format_Information_Content: Glacier-velocity data
+      Digital_Transfer_Option:
+        Online_Option:
+          Computer_Contact_Information:
+            Network_Address:
+              Network_Resource_Name: <URL:ftp://geochange.er.usgs.gov/pub/antarctica/glacier-velocity/>
+              Network_Resource_Name: <URL:http://geochange.er.usgs.gov/pub/antarctica/glacier-velocity/Core/meta/report.html>
+          Online_Computer_and_Operating_System:
+            Data General AViiON 6220 system running DG/UX
+            version 5.4R3.10 (UNIX)
+    Fees: none
+
+Metadata_Reference_Information:
+  Metadata_Date: 19960207
+  Metadata_Contact:
+    Contact_Information:
+      Contact_Person_Primary:
+        Contact_Person: Peter N. Schweitzer
+      Contact_Address:
+        Address_Type: mailing address
+        Address:
+          Mail Stop 955
+          U.S. Geological Survey
+          12201 Sunrise Valley Drive
+        City: Reston
+        State_or_Province: VA
+        Postal_Code: 22092
+        Country: USA
+      Contact_Voice_Telephone: (703) 648-6533
+      Contact_Facsimile_Telephone: (703) 648-6647
+      Contact_Electronic_Mail_Address: pschweitzer@usgs.gov
+  Metadata_Standard_Name: FGDC Content Standards for Digital Geospatial Metadata
+  Metadata_Standard_Version: 19940608
