@@ -14,6 +14,7 @@
 #
 
 simple		# Simple example of a document type that displays the first
+markdown        # Markdown text with heading-aware brief presentation
 		# x lines of text in the document.  The value of x can be
 		# set during searching with -o lines=[x], and the default
 		# is 1.
