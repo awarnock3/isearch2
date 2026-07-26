@@ -182,7 +182,7 @@ GDT_BOOLEAN MAILFOLDER::accept_tag(const CHR *tag) const
 #if RESTRICT_MAIL_FIELDS
   // Mail tags that we want, if it is not
   // here then we igonre it.
-  static char * Keywords[] = {
+  static const char * const Keywords[] = {
     /* Must be sorted! */
     "Bcc",
     "Cc",
@@ -550,10 +550,10 @@ GDT_BOOLEAN MAILFOLDER::IsMailFromLine (const char *line) const
   static char magic[] = "From "; // Mail magic
 
 #define MAX_FIELDS 10
-  char *fields[MAX_FIELDS];
+  const char *fields[MAX_FIELDS];
   const char *sender_tail;
   const char *lp;
-  char **fp;
+  const char **fp;
   int n, i;
   // Email (RFC822) has English language dates from 1 Jan 1970 on
   static char legal_day[] = "SunMonTueWedThuFriSat";
@@ -579,7 +579,7 @@ GDT_BOOLEAN MAILFOLDER::IsMailFromLine (const char *line) const
 	lp++;
       if (*lp == '\0' || *lp == '\n')
 	break;
-      *fp++ = (char *)lp;
+      *fp++ = lp;
       while (*lp && !isspace (*lp))
 	if (*lp++ == ':' && (n == 4 || n == 5))
 	  break;

@@ -45,7 +45,7 @@ DTCC=c++
 #
 # for Linux
 #
-CFLAGS=-O2 -DUNIX
+CFLAGS=-O2 -std=c++17 -DUNIX
 #CFLAGS=-g -fwritable-strings -Wall -Wno-unused -DUNIX # -DVERBOSE -DDEBUG
 
 #
@@ -117,7 +117,7 @@ CGI_DIR=Isearch-cgi
 
 RM = rm -f
 LDFLAGS=
-VER=1.47k
+VER=2.00
 #DIST=Isearch-$(VER)
 DIST=Isearch
 BINDIST=$(DIST)-bin
@@ -132,15 +132,15 @@ isearch::
 	`if [ ! -f src/conf.h ] ; \
 		then echo ./configure ; \
 	fi`
-	cd $(DOCTYPE_DIR); make "CC=$(CC)" \
+	+cd $(DOCTYPE_DIR); make "CC=$(CC)" \
 		CFLAGS="$(CFLAGS) -DVERS=\\\"$(VER)\\\" "
-	cd $(SRC_DIR); make "BIN_DIR=../$(BIN_DIR)" \
+	+cd $(SRC_DIR); make "BIN_DIR=../$(BIN_DIR)" \
 			"DOCTYPE_DIR=../$(DOCTYPE_DIR)" \
 			CFLAGS="$(CFLAGS) -DVERS=\\\"$(VER)\\\" " \
 			"CC=$(CC)" "DOCLIB=$(DOCLIB)" "LDFLAGS=$(LDFLAGS)"
 
 isearch-cgi::
-	cd $(CGI_DIR); make "BIN_DIR=../$(BIN_DIR)" "VER=$(VER)" \
+	+cd $(CGI_DIR); make "BIN_DIR=../$(BIN_DIR)" "VER=$(VER)" \
 			"LIB_DIR=../$(BIN_DIR)" "ISEARCH_DIR=.." \
 			CFLAGS="$(CFLAGS) -DVERS=\\\"$(VER)\\\"" \
 			"CC=$(CC)" "DOCLIB=$(DOCLIB)" "LDFLAGS=$(LDFLAGS)"
@@ -155,25 +155,25 @@ done:
 clean:
 	$(RM) *~ $(BIN_DIR)/Iindex $(BIN_DIR)/Isearch $(BIN_DIR)/Iutil \
 		$(BIN_DIR)/Iget $(BIN_DIR)/libIsearch.a $(BIN_DIR)/core
-	cd $(SRC_DIR); make -i clean
-	cd $(DOCTYPE_DIR); make -i clean
-	cd $(CGI_DIR); make -i clean
+	+cd $(SRC_DIR); make -i clean
+	+cd $(DOCTYPE_DIR); make -i clean
+	+cd $(CGI_DIR); make -i clean
 
 realclean:
 	$(RM) *~ $(BIN_DIR)/Iindex $(BIN_DIR)/Isearch $(BIN_DIR)/Iutil \
 		$(BIN_DIR)/libIsearch.a $(BIN_DIR)/core config.* \
 		$(BIN_DIR)/Iget Makefile.all
-	cd $(SRC_DIR); make -i realclean
-	cd $(DOCTYPE_DIR); make -i clean
-	cd $(CGI_DIR); make -i clean
+	+cd $(SRC_DIR); make -i realclean
+	+cd $(DOCTYPE_DIR); make -i clean
+	+cd $(CGI_DIR); make -i clean
 
 distclean:
 	$(RM) *~ $(BIN_DIR)/Iindex $(BIN_DIR)/Isearch $(BIN_DIR)/Iutil \
 		$(BIN_DIR)/libIsearch.a $(BIN_DIR)/core config.* \
 		$(BIN_DIR)/Iget Makefile.all
-	cd $(SRC_DIR); make -i distclean
-	cd $(DOCTYPE_DIR); make -i clean
-	cd $(CGI_DIR); make -i clean
+	+cd $(SRC_DIR); make -i distclean
+	+cd $(DOCTYPE_DIR); make -i clean
+	+cd $(CGI_DIR); make -i clean
 
 binclean:
 	$(RM) *~ $(BIN_DIR)/Iindex $(BIN_DIR)/Isearch $(BIN_DIR)/Iutil \

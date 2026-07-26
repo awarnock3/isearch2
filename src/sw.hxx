@@ -2,7 +2,7 @@
 #define SW_HXX
 
 // 400 words
-char   *stoplist[] = {
+const CHR *stoplist[] = {
   "0",
   "1",
   "2",

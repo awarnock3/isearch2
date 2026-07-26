@@ -201,7 +201,7 @@ HTMLTAG::~HTMLTAG() {
 // e.g. if tag[] == "<META NAME=\"AUTHOR\" CONTENT=\"Nassar\">"
 //     and tagType[] == "META"
 // then TagMatch will return 1
-int HTMLTAG::TagMatch(char* tag, char* tagType) const {
+int HTMLTAG::TagMatch(char* tag, const char* tagType) const {
 	// check first character
 	if (*tag != '<') {
 		return 0;

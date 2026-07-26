@@ -354,7 +354,11 @@ NUMERICLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation, INT4 *Index)
     INT4        Offset;       // Offset needed to read the element
 
     ElementSize = sizeof(INT4) + sizeof(DOUBLE);
-    fread((char*)&Total,1,sizeof(INT4),Fp);
+    if (fread((char*)&Total,1,sizeof(INT4),Fp) != sizeof(INT4)) {
+      fclose(Fp);
+      *Index = -1;
+      return NO_MATCH;
+    }
 
     Low = 0;
     High = Total - 1;
@@ -382,12 +386,20 @@ NUMERICLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation, INT4 *Index)
       }
 	
       if (Type != AT_START) {
-	fread((char *)&GpS, 1, sizeof(INT4), Fp);
-	fread((char *)&LowerBound, 1, sizeof(DOUBLE), Fp);
+	if (fread((char *)&GpS, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	    fread((char *)&LowerBound, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	  fclose(Fp);
+	  *Index = -1;
+	  return NO_MATCH;
+	}
       }
 	
-      fread((char *)&GpS, 1, sizeof(INT4), Fp);
-      fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp);
+      if (fread((char *)&GpS, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	  fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	fclose(Fp);
+	*Index = -1;
+	return NO_MATCH;
+      }
 	
       // If we're at the start, we need to read the first value into
       // NumericValue, but we don't want to leave LowerBound 
@@ -397,8 +409,12 @@ NUMERICLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation, INT4 *Index)
 	LowerBound = NumericValue;
 	
       if(Type != AT_END) {
-	fread((char *)&Dummy, 1, sizeof(INT4), Fp);
-	fread((char *)&UpperBound, 1, sizeof(DOUBLE), Fp);
+	if (fread((char *)&Dummy, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	    fread((char *)&UpperBound, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	  fclose(Fp);
+	  *Index = -1;
+	  return NO_MATCH;
+	}
       }
 	
       // Similarly, if we're at the end and can't read in a new value
@@ -514,7 +530,11 @@ NUMERICLIST::DiskFind(STRING Fn, INT4 Key, INT4 Relation, INT4 *Index)
     INT4        Offset;       // Offset needed to read the element
 
     ElementSize = sizeof(INT4) + sizeof(DOUBLE);
-    fread((char*)&Total,1,sizeof(INT4),Fp);
+    if (fread((char*)&Total,1,sizeof(INT4),Fp) != sizeof(INT4)) {
+      fclose(Fp);
+      *Index = -1;
+      return NO_MATCH;
+    }
 
     Low = 0;
     High = Total - 1;
@@ -544,12 +564,20 @@ NUMERICLIST::DiskFind(STRING Fn, INT4 Key, INT4 Relation, INT4 *Index)
       }
 	
       if (Type != AT_START) {
-	fread((char *)&GpLower, 1, sizeof(INT4), Fp);
-	fread((char *)&Dummy, 1, sizeof(DOUBLE), Fp);
+	if (fread((char *)&GpLower, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	    fread((char *)&Dummy, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	  fclose(Fp);
+	  *Index = -1;
+	  return NO_MATCH;
+	}
       }
 	
-      fread((char *)&GpValue, 1, sizeof(INT4), Fp);
-      fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp);
+      if (fread((char *)&GpValue, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	  fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	fclose(Fp);
+	*Index = -1;
+	return NO_MATCH;
+      }
 	
       // If we're at the start, we need to read the first value into
       // NumericValue, but we don't want to leave LowerBound 
@@ -559,8 +587,12 @@ NUMERICLIST::DiskFind(STRING Fn, INT4 Key, INT4 Relation, INT4 *Index)
 	GpLower = GpValue;
 	
       if(Type != AT_END) {
-	fread((char *)&GpUpper, 1, sizeof(INT4), Fp);
-	fread((char *)&Dummy, 1, sizeof(DOUBLE), Fp);
+	if (fread((char *)&GpUpper, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	    fread((char *)&Dummy, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	  fclose(Fp);
+	  *Index = -1;
+	  return NO_MATCH;
+	}
       }
 	
       // Similarly, if we're at the end and can't read in a new value
@@ -907,4 +939,3 @@ main()
 #define TOO_HIGH 1
 #define MATCH 2
 */
-

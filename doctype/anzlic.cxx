@@ -429,7 +429,7 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
 	  }
 	}
 
-	PCHR unified_name = UnifiedName(*tags_ptr);
+	const CHR *unified_name = UnifiedName(*tags_ptr);
 	// Ignore "unclassified" fields
 	if (unified_name == NULL) 
 	  continue; // ignore these

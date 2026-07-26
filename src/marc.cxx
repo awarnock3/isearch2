@@ -102,12 +102,12 @@ char fieldbuffer[FIELDBUFSIZE];
 char linebuffer[FIELDBUFSIZE];
 
 typedef struct {
-  char *label;
-  char *tags;
-  char *subfields;
-  char *beginpunct;
-  char *subfsep;
-  char *endpunct;
+  const char *label;
+  const char *tags;
+  const char *subfields;
+  const char *beginpunct;
+  const char *subfsep;
+  const char *endpunct;
   int  newfield;
   int  print_all;
   int  print_indicators;
@@ -184,7 +184,7 @@ DISP_FORMAT htmlformat[] = {
 };
 
 /* local prototypes */
-char *format_field(MARC_FIELD *mf,DISP_FORMAT *format,CHR *buff,INT repeat);
+char *format_field(MARC_FIELD *mf,const DISP_FORMAT *format,CHR *buff,INT repeat);
 void  outputline(void *(outfunc)(),CHR *line, INT maxlen, INT indent,
 	FILE *fp);
 void  OutputString(CHR *line, INT maxlen, INT indent, STRING* Buffer);
@@ -257,9 +257,9 @@ MARC::Print(FILE *fp)
     if (fld == NULL && *f->tags == '\0') {
       /* a null tag means output the supplied */
       /* record number			*/
-      sprintf(linebuffer,"%s%s%d%s", 
-	      f->label, f->beginpunct,displaynum, 
-	      f->endpunct);
+      snprintf(linebuffer, sizeof(linebuffer), "%s%s%d%s", 
+	       f->label, f->beginpunct,displaynum, 
+	       f->endpunct);
       /* assume it won't be INT4er than maxlen*/
       outputline (NULL,linebuffer, maxlen, f->indent, fp);
     }	
@@ -268,12 +268,16 @@ MARC::Print(FILE *fp)
     while (fld) {
       if (f->print_all) {
 	codeconvert(fieldbuffer);
+	STRING lineOut;
 	if (*f->label == '\0')
-	  sprintf(linebuffer,"%s %s%s%s", 
-		  fld->tag, f->beginpunct,fieldbuffer, f->endpunct);
+	  lineOut = fld->tag;
 	else
-	  sprintf(linebuffer,"%s %s%s%s", 
-		  f->label, f->beginpunct,fieldbuffer, f->endpunct);
+	  lineOut = f->label;
+	lineOut.Cat(" ");
+	lineOut.Cat(f->beginpunct);
+	lineOut.Cat(fieldbuffer);
+	lineOut.Cat(f->endpunct);
+	lineOut.GetCString(linebuffer, sizeof(linebuffer) - 1);
 	outputline (NULL, linebuffer, maxlen, f->indent, fp);
       }
       else  {/* more selective printing */
@@ -336,9 +340,9 @@ MARC::Print(STRING* StringBuffer)
     // if no field found, check for number format
     if (fld == NULL && *f->tags == '\0') {
       // a null tag means output the supplied record number
-      sprintf(linebuffer,"%s%s%d%s", 
-	      f->label, f->beginpunct,displaynum, 
-	      f->endpunct);
+      snprintf(linebuffer, sizeof(linebuffer), "%s%s%d%s", 
+	       f->label, f->beginpunct,displaynum, 
+	       f->endpunct);
       OutputString(linebuffer, maxlen, f->indent, &Hold);
       StringBuffer->Cat(Hold);
     }	
@@ -347,12 +351,16 @@ MARC::Print(STRING* StringBuffer)
     while (fld) {
       if (f->print_all) {
 	codeconvert(fieldbuffer);
+	STRING lineOut;
 	if (*f->label == '\0')
-	  sprintf(linebuffer,"%s %s%s%s", 
-		  fld->tag, f->beginpunct,fieldbuffer, f->endpunct);
+	  lineOut = fld->tag;
 	else
-	  sprintf(linebuffer,"%s %s%s%s", 
-		  f->label, f->beginpunct,fieldbuffer, f->endpunct);
+	  lineOut = f->label;
+	lineOut.Cat(" ");
+	lineOut.Cat(f->beginpunct);
+	lineOut.Cat(fieldbuffer);
+	lineOut.Cat(f->endpunct);
+	lineOut.GetCString(linebuffer, sizeof(linebuffer) - 1);
 	OutputString(linebuffer, maxlen, f->indent, &Hold);
 	StringBuffer->Cat(Hold);
       } else  {
@@ -378,10 +386,11 @@ MARC::Print(STRING* StringBuffer)
 /*                a line in a buffer according to the format.          */
 /***********************************************************************/
 char *
-format_field(MARC_FIELD *mf, DISP_FORMAT *format, CHR *buff, INT repeat)
+format_field(MARC_FIELD *mf, const DISP_FORMAT *format, CHR *buff, INT repeat)
 {
   MARC_SUBFIELD *subf;
-  char *linend, *c;
+  char *linend;
+  const char *c;
   INT pos, count, ok=0;
 	
   linend = buff;

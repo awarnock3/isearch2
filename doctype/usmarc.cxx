@@ -35,10 +35,10 @@ USMARC::USMARC(PIDBOBJ DbParent)
 
 struct ParseEntry
 {
-  char *field;
-  char *subfield;
-  char *tag;
-  char *name;
+  const char *field;
+  const char *subfield;
+  const char *tag;
+  const char *name;
 };
 
 // Maps a character string representation of a marc field
@@ -49,7 +49,7 @@ struct ParseEntry
 // author, especially since something like proceedings of the world wide web
 // consortium, for example, could very easily go either way.
 // Real Librarians(TM) will want to do some hacking in here. :-)
-ParseEntry ParseData[] = 
+const ParseEntry ParseData[] = 
 {
   // Ordaleit
   { "11*", "**", "*", "Ordaleit" },
@@ -325,13 +325,13 @@ USMARC::readMarcStructure(PRECORD NewRecord)
 // though that isn't the best policy.
 
 int 
-USMARC::usefulMarcField(char *fieldStr)
+USMARC::usefulMarcField(const char *fieldStr)
 {
   return 1;
 }
 
 int
-USMARC::compareReg(char *s1 , char *s2) {
+USMARC::compareReg(const char *s1 , const char *s2) {
   if (s1 == NULL || s2 == NULL) { // FIXME: Think out behavior if this happens
   }
 

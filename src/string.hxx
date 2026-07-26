@@ -55,7 +55,7 @@ Author:		Nassib Nassar, nrn@cnidr.org
 
 using namespace std;
 
-extern CHR *transcode (CHR *buffer, char **transarray);
+extern CHR *transcode (CHR *buffer, const CHR *const *transarray);
 
 typedef size_t STRINGINDEX;
 typedef STRINGINDEX* PSTRINGINDEX;

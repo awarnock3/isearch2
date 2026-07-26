@@ -103,7 +103,7 @@ TAGLIST::ReplaceWithSpace(PCHR data, INT length)
 	*p = '\0';			// Add a NULL to terminate the record
 }
 
-char *ValidTags[] = {"TITLE",
+const char * const ValidTags[] = {"TITLE",
 					"H1",
 					"H2",
 					"H3",

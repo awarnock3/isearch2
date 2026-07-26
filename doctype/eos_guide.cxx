@@ -406,7 +406,7 @@ EOS_GUIDE::~EOS_GUIDE() {
 //     and tagType[] == "META"
 // then TagMatch will return 1
 INT 
-EOS_GUIDE::TagMatch(char* tag, char* tagType) const {
+EOS_GUIDE::TagMatch(char* tag, const char* tagType) const {
   // check first character
   if (*tag != '<') {
     return 0;

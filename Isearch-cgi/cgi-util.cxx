@@ -73,6 +73,9 @@ void CGIAPP::GetInput() {
   } else {
     if (!strcmp(meth,"GET")) {
       query = (char *)getenv("QUERY_STRING");
+      if (query == NULL) {
+        query = (char *)"";
+      }
       Method=GET;
     } else {
       cout << "This program is to be referenced with a METHOD of POST or GET.\n";
@@ -86,6 +89,9 @@ void CGIAPP::GetInput() {
   if (Method==POST) {
     entry_count=0;
     for (x = 0; ContentLen>0; x++) {
+      if (x >= CGI_MAXENTRIES) {
+        break;
+      }
       cin.getline(temp1,ContentLen+1,'&');
       entry_count++;
       len=strlen(temp1);
@@ -106,7 +112,7 @@ void CGIAPP::GetInput() {
       strcpy(name[x],temp2);
 
       // Trim trailing blanks off the string before we stick it into Value
-      for (nn=strlen(temp3)-1;nn==0;nn--) {
+      for (nn=(INT)strlen(temp3)-1;nn>=0;nn--) {
 	if(temp3[nn] == ' ')
 	  temp3[nn]='\0';
 	else
@@ -124,6 +130,9 @@ void CGIAPP::GetInput() {
     unescape_url(query);
     len=strlen(query);
     for (x=0;y<len;x++) {
+      if (x >= CGI_MAXENTRIES) {
+        break;
+      }
       while ((query[y]!='=') && (query[y]!='&') && (y<len)) {
         temp1[z]=query[y];
         z++;
@@ -147,7 +156,7 @@ void CGIAPP::GetInput() {
         strcpy(name[x],"");
 
 	// Trim trailing blanks off the string before we stick it into Value
-	for (nn=strlen(temp1)-1;nn==0;nn--) {
+	for (nn=(INT)strlen(temp1)-1;nn>=0;nn--) {
 	  if(temp1[nn] == ' ')
 	    temp1[nn]='\0';
 	  else
@@ -161,7 +170,7 @@ void CGIAPP::GetInput() {
         strcpy(name[x],temp1);
 
 	// Trim trailing blanks off the string before we stick it into Value
-	for (nn=strlen(temp2)-1;nn==0;nn--) {
+	for (nn=(INT)strlen(temp2)-1;nn>=0;nn--) {
 	  if(temp2[nn] == ' ')
 	    temp2[nn]='\0';
 	  else
@@ -180,6 +189,12 @@ void CGIAPP::GetInput() {
 
 
 CGIAPP::CGIAPP() {
+  INT i;
+  for (i = 0; i < CGI_MAXENTRIES; i++) {
+    name[i] = NULL;
+    value[i] = NULL;
+  }
+  entry_count = 0;
   GetInput();
 }
 
@@ -219,8 +234,8 @@ PCHR CGIAPP::GetValueByName(const CHR *field) {
 CGIAPP::~CGIAPP() {
   INT i;
   for (i=0;i<entry_count;i++) {
-    delete name[i];
-    delete value[i];
+    delete [] name[i];
+    delete [] value[i];
   }
 }
 
@@ -283,5 +298,4 @@ void escape_url(PCHR url, PCHR out) {
   out[y] = '\0';
   spacetoplus(out);
 }
-
 

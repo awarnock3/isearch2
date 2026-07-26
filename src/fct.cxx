@@ -73,7 +73,7 @@ void FCT::SortByFc() {
 
 void FCT::Write(PFILE fp) const {
 	SIZE_T TotalEntries = GetTotalEntries();
-	fprintf(fp, "%d\n", TotalEntries);
+	fprintf(fp, "%zu\n", TotalEntries);
 	SIZE_T x;
 	for (x=1; x<=TotalEntries; x++) {
 		((FCT*)(VLIST::GetNodePtr(x)))->Fc.Write(fp);

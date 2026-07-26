@@ -637,7 +637,10 @@ THESAURUS::GetIndirectString(PFILE fp, const INT4 ptr, STRING* term) {
 
   // Offset into the synonym table and read the row
   fseek(fp,ptr,SEEK_SET);
-  fgets(buf,MAX_SYN_LENGTH,fp);
+  if (!fgets(buf,MAX_SYN_LENGTH,fp)) {
+    *term = "";
+    return;
+  }
   
   // Get the parent from before the = sign
   b = strtok(buf,"=+\n");
@@ -740,7 +743,10 @@ THESAURUS::GetChildren(const STRING& ParentTerm, STRLIST* Children) {
     if (!fp)
       return;
     fseek(fp,ptr,SEEK_SET);
-    fgets(buf,MAX_SYN_LENGTH,fp);
+    if (!fgets(buf,MAX_SYN_LENGTH,fp)) {
+      fclose(fp);
+      return;
+    }
     TheEntry = buf;
     TheEntry.Replace("=","+");
     Children->Split('+',TheEntry);

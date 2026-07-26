@@ -42,7 +42,7 @@ DTCC=c++
 # 
 # for MacOSX, BSD
 #
-CFLAGS=-O2 -DUNIX -D_BSD
+CFLAGS=-O2 -std=c++17 -DUNIX -D_BSD
 
 
 #

@@ -183,7 +183,7 @@ static int IsHTMLAttributeTag (const char *tag)
 {
   // HTML Attributes where we are also interested in values
   static struct {
-    char *tag;
+    const char *tag;
     unsigned char len;
   } Tags[] = {
 /*- UNSORTED LIST (lowercase names) -*/ 
@@ -357,7 +357,7 @@ static int IgnoreHTMLTag (const char *tag)
 #endif
 
 // Search for the next occurance of an element of tags in tag_list
-static const char *find_next_tag (char *const *tag_list, char *const *tags)
+static const char *find_next_tag (char *const *tag_list, const char *const *tags)
 {
   if (*tag_list == NULL)
     return NULL;
@@ -451,12 +451,12 @@ void HTML::ParseFields (PRECORD NewRecord)
 	  if (StrCaseCmp (*tags_ptr, "dd") == 0)
 	    {
 	      // Look for nearest <DT> or </DL>
-	      static char *tags[] = {"dt", "/dl", NULL};
+	      static const char * const tags[] = {"dt", "/dl", NULL};
 	      p = find_next_tag (tags_ptr, tags);
 	      if (p == NULL)
 		{
 		  // Some bogus uses
-		  static char *tags[] = {"dd", "/ul", "/ol", NULL};
+		  static const char * const tags[] = {"dd", "/ul", "/ol", NULL};
 		  p = find_next_tag (tags_ptr, tags);
 		  if (p)
 		    {
@@ -470,12 +470,12 @@ void HTML::ParseFields (PRECORD NewRecord)
 	  else if (StrCaseCmp (*tags_ptr, "dt") == 0)
 	    {
 	      // look for next <DD> or </DL>
-	      static char *tags[] = {"DD", "/DL", NULL};
+	      static const char * const tags[] = {"DD", "/DL", NULL};
 	      p = find_next_tag (tags_ptr, tags);
 	      if (p == NULL)
 		{
 		  // Some bogus uses
-		  static char *tags[] = {"dt", "/ul", "/ol", NULL};
+		  static const char * const tags[] = {"dt", "/ul", "/ol", NULL};
 		  p = find_next_tag (tags_ptr, tags);
 		  if (p)
 		    {
@@ -489,13 +489,13 @@ void HTML::ParseFields (PRECORD NewRecord)
 	  else if (StrCaseCmp (*tags_ptr, "li") == 0)
 	    {
 	      // look for next <LI>, </OL> or </UL>
-	      static char *tags[] = {"li", "/ol", "/ul", NULL};
+	      static const char * const tags[] = {"li", "/ol", "/ul", NULL};
 	      p = find_next_tag (tags_ptr, tags);
 	    }
 	  else if (StrCaseCmp (*tags_ptr, "tl") == 0)
 	    {
 	      // look for nearest <TL> or </TLI>
-	      static char *tags[] = {"tl", "/tli", NULL};
+	      static const char * const tags[] = {"tl", "/tli", NULL};
 	      p = find_next_tag (tags_ptr, tags);
 	    }
 	}			// end code to handle some HTML minimized tags

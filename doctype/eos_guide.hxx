@@ -22,7 +22,7 @@ public:
   ~EOS_GUIDE();
 
 private:
-  INT TagMatch(char* tag, char* tagType) const;
+  INT TagMatch(char* tag, const char* tagType) const;
   STRING DocSource;
 };
 

@@ -136,7 +136,7 @@ FILMLINE::FILMLINE (PIDBOBJ DbParent): MEDLINE (DbParent)
 
 
 // Hooks into the Field parser from Medline
-PCHR FILMLINE::UnifiedName (PCHR tag) const
+const CHR *FILMLINE::UnifiedName (const CHR *tag) const
 {
 #if USE_UNIFIED_NAMES
   static struct {
@@ -202,7 +202,7 @@ PCHR FILMLINE::UnifiedName (PCHR tag) const
   for (size_t i=0; i < sizeof(Table)/sizeof(Table[0]); i++)
     {
       if ((n = strcmp(tag, Table[i].key)) == 0)
-	return (PCHR)Table[i].name; // Return "our" unified name
+	return Table[i].name; // Return "our" unified name
     }
   return NULL; // Not in list
 #else
@@ -296,4 +296,3 @@ Present (const RESULT& ResultRecord,
 FILMLINE::~FILMLINE()
 {
 }
-

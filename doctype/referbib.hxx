@@ -24,7 +24,7 @@ public:
 		PSTRING StringBuffer);
 	~REFERBIB();
 // hooks into the guts of the field parser
-	virtual PCHR UnifiedName (PCHR tag) const; // for children to play with
+	virtual const CHR *UnifiedName (const CHR *tag) const; // for children to play with
 };
 typedef REFERBIB* PREFERBIB;
 

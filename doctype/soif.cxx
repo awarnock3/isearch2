@@ -219,7 +219,7 @@ SOIF::ParseFields(PRECORD NewRecord) {
   while (*p != '\0') {
     CHR name[128], c;
 
-    FieldName = NULL;
+    FieldName = "";
     if (strncmp(p, "@FILE { ", 8) == 0) {
       if ( (q = strchr(p, '\n')) == NULL) {
         cout << "SOIF::ParseRecords(): Badly started record - ";
@@ -250,7 +250,7 @@ SOIF::ParseFields(PRECORD NewRecord) {
 
     // We have a attr/val pair
 #define UnifiedName(tag) (tag) /* for now */
-    CHR *unified_name = UnifiedName(name);
+    const CHR *unified_name = UnifiedName(name);
     FieldName = unified_name ? unified_name: "Misc";
     dfd.SetFieldName(FieldName);
     Db->DfdtAddEntry(dfd);

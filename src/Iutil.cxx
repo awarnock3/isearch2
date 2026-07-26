@@ -95,9 +95,13 @@ cleanupAfterKillAll(const STRING& db) {
   char *s;
   s = new char[db.GetLength() + 16];
   sprintf(s, "rm -f %s.mdt", dbs);
-  system(s);
+  if (system(s) != 0) {
+    perror("system");
+  }
   sprintf(s, "rm -f %s.num", dbs);
-  system(s);
+  if (system(s) != 0) {
+    perror("system");
+  }
   delete [] dbs;
   delete [] s;
 #endif
@@ -161,7 +165,9 @@ main(int argc, char** argv) {
   STRING GlobalDoctype;
   INT SetGlobalDoctype = 0;
   CHR Cwd[256];
-  getcwd(Cwd, 255);
+  if (!getcwd(Cwd, 255)) {
+    strcpy(Cwd, ".");
+  }
   STRING Flag;
   STRING DBName;
   STRING MetaFn;
@@ -502,7 +508,9 @@ main(int argc, char** argv) {
 	printf("]\n");
 	printf("    > ");
 				//gets(s);
-	fgets(s,511,stdin);
+	if (!fgets(s,511,stdin)) {
+	  s[0] = '\0';
+	}
 	INT slen;
 	slen = strlen(s);
 	if ((slen > 0) && (s[slen-1] == '\n')) {
@@ -757,7 +765,9 @@ main(int argc, char** argv) {
     char* s1 = source.NewCString();
     char* s2 = dest.NewCString();
     sprintf(s, "mv -f %s.* %s.", s1, s2);
-    system(s);
+    if (system(s) != 0) {
+      perror("system");
+    }
     delete [] s;
 #endif
   }

@@ -178,7 +178,7 @@ void SGMLNORM::ParseRecords (const RECORD& FileRecord)
 
 
 
-PCHR SGMLNORM::UnifiedName (PCHR tag) const
+const CHR *SGMLNORM::UnifiedName (const CHR *tag) const
 {
   return tag;
 }
@@ -284,7 +284,7 @@ void SGMLNORM::ParseFields (PRECORD NewRecord)
 	      else
 		{
 #endif
-		  PCHR unified_name = UnifiedName(*tags_ptr);
+		  const CHR *unified_name = UnifiedName(*tags_ptr);
 		  // Ignore "unclassified" fields
 		  if (unified_name == NULL) continue; // ignore these
 		  FieldName = unified_name;

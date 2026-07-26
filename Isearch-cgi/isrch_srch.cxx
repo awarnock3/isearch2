@@ -91,7 +91,7 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 
 PCHR gettok(PCHR input);
 INT get_term(INT t, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight);
-PCHR get_field(PCHR fmt, INT n);
+PCHR get_field(const CHR *fmt, INT n);
 
 INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
 	INT Start, INT MaxHits, INT TYPE);
@@ -336,7 +336,7 @@ gettok(PCHR input)
 }
 
 PCHR
-get_field(PCHR f, INT n)
+get_field(const CHR *f, INT n)
 {
   PCHR bp;
   PCHR field;

@@ -86,10 +86,10 @@ void buildHeap(void *data, size_t heapsize, size_t width,
 	int (*compar) (const void *, const void *), int position, int reverse) {
 
   int childpos, cmpstatus; 
-  void *value;
+  CHR *value;
 
   //  value = (void *)malloc(width);
-  value = (void *) (new CHR[width]);
+  value = new CHR[width];
 
   memcpy(value, ((char *)data + (width * position) ), width);
 
@@ -165,7 +165,7 @@ void hsort(void *data, size_t nel, size_t width,
 	   int (*compar) (const void *, const void *)) {
   
   int i;
-  void *tmp;
+  CHR *tmp;
   for (i = nel/2; i >=0; i--) 
     buildHeap(data, nel, width, compar, i, 0);
 
@@ -179,7 +179,7 @@ void hsort(void *data, size_t nel, size_t width,
 */
 
   //  tmp = malloc(width);
-  tmp = (void *) (new CHR[width]);
+  tmp = new CHR[width];
 
   for (i = nel - 1; i > 0; i--) {
     memcpy(tmp, ((char *)data + (i * width)), width);
@@ -190,4 +190,3 @@ void hsort(void *data, size_t nel, size_t width,
   //  free(tmp);
   delete [] tmp;
 }
-

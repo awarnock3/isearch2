@@ -27,7 +27,7 @@ public:
 
   ~SGMLNORM ();
   // hooks into the guts of the field parser
-  virtual CHR* UnifiedName (CHR *tag) const; // for children to play with
+  virtual const CHR* UnifiedName (const CHR *tag) const; // for children to play with
 
   /* SGML helper functions */
   PCHR *parse_tags (CHR *b, GPTYPE len) const;

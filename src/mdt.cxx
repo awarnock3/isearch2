@@ -80,17 +80,27 @@ MDT::MDT(const STRING& DbFileStem, const GDT_BOOLEAN WrongEndian)
   if (Fp) {
     TotalEntries = GetFileSize(Fp) / sizeof(GPREC);
     GpIndex = new GPREC[TotalEntries];
-    fread((char*)GpIndex, 1, TotalEntries * sizeof(GPREC), Fp);
+    const size_t gpRead = fread((char*)GpIndex, 1, TotalEntries * sizeof(GPREC), Fp);
+    if (gpRead != TotalEntries * sizeof(GPREC)) {
+      delete [] GpIndex;
+      GpIndex = 0;
+      TotalEntries = 0;
+    }
     fclose(Fp);
     // Load Key Index
     Fn = FileStem;
     Fn += DbExtMdtKeyIndex;
     Fp = fopen(Fn, "rb");
-    if (Fp) {
+    if (Fp && TotalEntries > 0) {
       KeyIndex = new KEYREC[TotalEntries];
-      fread((char*)KeyIndex, 1, TotalEntries * sizeof(KEYREC), Fp);
+      const size_t keyRead = fread((char*)KeyIndex, 1, TotalEntries * sizeof(KEYREC), Fp);
+      if (keyRead != TotalEntries * sizeof(KEYREC)) {
+        delete [] KeyIndex;
+        KeyIndex = 0;
+      }
       fclose(Fp);
     } else {
+      if (Fp) fclose(Fp);
       KeyIndex = 0;
     }
   } else {
@@ -217,7 +227,9 @@ SIZE_T MDT::RemoveDeleted() {
 #if (defined(_MSDOS) || defined(_WIN32)) && !defined(UNIX)
   chsize(FileDesc, TotalEntries * sizeof(MDTREC));
 #else
-  ftruncate(FileDesc, TotalEntries * sizeof(MDTREC));
+  if (ftruncate(FileDesc, TotalEntries * sizeof(MDTREC)) != 0) {
+    perror("ftruncate");
+  }
 #endif
   return Count;
 }
@@ -225,7 +237,11 @@ SIZE_T MDT::RemoveDeleted() {
 void MDT::GetEntry(const SIZE_T Index, MDTREC* MdtrecPtr) const {
   if ( (Index > 0) && (Index <= TotalEntries) ) {
     fseek(MdtFp, (Index - 1) * sizeof(MDTREC), SEEK_SET);
-    fread((char*)MdtrecPtr, 1, sizeof(MDTREC), MdtFp);
+    const size_t mdtRead = fread((char*)MdtrecPtr, 1, sizeof(MDTREC), MdtFp);
+    if (mdtRead != sizeof(MDTREC)) {
+      memset(MdtrecPtr, 0, sizeof(MDTREC));
+      return;
+    }
     if (MdtWrongEndian) {
       MdtrecPtr->FlipBytes();
     }

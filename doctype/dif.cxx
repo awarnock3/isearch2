@@ -76,7 +76,7 @@ char multilineGroup[NO_MULTILINE_GROUPS][25] = { "Quality",
                                                  "Project_Text",
                                                  "Source_Text",
                                                  "Sensor_Text" };
-void dbg(char *s) {
+void dbg(const char *s) {
   // printf("%s\n",s);
 }
 /* ========================= FROM FGDC doctype ========================*/
@@ -795,7 +795,7 @@ void DIF::textML() {
   parserError("Error: expected text or end_group");
   dbg("</textML>");
 }
-void DIF::parserError(char *s) {  /* Parser error. */
+void DIF::parserError(const char *s) {  /* Parser error. */
 	fprintf(stdout,"***** %s ***** \n", s);
 }
 /*

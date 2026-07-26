@@ -568,8 +568,11 @@ int main(int argc, char** argv) {
       FileNum = 0;
     } else {
       printf("\nSelect file #: ");
-      fgets(Selection,79,stdin);
-      FileNum = atoi(Selection);
+      if (!fgets(Selection,79,stdin)) {
+	FileNum = 0;
+      } else {
+	FileNum = atoi(Selection);
+      }
     }
     if ( (FileNum > n) || (FileNum < 0) ) {
       printf("\nSelect a number between 1 and %i.\n", n);
@@ -589,7 +592,9 @@ int main(int argc, char** argv) {
       // printf("\n");
 			
       printf("Press <Return> to select another file: ");
-      fgets(s,255,stdin);
+      if (!fgets(s,255,stdin)) {
+	s[0] = '\0';
+      }
       printf("\n");
       //      LoadPos=0;
       MajorCount=0;

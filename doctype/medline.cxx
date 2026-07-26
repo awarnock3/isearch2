@@ -269,7 +269,7 @@ void MEDLINE::ParseRecords (const RECORD& FileRecord)
  flavours.
 */
 
-PCHR MEDLINE::UnifiedName (PCHR tag) const
+const CHR *MEDLINE::UnifiedName (const CHR *tag) const
 {
 printf("Medline:UnifiedName called\n");
 #if USE_UNIFIED_NAMES
@@ -352,7 +352,7 @@ void MEDLINE::ParseFields (PRECORD NewRecord)
       //      if (val_len <= 0) continue; // Skip blank fields
       if (val_len < 0) continue; // Skip blank fields
 
-      PCHR unified_name = UnifiedName(*tags_ptr);
+      const CHR *unified_name = UnifiedName(*tags_ptr);
 #if WANT_MISC
       // Throw "unclassified" into Misc
       FieldName = unified_name ? unified_name: "Misc";

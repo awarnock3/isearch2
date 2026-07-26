@@ -626,7 +626,11 @@ INTERVALLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation,
 
   } else {
 
-    fread((char*)&Total,1,sizeof(INT4),Fp);
+    if (fread((char*)&Total,1,sizeof(INT4),Fp) != sizeof(INT4)) {
+      fclose(Fp);
+      *Index = -1;
+      return NO_MATCH;
+    }
     ElementSize = sizeof(INT4) + 2*sizeof(DOUBLE);
     High = Total - 1;
     X = High / 2;
@@ -638,16 +642,24 @@ INTERVALLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation,
       // Get the starting value
       Offset = sizeof(INT4);
       fseek(Fp, (long)Offset, SEEK_SET);
-      fread((char *)&GpS, 1, sizeof(INT4), Fp);
-      fread((char *)&StartValue, 1, sizeof(DOUBLE), Fp);
-      fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
+      if (fread((char *)&GpS, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+          fread((char *)&StartValue, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+          fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+        fclose(Fp);
+        *Index = -1;
+        return NO_MATCH;
+      }
 
       // Get the ending value
       Offset = sizeof(INT4) + High * ElementSize;
       fseek(Fp, (long)Offset, SEEK_SET);
-      fread((char *)&GpS, 1, sizeof(INT4), Fp);
-      fread((char *)&EndValue, 1, sizeof(DOUBLE), Fp);
-      fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
+      if (fread((char *)&GpS, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+          fread((char *)&EndValue, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+          fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+        fclose(Fp);
+        *Index = -1;
+        return NO_MATCH;
+      }
 #ifdef DEBUG
       cerr << "DiskFind: START_BLOCK - Looking for " << (INT)Key << " between " 
 	   << (INT)StartValue << " and " << (INT)EndValue << endl;
@@ -687,14 +699,22 @@ INTERVALLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation,
 	}
 
 	if (Type != AT_START) {
-	  fread((char *)&GpS, 1, sizeof(INT4), Fp);
-	  fread((char *)&LowerBound, 1, sizeof(DOUBLE), Fp);
-	  fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
+	  if (fread((char *)&GpS, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	      fread((char *)&LowerBound, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	      fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	    fclose(Fp);
+	    *Index = -1;
+	    return NO_MATCH;
+	  }
 	}
 
-	fread((char *)&GpS, 1, sizeof(INT4), Fp);
-	fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp);
-	fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
+	if (fread((char *)&GpS, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	    fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	    fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	  fclose(Fp);
+	  *Index = -1;
+	  return NO_MATCH;
+	}
 
 	// If we're at the start, we need to read the first value into
 	// NumericValue, but we don't want to leave LowerBound 
@@ -704,9 +724,13 @@ INTERVALLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation,
 	  LowerBound = NumericValue;
 
 	if (Type != AT_END) {
-	  fread((char *)&Dummy, 1, sizeof(INT4), Fp);
-	  fread((char *)&UpperBound, 1, sizeof(DOUBLE), Fp);
-	  fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
+	  if (fread((char *)&Dummy, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	      fread((char *)&UpperBound, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	      fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	    fclose(Fp);
+	    *Index = -1;
+	    return NO_MATCH;
+	  }
 	}
 
 	// Similarly, if we're at the end and can't read in a new value
@@ -731,17 +755,17 @@ INTERVALLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation,
 	  cerr << "Got match at index " << X << endl;
 	  Offset = sizeof(INT4) + (X-2) * ElementSize;
 	  fseek(Fp, (long)Offset, SEEK_SET);
-	  fread((char *)&GpS, 1, sizeof(INT4), Fp);
-	  fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp);
-	  fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
+	  if (fread((char *)&GpS, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	      fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	      fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) break;
 	  cerr << "The previous value is " << (INT)NumericValue;
-	  fread((char *)&GpS, 1, sizeof(INT4), Fp);
-	  fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp);
-	  fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
+	  if (fread((char *)&GpS, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	      fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	      fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) break;
 	  cerr << ", the matched value is " << (INT)NumericValue;
-	  fread((char *)&GpS, 1, sizeof(INT4), Fp);
-	  fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp);
-	  fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
+	  if (fread((char *)&GpS, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	      fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	      fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) break;
 	  cerr << " and the next value is " << (INT)NumericValue;	  
 #endif
 
@@ -812,14 +836,22 @@ INTERVALLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation,
 	}
 
 	if (Type != AT_START) {
-	  fread((char *)&GpS, 1, sizeof(INT4), Fp);
-	  fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
-	  fread((char *)&LowerBound, 1, sizeof(DOUBLE), Fp);
+	  if (fread((char *)&GpS, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	      fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	      fread((char *)&LowerBound, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	    fclose(Fp);
+	    *Index = -1;
+	    return NO_MATCH;
+	  }
 	}
 
-	fread((char *)&GpS, 1, sizeof(INT4), Fp);
-	fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
-	fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp);
+	if (fread((char *)&GpS, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	    fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	    fread((char *)&NumericValue, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	  fclose(Fp);
+	  *Index = -1;
+	  return NO_MATCH;
+	}
 
 	// If we're at the start, we need to read the first value into
 	// NumericValue, but we don't want to leave LowerBound 
@@ -829,9 +861,13 @@ INTERVALLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation,
 	  LowerBound = NumericValue;
 
 	if (Type != AT_END) {
-	  fread((char *)&Dummy, 1, sizeof(INT4), Fp);
-	  fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
-	  fread((char *)&UpperBound, 1, sizeof(DOUBLE), Fp);
+	  if (fread((char *)&Dummy, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	      fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	      fread((char *)&UpperBound, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	    fclose(Fp);
+	    *Index = -1;
+	    return NO_MATCH;
+	  }
 	}
 
 	// Similarly, if we're at the end and can't read in a new value
@@ -919,7 +955,7 @@ INTERVALLIST::DiskFind(STRING Fn, INT4 Key, INT4 Relation,
   INT4        GpS;
   INT4        LowerBound, UpperBound, NumericValue;
   DOUBLE      Dummy;
-  INT4        Hold;         // This is the interval boundary - we don't use it
+  DOUBLE      Hold;         // This is the interval boundary - we don't use it
   INT4        Offset;       // Offset needed to read the element
 
 
@@ -935,7 +971,11 @@ INTERVALLIST::DiskFind(STRING Fn, INT4 Key, INT4 Relation,
 
   } else {
 
-    fread((char*)&Total,1,sizeof(INT4),Fp);
+    if (fread((char*)&Total,1,sizeof(INT4),Fp) != sizeof(INT4)) {
+      fclose(Fp);
+      *Index = -1;
+      return NO_MATCH;
+    }
     ElementSize = sizeof(INT4) + 2*sizeof(DOUBLE);
     High = Total - 1;
     X = High / 2;
@@ -972,14 +1012,22 @@ INTERVALLIST::DiskFind(STRING Fn, INT4 Key, INT4 Relation,
 	}
 
 	if (Type != AT_START) {
-	  fread((char *)&LowerBound, 1, sizeof(INT4), Fp);
-	  fread((char *)&Dummy, 1, sizeof(DOUBLE), Fp);
-	  fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
+	  if (fread((char *)&LowerBound, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	      fread((char *)&Dummy, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	      fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	    fclose(Fp);
+	    *Index = -1;
+	    return NO_MATCH;
+	  }
 	}
 
-	fread((char *)&NumericValue, 1, sizeof(INT4), Fp);
-	fread((char *)&Dummy, 1, sizeof(DOUBLE), Fp);
-	fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
+	if (fread((char *)&NumericValue, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	    fread((char *)&Dummy, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	    fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	  fclose(Fp);
+	  *Index = -1;
+	  return NO_MATCH;
+	}
 
 	// If we're at the start, we need to read the first value into
 	// NumericValue, but we don't want to leave LowerBound 
@@ -989,9 +1037,13 @@ INTERVALLIST::DiskFind(STRING Fn, INT4 Key, INT4 Relation,
 	  LowerBound = NumericValue;
 
 	if (Type != AT_END) {
-	  fread((char *)&UpperBound, 1, sizeof(INT4), Fp);
-	  fread((char *)&Dummy, 1, sizeof(DOUBLE), Fp);
-	  fread((char *)&Hold, 1, sizeof(DOUBLE), Fp);
+	  if (fread((char *)&UpperBound, 1, sizeof(INT4), Fp) != sizeof(INT4) ||
+	      fread((char *)&Dummy, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE) ||
+	      fread((char *)&Hold, 1, sizeof(DOUBLE), Fp) != sizeof(DOUBLE)) {
+	    fclose(Fp);
+	    *Index = -1;
+	    return NO_MATCH;
+	  }
 	}
 
 	// Similarly, if we're at the end and can't read in a new value

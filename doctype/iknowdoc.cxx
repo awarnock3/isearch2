@@ -245,7 +245,7 @@ void IKNOWDOC::ParseFields (PRECORD NewRecord)
       //      if (val_len <= 0) continue; // Don't bother with empty fields
       if (val_len < 0) continue; // Don't bother with empty fields
  
-      PCHR unified_name = UnifiedName(*tags_ptr);
+      const CHR *unified_name = UnifiedName(*tags_ptr);
 #if WANT_MISC
       // Throw "unclassified" into Misc
       FieldName = unified_name ? unified_name: "Misc";
