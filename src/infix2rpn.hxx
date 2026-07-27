@@ -70,8 +70,8 @@ private:
   void        ProcessOp(const operators op, STRSTACK *TheStack,  
 			STRING *result);
   void        RegisterError(const STRING &Error);
-  CHR        *op2string(const operators op);
-  CHR        *StandardizeOpName(const STRING op);
+  const CHR  *op2string(const operators op);
+  const CHR  *StandardizeOpName(const STRING op);
   INT         TermsWithNoOps;
   STRING      ErrorMessage;
   CHR         DefaultOp[MAX_OP_LEN];

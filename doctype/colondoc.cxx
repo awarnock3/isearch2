@@ -147,7 +147,7 @@ void COLONDOC::ParseRecords (const RECORD& FileRecord)
 }
 
 
-PCHR COLONDOC::UnifiedName (PCHR tag) const
+const CHR *COLONDOC::UnifiedName (const CHR *tag) const
 {
   return tag; // Identity
 }
@@ -184,7 +184,7 @@ void COLONDOC::ParseFields (PRECORD NewRecord)
       NewRecord->GetDocumentType(&doctype);
       if (tags)
 	{
-	  delete tags;
+	  delete [] tags;
 	  cout << "Warning: No `" << doctype << "' fields/tags in \"" << fn << "\"\n";
 	}
       else
@@ -221,7 +221,7 @@ void COLONDOC::ParseFields (PRECORD NewRecord)
       if (val_len < 0) continue; // Don't bother with empty fields (J. Mandel)
       //      if (val_len <= 0) continue; // Don't bother with empty fields
 
-      PCHR unified_name = UnifiedName(*tags_ptr);
+      const CHR *unified_name = UnifiedName(*tags_ptr);
 #if WANT_MISC
       // Throw "unclassified" into Misc
       FieldName = unified_name ? unified_name: "Misc";
@@ -245,7 +245,7 @@ void COLONDOC::ParseFields (PRECORD NewRecord)
   NewRecord->SetDft (*pdft);
   delete pdft;
   delete[]RecBuffer;
-  delete tags;
+  delete [] tags;
 }
 
 void COLONDOC::Present (const RESULT& ResultRecord,

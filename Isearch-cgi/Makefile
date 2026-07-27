@@ -13,8 +13,8 @@ CC=g++
 # Compiler Flags
 # Nothing fancy
 #
-#CFLAGS=-g -Wall
-CFLAGS=-O2 -W -DUNIX -DVERS=\\\"$(VER)\\\"
+#CFLAGS=-g -std=c++17 -Wall
+CFLAGS=-O2 -std=c++17 -W -DUNIX -DVERS=\\\"$(VER)\\\"
 
 # Isearch Source
 # Where is your CNIDR Isearch code?

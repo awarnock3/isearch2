@@ -212,7 +212,10 @@ int rescan(int file,char *buffer,int badpos)
 
   /* seek back in the file to the record terminator */
   currentpos = lseek(file,-6,1);
-  read(file,&c,1); /*get one byte*/
+  if (read(file,&c,1) != 1) {
+    fprintf(stderr,"End of file in rescan - quitting\n");
+    exit(0);
+  }
   if (c == RECTERM)
     fprintf(stderr,"Rescanning - previous record OK\n");
 
@@ -267,9 +270,15 @@ INT4 SeekMARC(int marcfile,int assocfile,int recnumber)
   if (MaxRecs == 0) {
     seekreturn = lseek(assocfile,0,0);
 #ifndef __SUNPRO_CC
-    read(assocfile,(void*)&MaxRecs,sizeof(INT4)); // explicit cast
+    if (read(assocfile,(void*)&MaxRecs,sizeof(INT4)) != (ssize_t)sizeof(INT4)) {
+      fprintf(stderr,"unable to read associator file header in SeekMARC\n");
+      return (-1);
+    }
 #else
-    read(assocfile,(char*)&MaxRecs,sizeof(INT4)); // explicit cast
+    if (read(assocfile,(char*)&MaxRecs,sizeof(INT4)) != (ssize_t)sizeof(INT4)) {
+      fprintf(stderr,"unable to read associator file header in SeekMARC\n");
+      return (-1);
+    }
 #endif
   }
        
@@ -292,9 +301,15 @@ INT4 SeekMARC(int marcfile,int assocfile,int recnumber)
     }
     else {
 #ifndef __SUNPRO_CC
-      read(assocfile,(void*)&marcoffset,sizeof(INT4)); // explicit cast
+      if (read(assocfile,(void*)&marcoffset,sizeof(INT4)) != (ssize_t)sizeof(INT4)) {
+        fprintf(stderr,"unable to read associator offset in SeekMARC\n");
+        return (-1);
+      }
 #else
-      read(assocfile,(char*)&marcoffset,sizeof(INT4)); // explicit cast
+      if (read(assocfile,(char*)&marcoffset,sizeof(INT4)) != (ssize_t)sizeof(INT4)) {
+        fprintf(stderr,"unable to read associator offset in SeekMARC\n");
+        return (-1);
+      }
 #endif
     }
   }
@@ -458,7 +473,7 @@ int subfcopy(char *To, char *From,int flag)
 /*          returns -1 for no match and 0 for match                 */
 /********************************************************************/
 
-int tagcmp(char *pattag, char *comptag)
+int tagcmp(const char *pattag, const char *comptag)
 {
   int i;
   for (i = 0; i < 3; i++) {
@@ -482,7 +497,7 @@ int tagcmp(char *pattag, char *comptag)
 /*            field. Startf lets it start from later in a field list.*/
 /*            Permits "wildcard" comparisons using tagcmp            */
 /*********************************************************************/
-MARC_FIELD *GetField(MARC_REC *rec,MARC_FIELD *startf,char *buffer,char *tag)
+MARC_FIELD *GetField(MARC_REC *rec,MARC_FIELD *startf,char *buffer,const char *tag)
 {
   MARC_FIELD *f;
    
@@ -604,4 +619,3 @@ char *normalize(char *in, char *out)
 	  valmainsub, sep, decimal, subcutter);
   return(out);
 }
-

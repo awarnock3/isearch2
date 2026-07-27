@@ -23,7 +23,7 @@ public:
 		PSTRING StringBuffer);
 	~FILMLINE();
 // hooks into the guts of the Medline field parser
-	PCHR UnifiedName (PCHR tag) const; 
+	const CHR *UnifiedName (const CHR *tag) const; 
 };
 typedef FILMLINE* PFILMLINE;
 

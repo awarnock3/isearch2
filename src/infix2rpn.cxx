@@ -241,7 +241,7 @@ INFIX2RPN::ProcessOp(const operators op, STRSTACK *TheStack,
 
 //standardizes the various possible representations of
 //the various operators.
-CHR *
+const CHR *
 INFIX2RPN::StandardizeOpName(const STRING op) {
   if ( (op ^= "AND") || (op == "&&") )
     return "AND";
@@ -261,7 +261,7 @@ INFIX2RPN::StandardizeOpName(const STRING op) {
 
 
 //converts the internal operator token name to a standard string
-CHR *
+const CHR *
 INFIX2RPN::op2string(const operators op) {
   switch(op) {
   case LeftParen:
@@ -287,4 +287,3 @@ INFIX2RPN::op2string(const operators op) {
   //        return NULL;
   return "";
 }
-

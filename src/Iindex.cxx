@@ -47,12 +47,14 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include <string.h>
 #include <locale.h>
 #include <time.h>
+#include <ctype.h>
 
 #if defined(_MSDOS) || defined(_WIN32)
 #include <direct.h>
 #define NO_MMAP
 #else
 #include <unistd.h>
+#include <glob.h>
 #endif
 
 #ifndef NO_MMAP
@@ -111,6 +113,45 @@ typedef IDBC* PIDBC;
 STRING Separator;
 STRING DocumentType;
 UINT4 MemoryUsage = 1;
+
+#if !defined(_MSDOS) && !defined(_WIN32)
+static void RemoveByPattern(const STRING& Pattern)
+{
+  CHR *pattern = Pattern.NewCString();
+  glob_t matches;
+  memset(&matches, 0, sizeof(matches));
+  const int status = glob(pattern, 0, NULL, &matches);
+  if (status == 0) {
+    for (size_t i = 0; i < matches.gl_pathc; ++i) {
+      if (unlink(matches.gl_pathv[i]) != 0 && errno != ENOENT) {
+        perror(matches.gl_pathv[i]);
+      }
+    }
+  } else if (status != GLOB_NOMATCH) {
+    perror("glob");
+  }
+  globfree(&matches);
+  delete [] pattern;
+}
+#endif
+
+static GDT_BOOLEAN IsSafeSystemArg(const CHR* value, const GDT_BOOLEAN allowWildcards)
+{
+  if (value == NULL || *value == '\0') {
+    return GDT_FALSE;
+  }
+  for (const CHR* p = value; *p != '\0'; ++p) {
+    const unsigned char c = static_cast<unsigned char>(*p);
+    if (isalnum(c) || c == '/' || c == '.' || c == '_' || c == '-' || c == '+') {
+      continue;
+    }
+    if (allowWildcards && (c == '*' || c == '?' || c == '[' || c == ']')) {
+      continue;
+    }
+    return GDT_FALSE;
+  }
+  return GDT_TRUE;
+}
 
 
 void 
@@ -310,7 +351,9 @@ main(int argc, char** argv) {
 
   STRLIST DocTypeOptions;
   CHR Cwd[256];
-  getcwd(Cwd, 255);
+  if (!getcwd(Cwd, 255)) {
+    strcpy(Cwd, ".");
+  }
   STRING Flag;
   STRING DBName;
   STRING MetaFn;
@@ -470,7 +513,9 @@ main(int argc, char** argv) {
 	
   if (!AppendDb) {
     STRING KillFile;
+#if defined(_MSDOS) || defined(_WIN32)
     PCHR cKillFile;
+#endif
 		
     KillFile = DBName;
     KillFile.Cat(".dbi");
@@ -518,27 +563,25 @@ main(int argc, char** argv) {
     KillFile.Cat(DBName);
     KillFile.Cat(".0*");
     cKillFile = KillFile.NewCString();
-    system(cKillFile);
-    delete cKillFile;
+    if (system(cKillFile) != 0) {
+      perror("system");
+    }
+    delete [] cKillFile;
     KillFile = "del ";
     KillFile.Cat(DBName);
     KillFile.Cat(".inx*");
     cKillFile = KillFile.NewCString();
-    system(cKillFile);
-    delete cKillFile;
+    if (system(cKillFile) != 0) {
+      perror("system");
+    }
+    delete [] cKillFile;
 #else
-    KillFile = "rm -f ";
-    KillFile.Cat(DBName);
+    KillFile = DBName;
     KillFile.Cat(".[0-9]*");
-    cKillFile = KillFile.NewCString();
-    system(cKillFile);
-    delete [] cKillFile;
-    KillFile = "rm -f ";
-    KillFile.Cat(DBName);
+    RemoveByPattern(KillFile);
+    KillFile = DBName;
     KillFile.Cat(".inx*");
-    cKillFile = KillFile.NewCString();
-    system(cKillFile);
-    delete [] cKillFile;
+    RemoveByPattern(KillFile);
 #endif
   }
 
@@ -633,43 +676,54 @@ main(int argc, char** argv) {
 	  RemoveFileName(&PathName);
 	  AddFile(pdb, PathName, FileName);
 	} else {
-	  chdir(Cwd);
+	  if (chdir(Cwd) != 0) {
+	    perror(Cwd);
+	  }
          if (Recursive 
 	      || (TheFile.Search("*") > 0) 
 	      || (TheFile.Search("?") > 0)) { 
             // Check to see if we still have a wildcard
-	    CHR tempbuf[256];
-	    if (Recursive) {
-	      // This is a recursive search for files.
+           if (!IsSafeSystemArg(argv[z+x], GDT_TRUE) ||
+               !IsSafeSystemArg(pAppTemp, GDT_FALSE)) {
+             fprintf(stderr, "ERROR: Unsafe characters in file specification.\n");
+             continue;
+           }
+           const size_t command_len = strlen(argv[z+x]) + strlen(pAppTemp) + 128;
+           CHR *tempbuf = new CHR[command_len];
+           if (Recursive) {
+             // This is a recursive search for files.
 				
 #if defined(_MSDOS) || defined (_WIN32)
-	    /* Use the DOS dir command to generate the file list */
-	    sprintf(tempbuf, "dir /s /b %s > %s",
-		    argv[z+x], pAppTemp);
+           /* Use the DOS dir command to generate the file list */
+           snprintf(tempbuf, command_len, "dir /s /b %s > %s",
+		     argv[z+x], pAppTemp);
 #elif defined (ULTRIX)
-	    /* Ultrix doesn''t seem to like -follow. */
-	    sprintf(tempbuf, "find %s -name \"*\" -print > %s",
-		    argv[z+x], pAppTemp);
+           /* Ultrix doesn''t seem to like -follow. */
+           snprintf(tempbuf, command_len, "find %s -name \"*\" -print > %s",
+		     argv[z+x], pAppTemp);
 #else
-	    sprintf(tempbuf, "find %s -name \"*\" -follow -print > %s",
-		    argv[z+x], pAppTemp);
+           snprintf(tempbuf, command_len, "find %s -name \"*\" -follow -print > %s",
+		     argv[z+x], pAppTemp);
 #endif
-	    } else { 
-	      // This must be a non recursive wildcard search 
+           } else { 
+             // This must be a non recursive wildcard search 
 #if defined(_MSDOS) || defined (_WIN32)
-	      /* Use the DOS dir command to generate the file list */
-	      sprintf(tempbuf, "dir /b %s > %s",
-		      argv[z+x], pAppTemp);
+             /* Use the DOS dir command to generate the file list */
+             snprintf(tempbuf, command_len, "dir /b %s > %s",
+		       argv[z+x], pAppTemp);
 #elif defined (ULTRIX)
-	      /* Ultrix doesn''t seem to like -follow. */
-	      sprintf(tempbuf, "find %s -name \"*\" -print > %s",
-		      argv[z+x], pAppTemp);
+             /* Ultrix doesn''t seem to like -follow. */
+             snprintf(tempbuf, command_len, "find %s -name \"*\" -print > %s",
+		       argv[z+x], pAppTemp);
 #else
-	      sprintf(tempbuf, "find %s -name \"*\" -print > %s",
-		      argv[z+x], pAppTemp);
+             snprintf(tempbuf, command_len, "find %s -name \"*\" -print > %s",
+		       argv[z+x], pAppTemp);
 #endif
-	    }
-	    system(tempbuf);
+           }
+           if (system(tempbuf) != 0) {
+             perror("system");
+           }
+           delete [] tempbuf;
 						
 	    
 	    PFILE fp = fopen(AppTemp, "r");
@@ -700,7 +754,9 @@ main(int argc, char** argv) {
 		  RemoveFileName(&PathName);
 		  AddFile(pdb, PathName, FileName);
 		} else {
-		  chdir(Cwd);
+		  if (chdir(Cwd) != 0) {
+		    perror(Cwd);
+		  }
 		}
 	      }
 	    }
@@ -810,14 +866,14 @@ main(int argc, char** argv) {
       fprintf(fp,"<Locator>\n");
 
       fprintf(fp,"  <Title>");
-      fprintf(fp,DbName);
+      fprintf(fp, "%s", (const char *)DbName);
       fprintf(fp,"</Title>\n");
       fprintf(fp,"  <Methodology>");
       fprintf(fp,"Automatically generated by CNIDR Iindex");
       fprintf(fp,"</Methodology>\n");
       
       fprintf(fp,"  <Control-Identifier>");
-      fprintf(fp,DbName);
+      fprintf(fp, "%s", (const char *)DbName);
   //  fprintf(fp,PathName);
   //  fprintf(fp,FileName);
       fprintf(fp,"</Control-Identifier>\n");
@@ -826,7 +882,7 @@ main(int argc, char** argv) {
       fprintf(fp,"</Language-of-Record>\n");
       
       fprintf(fp,"  <Date-of-Last-Modification>");
-      fprintf(fp,date);
+      fprintf(fp, "%s", date);
       fprintf(fp,"</Date-of-Last-Modification>\n");
 
       STRLIST position;

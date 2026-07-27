@@ -130,7 +130,11 @@ INDEX::INDEX(const PIDBOBJ DbParent, const STRING& NewFileName)
   // see if .num file exists...  
   FILE *fa=Parent->ffopen(CheckName,"r");
   if(fa){
-    fgets(Tmp,256,fa);
+    if (!fgets(Tmp,256,fa)) {
+      Parent->ffclose(fa);
+      IndexNum=0;
+      return;
+    }
     IndexNum=atoi(Tmp);
     fclose(fa);
   }else
@@ -558,8 +562,11 @@ INDEX::AddRecordList(PFILE RecordListFp)
 	  cout << "), at offset " << MemoryDataLength << endl;
 #endif
 
-	  fread(MemoryData + MemoryDataLength, 1, DataFileSize,
-		DataFp);
+	  if (fread(MemoryData + MemoryDataLength, 1, DataFileSize,
+		    DataFp) != (size_t)DataFileSize) {
+	    perror(DataFileName);
+	    EXIT_ERROR;
+	  }
 #if 0   
 	  for (p = MemoryData + MemoryDataLength;
 	       p < (MemoryData + MemoryDataLength + DataFileSize); p++) {
@@ -754,7 +761,10 @@ INDEX::MergeIndexFiles(INT MemMB)
   STRING CheckName;
   Parent->ComposeDbFn(&CheckName, ".num");
   FILE *fa=Parent->ffopen(CheckName,"r");
-  fgets(Tmp,256,fa);
+  if (!fgets(Tmp,256,fa)) {
+    Parent->ffclose(fa);
+    return;
+  }
   IndexNum=atoi(Tmp);
 
   //  MERGEUNIT A[IndexNum];
@@ -831,7 +841,7 @@ INDEX::MergeIndexFiles(INT MemMB)
     printf("Deleting %s\n", p);
 #endif
     unlink(p);
-    delete p;
+    delete [] p;
   }
   fclose(fj);
   
@@ -1938,9 +1948,13 @@ INDEX::DumpIndex(INT DebugSkip) {
   
   fx = Parent->ffopen(CheckName,"r");
   if (fx) {
-    fgets(buf,256,fx);
-    Parent->ffclose(fx);
-    IndexNum=atoi(buf);
+    if (!fgets(buf,256,fx)) {
+      Parent->ffclose(fx);
+      IndexNum=1;
+    } else {
+      Parent->ffclose(fx);
+      IndexNum=atoi(buf);
+    }
   } else
     IndexNum=1;
 
@@ -2032,9 +2046,13 @@ INDEX::WriteCentroid(FILE* fp)
 	
   fx = Parent->ffopen(CheckName,"r");
   if (fx) {
-    fgets(buf,256,fx);
-    Parent->ffclose(fx);
-    IndexNum=atoi(buf);
+    if (!fgets(buf,256,fx)) {
+      Parent->ffclose(fx);
+      IndexNum=1;
+    } else {
+      Parent->ffclose(fx);
+      IndexNum=atoi(buf);
+    }
   } else
     IndexNum=1;
 
@@ -2135,7 +2153,10 @@ INDEX::WriteCentroid(FILE* fp)
   Parent->ComposeDbFn(&CheckName, ".dfd");
   fx = Parent->ffopen(CheckName,"r");
   if (fx) {
-    fgets(buf,256,fx);
+    if (!fgets(buf,256,fx)) {
+      Parent->ffclose(fx);
+      return;
+    }
     FieldCount=atoi(buf);
   } else {
     return;
@@ -2143,17 +2164,17 @@ INDEX::WriteCentroid(FILE* fp)
 
   for (xx=0;xx<FieldCount;xx++) {
     // Read 8 lines per entry
-    fgets(buf,256,fx); // Field number is first
+    if (!fgets(buf,256,fx)) break; // Field number is first
     FieldExt = atoi(buf);
-    fgets(buf,256,fx);
-    fgets(buf,256,fx);
-    fgets(buf,256,fx);
-    fgets(buf,256,fx); // Field Name
+    if (!fgets(buf,256,fx)) break;
+    if (!fgets(buf,256,fx)) break;
+    if (!fgets(buf,256,fx)) break;
+    if (!fgets(buf,256,fx)) break; // Field Name
     buf[strlen(buf)-1] = '\0';
     FieldName = buf;
-    fgets(buf,256,fx);
-    fgets(buf,256,fx);
-    fgets(buf,256,fx); // Field type
+    if (!fgets(buf,256,fx)) break;
+    if (!fgets(buf,256,fx)) break;
+    if (!fgets(buf,256,fx)) break; // Field type
     buf[strlen(buf)-1] = '\0';
     FieldType = buf;
     fname = FieldName.NewCString();
@@ -2343,8 +2364,12 @@ INDEX::WriteCentroid(FILE* fp)
 	INT npts;
 	while (!feof(Fp)) {
 	  Parent->GpFread(&GpS, 1, sizeof(GPTYPE), Fp);
-	  fread(&npts,1,sizeof(INT), Fp);
-	  fread(Vertices,4,sizeof(DOUBLE),Fp);
+	  if (fread(&npts,1,sizeof(INT), Fp) != sizeof(INT)) {
+	    break;
+	  }
+	  if (fread(Vertices, sizeof(DOUBLE), 4, Fp) != 4) {
+	    break;
+	  }
 
 	  iWest  = (INT)Vertices[0];
 	  iNorth = (INT)Vertices[1];
@@ -2401,7 +2426,10 @@ INDEX::CollapseIndexFiles(INT MemMB)
   STRING CheckName;
   Parent->ComposeDbFn(&CheckName, ".num");
   FILE *fa=Parent->ffopen(CheckName,"r");
-  fgets(Tmp,256,fa);
+  if (!fgets(Tmp,256,fa)) {
+    Parent->ffclose(fa);
+    return;
+  }
   LocalIndexNum=atoi(Tmp);
   First=LocalIndexNum-2;
   Second=LocalIndexNum-1;
@@ -2472,7 +2500,7 @@ INDEX::CollapseIndexFiles(INT MemMB)
     printf("Deleting %s\n", p);
 #endif
     unlink(p);
-    delete p;
+    delete [] p;
   }
   fclose(fj);
   TmpIndexFileName=IndexFileName;

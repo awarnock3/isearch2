@@ -98,7 +98,7 @@ public:
   void group();
   void groupbody();
   void textML();
-  void parserError(char *);
+  void parserError(const char *);
   void writeField(char *fld, long start, long stop);
 
   /* 

@@ -440,7 +440,7 @@ void LITMED::ParseFields (PRECORD NewRecord)
   NewRecord->SetDft (*pdft);
   delete pdft;
   delete[]RecBuffer;
-  delete tags;
+  delete [] tags;
 }
 
 void LITMED:: Present (const RESULT& ResultRecord, const STRING& ElementSet,

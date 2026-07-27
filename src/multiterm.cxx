@@ -122,7 +122,11 @@ PIRSET INDEX::MultiTermSearch(const STRING& QueryTerm,
   // Note - this should always succeed because TermSearch calls this
   // routine when it find that the *.num file exists
   fx=Parent->ffopen(CheckName,"r");
-  fgets(buf,256,fx);
+  if (!fgets(buf,256,fx)) {
+    fclose(fx);
+    delete pirset;
+    return NULL;
+  }
   fclose(fx);
   IndexNum=atoi(buf);
 
@@ -468,4 +472,3 @@ PIRSET INDEX::MultiTermSearch(const STRING& QueryTerm,
   //  pirset->MergeEntries(1);
   return pirset;
 }
-

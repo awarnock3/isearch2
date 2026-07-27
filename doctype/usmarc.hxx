@@ -49,8 +49,8 @@ private:
   int readRecordLength(void);
   int readBaseAddr(void);
   void readMarcStructure(PRECORD NewRecord);
-  int usefulMarcField(char *fieldStr);
-  int compareReg(char *s1, char *s2);
+  int usefulMarcField(const char *fieldStr);
+  int compareReg(const char *s1, const char *s2);
   char findNextTag(char *RecBuffer, int &pos, int &tagPos, int &tagLength);
 };
 

@@ -14,8 +14,8 @@ CC=g++
 #
 # Uncomment the appropriate entry
 #
-#CFLAGS=-O2 -DUNIX -Wall
-CFLAGS=-g -DUNIX -Wall -Wno-unused
+#CFLAGS=-O2 -std=c++17 -DUNIX -Wall
+CFLAGS=-g -std=c++17 -DUNIX -Wall -Wno-unused
 
 #
 # Install Directory

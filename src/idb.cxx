@@ -440,7 +440,7 @@ IDB::DfdtGetFileName(const STRING& FieldName, STRING *StringBuffer) const
   if(f==""){
     MainDfdt->GetDfdRecord(FieldName, &Dfd);
     INT FileNumber = Dfd.GetFileNumber();
-    CHR s[10];
+    CHR s[16];
     INT x, y;
     ComposeDbFn(StringBuffer, ".");
     if (FileNumber > 999) {
@@ -468,7 +468,9 @@ static int
 IdbCompareFcsOnDisk(const void* FcPtr1, const void* FcPtr2) {
   fseek(GlobalFcFp, (((LONG)FcPtr2) - 1) * sizeof(FC), SEEK_SET);
   static FC Fc;
-  fread((char*)&Fc, 1, sizeof(Fc), GlobalFcFp);
+  if (fread((char*)&Fc, 1, sizeof(Fc), GlobalFcFp) != sizeof(Fc)) {
+    return 0;
+  }
   if (GlobalWrongEndian) {
     Fc.FlipBytes();
   }
@@ -927,7 +929,10 @@ IDB::GetDbState() {
   ComposeDbFn(&DbStateFn, DbExtDbState);
   FILE* fp = fopen(DbStateFn, "rb");
   if (fp) {
-    fread(&DbState, 1, sizeof(DbState), fp);
+    if (fread(&DbState, 1, sizeof(DbState), fp) != sizeof(DbState)) {
+      fclose(fp);
+      return IsearchDbStateReady;
+    }
     fclose(fp);
     return DbState;
   } else {
@@ -1825,4 +1830,3 @@ MakeDbGilsRec(IDB *IdbPtr, STRING& PathName, STRING& FileName, STRING* buffer)
   buffer->Cat("<Record-Source> </Record-Source>\n");
   //  buffer->Cat("</Locator>\n"); // Has to be written later
 }
-

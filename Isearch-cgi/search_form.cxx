@@ -292,6 +292,10 @@ int main(int argc, char **argv)
   cout << "<p>";
   cout << "Enter maximum number of hits to retrieve: " << endl;
   cout << "<input size=4 name=\"MAXHITS\" value=\"50\"><p>" << endl;
+  cout << "Result format: <select name=\"OUTPUT\">" << endl;
+  cout << "<option selected value=\"HTML\">HTML" << endl;
+  cout << "<option value=\"JSON\">JSON (results only)" << endl;
+  cout << "</select><p>" << endl;
   cout << "<input type=\"submit\" value=\" Submit Query \">" << endl;
   cout << "<input type=reset value=\" Clear Entries \">" << endl;
 

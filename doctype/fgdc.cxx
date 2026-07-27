@@ -342,7 +342,7 @@ FGDC::ParseDate(const STRING& Buffer, DOUBLE* fStart,
   Hold = Buffer.NewCString();
   ParseDate(Hold,fStart,fEnd);
 
-  delete Hold;
+  delete [] Hold;
   return;
 }
 
@@ -499,7 +499,7 @@ FGDC::ParseDateRange(const STRING& Buffer, DOUBLE* fStart,
   Hold = Buffer.NewCString();
   ParseDate(Hold,fStart,fEnd);
 
-  delete Hold;
+  delete [] Hold;
   return;
 }
 
@@ -966,7 +966,7 @@ FGDC::ParseFields (RECORD *NewRecord)
 	  }
 	}
 
-	CHR *unified_name = UnifiedName(*tags_ptr);
+	const CHR *unified_name = UnifiedName(*tags_ptr);
 	// Ignore "unclassified" fields
 	if (unified_name == NULL) 
 	  continue; // ignore these
@@ -1094,7 +1094,7 @@ FGDC::ParseFields (RECORD *NewRecord)
   NewRecord->SetDft (*pdft);
   
   // Clean up;
-  delete tags;
+  delete [] tags;
   delete pdft;
   delete[]RecBuffer;
 }
@@ -1824,13 +1824,21 @@ FGDC::Present (const RESULT& ResultRecord, const STRING& ElementSet,
 	      return;
 	    } else {
 	      STRING s_cmd;
-	      CHR *TmpName;
-
-	      TmpName = tempnam("/tmp", "mpout");
+	      CHR TmpName[] = "/tmp/mpoutXXXXXX";
+	      int TmpFd = mkstemp(TmpName);
+	      if (TmpFd < 0) {
+		*StringBuffer = "Unable to create temporary file";
+		return;
+	      }
+	      close(TmpFd);
 
 	      BuildCommandLine(mpCommand, HoldFilename, RecordSyntax, 
 			       TmpName, &s_cmd);
-	      system(s_cmd);
+	      if (system(s_cmd) != 0) {
+		unlink(TmpName);
+		*StringBuffer = "Failed to generate requested file";
+		return;
+	      }
 
 	      b.ReadFile(TmpName);
 	      unlink(TmpName);

@@ -77,6 +77,5 @@ void unescape_url(PCHR p);
 void escape_url(PCHR url, PCHR out);
 void spacetoplus(PCHR str);
 CHR x2c(PCHR p);
-PCHR c2x(CHR what);
 
 #endif

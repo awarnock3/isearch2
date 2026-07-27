@@ -429,7 +429,7 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
 	  }
 	}
 
-	PCHR unified_name = UnifiedName(*tags_ptr);
+	const CHR *unified_name = UnifiedName(*tags_ptr);
 	// Ignore "unclassified" fields
 	if (unified_name == NULL) 
 	  continue; // ignore these
@@ -532,7 +532,7 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
   NewRecord->SetDft (*pdft);
   
   // Clean up;
-  delete tags;
+  delete [] tags;
   delete pdft;
   delete[]RecBuffer;
 }

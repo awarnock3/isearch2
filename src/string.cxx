@@ -48,6 +48,7 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include <fstream>
 #include <ctype.h>
 #include <sys/stat.h>
+#include <limits.h>
 
 #ifdef UNIX
 #include <unistd.h>
@@ -608,10 +609,15 @@ STRING::GetFloat() const {
 
 GDT_BOOLEAN 
 STRING::FGet(PFILE FilePointer, const STRINGINDEX MaxCharacters) {
+  if (MaxCharacters <= 0 || MaxCharacters >= INT_MAX) {
+    *this = "";
+    return GDT_FALSE;
+  }
   CHR* pc = new CHR[MaxCharacters+2];
   CHR* p;
   GDT_BOOLEAN Ok;
-  if (fgets(pc, MaxCharacters+1, FilePointer)) {
+  const int ReadLen = (int)MaxCharacters + 1;
+  if (fgets(pc, ReadLen, FilePointer)) {
     p = pc + strlen(pc) - 1;
     while ( (p >= pc) && ( (*p == '\n') || (*p == '\r') ) ) {
       *(p--) = '\0';
@@ -1045,7 +1051,8 @@ STRING::ReadFile(const STRING& FileName)
       if (Buffer) {                    // make sure the allocation succeeded
         if ( (Length > 0) && (fp = fopen(FileName, "rb")) ) {
 	  // Zero length is ok, except we read nothing
-	       fread((char*)Buffer, 1, Length, fp);
+               size_t BytesRead = fread((char*)Buffer, 1, Length, fp);
+               Length = (STRINGINDEX)BytesRead;
 	  fclose(fp);
 	}
       Buffer[Length] = '\0';
@@ -1077,7 +1084,8 @@ STRING::ReadFile(const CHR* FileName)
       if (Buffer) {                    // make sure the allocation succeeded
         if ( (Length > 0) && (fp = fopen(FileName, "rb")) ) { 
 	  // Zero length is ok, except we read nothing
-	  fread((char*)Buffer, 1, Length, fp);
+          size_t BytesRead = fread((char*)Buffer, 1, Length, fp);
+          Length = (STRINGINDEX)BytesRead;
 	  fclose(fp);
 	}
       Buffer[Length] = '\0';
@@ -1127,7 +1135,7 @@ STRING::MakePrintable() {
 }
 
 
-char *translate[] = {
+const CHR *translate[] = {
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //   0 -  7
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //   8 - 15
   NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //  16
@@ -1193,7 +1201,7 @@ STRING::XmlCleanup() {
  *                   the buffer is 6 times the original string length
  *             By John HLB Tyler (Credit please?)
  */
-char *transcode (char *buffer, char **transarray)
+char *transcode (char *buffer, const char *const *transarray)
 {
   char *obuf=buffer;            // Beginning of old buffer
   char *obufscan=obuf;          // Scanning point of old buffer
@@ -1201,7 +1209,7 @@ char *transcode (char *buffer, char **transarray)
   char *nbuf;                   // Pointer to start of new string buffer
   char *ipnt;                   // Insertion point into new buffer
   char *maxipnt;                // End of new buffer
-  char *rscan;                  // Pointer to a character in the replacement
+  const char *rscan;            // Pointer to a character in the replacement
 
   char entity[7];               // Buffer to hold the numeric entity
 
@@ -1319,5 +1327,3 @@ INT
 StrNCaseCmp(const UCHR* s1, const UCHR* s2, const size_t n) {
   return StrNCaseCmp((CHR*)s1, (CHR*)s2, n);
 }
-
-

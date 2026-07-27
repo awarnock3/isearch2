@@ -37,7 +37,7 @@ DTCC=g++
 # for Solaris, SunOS, Ultrix, OSF
 #
 #CFLAGS=-O2 -DUNIX -DMULTI
-CFLAGS=-O2 -DUNIX
+CFLAGS=-O2 -std=c++17 -DUNIX
 
 #
 # for Linux

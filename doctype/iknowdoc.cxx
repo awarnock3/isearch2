@@ -206,7 +206,7 @@ void IKNOWDOC::ParseFields (PRECORD NewRecord)
       NewRecord->GetDocumentType(&doctype);
       if (tags)
         {
-          delete tags;
+          delete [] tags;
           cout << "Warning: No `" << doctype << "' fields/tags in \"" << fn << "\"\n";
         }
       else
@@ -245,7 +245,7 @@ void IKNOWDOC::ParseFields (PRECORD NewRecord)
       //      if (val_len <= 0) continue; // Don't bother with empty fields
       if (val_len < 0) continue; // Don't bother with empty fields
  
-      PCHR unified_name = UnifiedName(*tags_ptr);
+      const CHR *unified_name = UnifiedName(*tags_ptr);
 #if WANT_MISC
       // Throw "unclassified" into Misc
       FieldName = unified_name ? unified_name: "Misc";
@@ -302,7 +302,7 @@ void IKNOWDOC::ParseFields (PRECORD NewRecord)
   NewRecord->SetDft (*pdft);
   delete pdft;
   delete[]RecBuffer;
-  delete tags;
+  delete [] tags;
 }
 
 static PCHR *parse_tags (PCHR b, GPTYPE len)

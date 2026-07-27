@@ -182,7 +182,7 @@ GDT_BOOLEAN MAILFOLDER::accept_tag(const CHR *tag) const
 #if RESTRICT_MAIL_FIELDS
   // Mail tags that we want, if it is not
   // here then we igonre it.
-  static char * Keywords[] = {
+  static const char * const Keywords[] = {
     /* Must be sorted! */
     "Bcc",
     "Cc",
@@ -361,7 +361,7 @@ void MAILFOLDER::ParseFields (PRECORD NewRecord)
       NewRecord->GetDocumentType(&doctype);
       if (tags)
 	{
-	  delete tags;
+	  delete [] tags;
 	  cout << "Warning: No `" << doctype << "' fields/tags in \"" << fn << "\" record.\n";
 	}
       else
@@ -439,7 +439,7 @@ void MAILFOLDER::ParseFields (PRECORD NewRecord)
   NewRecord->SetDft (*pdft);
   delete pdft;
   delete[]RecBuffer;
-  delete tags;
+  delete [] tags;
 }
 
 /*-
@@ -452,7 +452,8 @@ PCHR MAILFOLDER::NameKey (PCHR buf, GDT_BOOLEAN name) const
 {
   PCHR s = NULL;
   PCHR e = NULL;
-  char email[256];
+  const size_t input_len = strlen(buf);
+  CHR *email = new CHR[input_len + 1];
   char p1, p2, b1, b2;
 
   if (name)
@@ -483,8 +484,11 @@ PCHR MAILFOLDER::NameKey (PCHR buf, GDT_BOOLEAN name) const
   s = email;
   while(isspace(*s) || *s == '"') s++; // Skip leading space
   strcpy (buf, s);
-  s = buf + strlen(buf) - 1;
-  while (s > buf && (isspace(*s) || *s == '"')) *s-- = '\0'; // Trim trailing space
+  if (*buf != '\0') {
+    s = buf + strlen(buf) - 1;
+    while (s > buf && (isspace(*s) || *s == '"')) *s-- = '\0'; // Trim trailing space
+  }
+  delete [] email;
   return buf;
 }
 
@@ -550,10 +554,10 @@ GDT_BOOLEAN MAILFOLDER::IsMailFromLine (const char *line) const
   static char magic[] = "From "; // Mail magic
 
 #define MAX_FIELDS 10
-  char *fields[MAX_FIELDS];
+  const char *fields[MAX_FIELDS];
   const char *sender_tail;
   const char *lp;
-  char **fp;
+  const char **fp;
   int n, i;
   // Email (RFC822) has English language dates from 1 Jan 1970 on
   static char legal_day[] = "SunMonTueWedThuFriSat";
@@ -579,7 +583,7 @@ GDT_BOOLEAN MAILFOLDER::IsMailFromLine (const char *line) const
 	lp++;
       if (*lp == '\0' || *lp == '\n')
 	break;
-      *fp++ = (char *)lp;
+      *fp++ = lp;
       while (*lp && !isspace (*lp))
 	if (*lp++ == ':' && (n == 4 || n == 5))
 	  break;

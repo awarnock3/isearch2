@@ -422,7 +422,7 @@ CIPC::ParseDate(const STRING& Buffer, DOUBLE* fStart,
   Hold = Buffer.NewCString();
   ParseDate(Hold,fStart,fEnd);
 
-  delete Hold;
+  delete [] Hold;
   return;
 }
 
@@ -587,7 +587,7 @@ CIPC::ParseDateRange(const STRING& Buffer, DOUBLE* fStart,
   Hold = Buffer.NewCString();
   ParseDate(Hold,fStart,fEnd);
 
-  delete Hold;
+  delete [] Hold;
   return;
 }
 
@@ -816,8 +816,8 @@ CIPC::ParseGPoly(const CHR *Buffer, DOUBLE Vertices[])
 
   DOUBLE North,South,East,West;
   DOUBLE Left;
-  CHR Tag[12];
-  CHR eTag[12];
+  CHR Tag[32];
+  CHR eTag[32];
 
   strcpy(Tag,"<WestBoundingCoordinate>");
   strcpy(eTag,"</WestBoundingCoordinate>");
@@ -970,7 +970,7 @@ CIPC::ParseFields (RECORD *NewRecord)
 	  }
 	}
 
-	CHR *unified_name = UnifiedName(*tags_ptr);
+	const CHR *unified_name = UnifiedName(*tags_ptr);
 	// Ignore "unclassified" fields
 	if (unified_name == NULL) 
 	  continue; // ignore these
@@ -1099,7 +1099,7 @@ CIPC::ParseFields (RECORD *NewRecord)
   NewRecord->SetDft (*pdft);
   
   // Clean up;
-  delete tags;
+  delete [] tags;
   delete pdft;
   delete[]RecBuffer;
 }
@@ -1483,5 +1483,3 @@ CIPC::find_end_tag (char **t, const char *tag) const
   return NULL;		// No end tag found
 #endif
 }
-
-

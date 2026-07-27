@@ -231,7 +231,7 @@ SGMLTAG::ParseFields(PRECORD NewRecord)
   delete pdft;
   delete [] RecBuffer;
   delete [] OrigRecBuffer;
-  delete tags;
+  delete [] tags;
 }
 
 SGMLTAG::~SGMLTAG() {

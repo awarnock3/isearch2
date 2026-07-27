@@ -90,7 +90,7 @@ TAGLIST::ReplaceWithSpace(PCHR data, INT length)
 		}
 		tags_ptr++;
 	}
-	delete tags;
+	delete [] tags;
 
 	for (p = data; p < (data + length); p++) 
 	{
@@ -103,7 +103,7 @@ TAGLIST::ReplaceWithSpace(PCHR data, INT length)
 	*p = '\0';			// Add a NULL to terminate the record
 }
 
-char *ValidTags[] = {"TITLE",
+const char * const ValidTags[] = {"TITLE",
 					"H1",
 					"H2",
 					"H3",
@@ -302,7 +302,7 @@ TAGLIST::ParseFields(PRECORD NewRecord)
   delete pdft;
   delete [] RecBuffer;
   delete [] OrigRecBuffer;
-  delete tags;
+  delete [] tags;
 }
 
 TAGLIST::~TAGLIST(){

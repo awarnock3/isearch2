@@ -204,7 +204,7 @@ MARCDUMP::ParseFields (RECORD *NewRecord)
     STRING doctype;
     NewRecord->GetDocumentType(&doctype);
     if (tags) {
-      delete tags;
+      delete [] tags;
       cout << "Warning: No `" << doctype << "' fields/tags in \"" 
 	   << fn << "\"\n";
     } else {
@@ -284,7 +284,7 @@ MARCDUMP::ParseFields (RECORD *NewRecord)
   NewRecord->SetDft (*pdft);
   delete pdft;
   delete[]RecBuffer;
-  delete tags;
+  delete [] tags;
 }
 
 

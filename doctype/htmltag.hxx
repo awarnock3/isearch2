@@ -22,7 +22,7 @@ public:
   ~HTMLTAG();
 
 private:
-    int TagMatch(char* tag, char* tagType) const;
+    int TagMatch(char* tag, const char* tagType) const;
 };
 
 typedef HTMLTAG* PHTMLTAG;

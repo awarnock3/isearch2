@@ -262,7 +262,7 @@ NOTE:
 formats that might be added to Isearch, eg. BibTeX
 */
 
-PCHR REFERBIB::UnifiedName(PCHR tag) const
+const CHR *REFERBIB::UnifiedName(const CHR *tag) const
 {
 #if USE_UNIFIED_NAMES
   const char *Table[] = {
@@ -299,7 +299,7 @@ PCHR REFERBIB::UnifiedName(PCHR tag) const
   // Ignore lower case tags
   if (tag[1] < 'A' || tag[1] > 'Z') return NULL;
   // Return unified field name
-  return (PCHR)Table[(unsigned)tag[1] - (unsigned)'A'];
+  return Table[(unsigned)tag[1] - (unsigned)'A'];
 #else
   return tag; // Identity
 #endif
@@ -340,7 +340,7 @@ void REFERBIB::ParseFields (PRECORD NewRecord)
       NewRecord->GetDocumentType(&doctype);
       if (tags)
 	{
-	  delete tags;
+	  delete [] tags;
 	  cout << "Warning: No `" << doctype << "' fields/tags in \"" << fn << "\" record.\n";
 	}
        else
@@ -384,7 +384,7 @@ void REFERBIB::ParseFields (PRECORD NewRecord)
 	}
 #endif
 
-      PCHR unified_name = UnifiedName(*tags_ptr);
+      const CHR *unified_name = UnifiedName(*tags_ptr);
 #if WANT_MISC
       // Throw "unclassified" into Misc
       FieldName = unified_name ? unified_name: "Misc";
@@ -408,7 +408,7 @@ void REFERBIB::ParseFields (PRECORD NewRecord)
   NewRecord->SetDft (*pdft);
   delete pdft;
   delete[]RecBuffer;
-  delete tags;
+  delete [] tags;
 }
 
 void REFERBIB::Present (const RESULT& ResultRecord,

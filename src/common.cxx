@@ -235,7 +235,9 @@ ExpandFileSpec(STRING* FileSpec)
   STRING s;
   INT Special;
   CHR Cwd[1024];
-  getcwd(Cwd, 1022);
+  if (!getcwd(Cwd, 1022)) {
+    strcpy(Cwd, ".");
+  }
   NewFileSpec = Cwd;
   AddTrailingSlash(&NewFileSpec);
   OldFileSpec = *FileSpec;

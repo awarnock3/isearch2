@@ -60,6 +60,32 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "vidb.hxx"
 #include "thesaurus.hxx"
 
+static void PrintJsonEscaped(const STRING& Value) {
+  CHR* text = Value.NewCString();
+  putchar('"');
+  for (const unsigned char* p = (const unsigned char*)text; *p; ++p) {
+    unsigned char c = *p;
+    switch (c) {
+      case '\"': fputs("\\\"", stdout); break;
+      case '\\': fputs("\\\\", stdout); break;
+      case '\b': fputs("\\b", stdout); break;
+      case '\f': fputs("\\f", stdout); break;
+      case '\n': fputs("\\n", stdout); break;
+      case '\r': fputs("\\r", stdout); break;
+      case '\t': fputs("\\t", stdout); break;
+      default:
+        if (c < 0x20) {
+          printf("\\u%04x", (unsigned int)c);
+        } else {
+          putchar((int)c);
+        }
+        break;
+    }
+  }
+  putchar('"');
+  delete [] text;
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr,"Isearch v%s\n", IsearchVersion);
@@ -67,7 +93,23 @@ int main(int argc, char** argv) {
     fprintf(stderr,"-d (X)        # Search database with root name (X).\n");
     fprintf(stderr,"-V            # Print the version number.\n");
     fprintf(stderr,"-p (X)        # Present element set (X) with results.\n");
+    fprintf(stderr,"              # Values: B (brief filename), F (full record),\n");
+    fprintf(stderr,"              # field name, comma-separated list, or doctype-\n");
+    fprintf(stderr,"              # specific element sets (for example A/S/C/R).\n");
     fprintf(stderr,"-f (X)        # Present results in format (X).\n");
+    fprintf(stderr,"              # Values: TEXT, SUTRS, USMARC, HTML, SGML,\n");
+    fprintf(stderr,"              # XML, GRS-1, or syntax OIDs:\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.101 (SUTRS)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.10 (USMARC)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.109.3 (HTML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.108 (old HTML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.1000.34.1 (CNIDR HTML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.109.9 (SGML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.1000.34.2 (CNIDR SGML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.109.10 (XML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.105 (GRS-1)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.109 (MIME->SUTRS)\n");
+    fprintf(stderr,"-json         # Return search results as JSON.\n");
     fprintf(stderr,"-q            # Print results and quit immediately.\n");
     fprintf(stderr,"-t            # Print terse results and quit immediately.\n");
     fprintf(stderr,"-and          # Perform boolean \"and\" on results.\n");
@@ -134,6 +176,7 @@ int main(int argc, char** argv) {
   INT LastUsed = 0;
   GDT_BOOLEAN TerseFlag=GDT_FALSE;
   GDT_BOOLEAN Synonyms=GDT_FALSE;
+  GDT_BOOLEAN JsonFlag=GDT_FALSE;
 	
   ElementSet = "B";
   while (x < argc) {
@@ -227,6 +270,12 @@ int main(int argc, char** argv) {
 	ByteRangeFlag = 1;
 	LastUsed = x;
       }
+      if (Flag.Equals("-json")) {
+	JsonFlag = GDT_TRUE;
+	TerseFlag = GDT_TRUE;
+	QuitFlag = 1;
+	LastUsed = x;
+      }
       if (Flag.Equals("-and")) {
 	BooleanAnd = 1;
 	LastUsed = x;
@@ -278,19 +327,44 @@ int main(int argc, char** argv) {
     fprintf(stderr,"Warning: Failed to set the locale!\n");
   }
 
-  x = LastUsed + 1;
-  if (x >= argc) {
+  INT NumWords = 0;
+  for (INT argi = 1; argi < argc; ++argi) {
+    STRING Arg = argv[argi];
+    if (Arg.Equals("-o") || Arg.Equals("-d") || Arg.Equals("-p") ||
+	Arg.Equals("-f") || Arg.Equals("-prefix") || Arg.Equals("-suffix") ||
+	Arg.Equals("-startdoc") || Arg.Equals("-enddoc")) {
+      ++argi; // skip value for options that take one argument
+      continue;
+    }
+    if (Arg.Equals("-q") || Arg.Equals("-syn") || Arg.Equals("-t") ||
+	Arg.Equals("-byterange") || Arg.Equals("-json") || Arg.Equals("-and") ||
+	Arg.Equals("-rpn") || Arg.Equals("-infix") || Arg.Equals("-V") ||
+	Arg.Equals("-debug")) {
+      continue;
+    }
+    ++NumWords;
+  }
+  if (NumWords <= 0) {
     RETURN_ERROR;
   }
-  
-  INT NumWords = argc - x;
-  INT z = x;
-  //	STRING WordList[NumWords];
+
   STRING *WordList = new STRING[NumWords];
-  for (z=0; z<NumWords; z++) {
-    WordList[z] = argv[z+x];
-    //    WordList[z].Print();
-    //    cout << endl;
+  INT z = 0;
+  for (INT argi = 1; argi < argc; ++argi) {
+    STRING Arg = argv[argi];
+    if (Arg.Equals("-o") || Arg.Equals("-d") || Arg.Equals("-p") ||
+	Arg.Equals("-f") || Arg.Equals("-prefix") || Arg.Equals("-suffix") ||
+	Arg.Equals("-startdoc") || Arg.Equals("-enddoc")) {
+      ++argi;
+      continue;
+    }
+    if (Arg.Equals("-q") || Arg.Equals("-syn") || Arg.Equals("-t") ||
+	Arg.Equals("-byterange") || Arg.Equals("-json") || Arg.Equals("-and") ||
+	Arg.Equals("-rpn") || Arg.Equals("-infix") || Arg.Equals("-V") ||
+	Arg.Equals("-debug")) {
+      continue;
+    }
+    WordList[z++] = argv[argi];
   }
   
   STRING DBPathName, DBFileName;
@@ -472,6 +546,71 @@ int main(int argc, char** argv) {
   if(!TerseFlag) {
     printf("%i document(s) displayed.\n\n", n);
   }
+
+  INT TotalMatches = pirset->GetTotalEntries();
+
+  if (JsonFlag) {
+    RESULT JsonResult;
+    STRING JsonPath, JsonFile, JsonKey, JsonElement, JsonBrief, JsonTotalBrief, JsonTempElementSet;
+    INT score;
+
+    printf("{\"database\":");
+    PrintJsonEscaped(DBName);
+    printf(",\"query\":");
+    PrintJsonEscaped(QueryString);
+    printf(",\"total_matches\":%i", TotalMatches);
+    printf(",\"displayed\":%i", n);
+    printf(",\"start_doc\":%i", x1);
+    printf(",\"end_doc\":%i", x2 == 0 ? n : x2);
+    printf(",\"results\":[");
+
+    for (t=1; t<=n; t++) {
+      prset->GetEntry(t, &JsonResult);
+      score = prset->GetScaledScore(JsonResult.GetScore(), 100);
+      JsonResult.GetPathName(&JsonPath);
+      JsonResult.GetFileName(&JsonFile);
+      JsonResult.GetKey(&JsonKey);
+
+      JsonTotalBrief = "";
+      JsonTempElementSet = ElementSet;
+      while (!JsonTempElementSet.Equals("")) {
+	JsonElement = JsonTempElementSet;
+	if ( (x=JsonTempElementSet.Search(',')) ) {
+	  JsonElement.EraseAfter(x-1);
+	  JsonTempElementSet.EraseBefore(x+1);
+	} else {
+	  JsonTempElementSet = "";
+	}
+	pdb->Present(JsonResult, JsonElement, RecordSyntax, &JsonBrief);
+	if (JsonTotalBrief.GetLength() > 0) {
+	  JsonTotalBrief += " | ";
+	}
+	JsonTotalBrief += JsonBrief;
+      }
+
+      if (t > 1) {
+	printf(",");
+      }
+      printf("{\"rank\":%i,\"score\":%i,\"path\":", t, score);
+      PrintJsonEscaped(JsonPath);
+      printf(",\"file\":");
+      PrintJsonEscaped(JsonFile);
+      printf(",\"key\":");
+      PrintJsonEscaped(JsonKey);
+      printf(",\"brief\":");
+      PrintJsonEscaped(JsonTotalBrief);
+      printf(",\"record_start\":%ld,\"record_end\":%ld}",
+	     (long)JsonResult.GetRecordStart(),
+	     (long)JsonResult.GetRecordEnd());
+    }
+    printf("]}\n");
+    pdb->EndRsetPresent(RecordSyntax);
+    delete [] WordList;
+    delete pirset;
+    delete prset;
+    delete pdb;
+    RETURN_ZERO;
+  }
   
   CHR Selection[80];
   CHR s[256];
@@ -568,8 +707,11 @@ int main(int argc, char** argv) {
       FileNum = 0;
     } else {
       printf("\nSelect file #: ");
-      fgets(Selection,79,stdin);
-      FileNum = atoi(Selection);
+      if (!fgets(Selection,79,stdin)) {
+	FileNum = 0;
+      } else {
+	FileNum = atoi(Selection);
+      }
     }
     if ( (FileNum > n) || (FileNum < 0) ) {
       printf("\nSelect a number between 1 and %i.\n", n);
@@ -589,7 +731,9 @@ int main(int argc, char** argv) {
       // printf("\n");
 			
       printf("Press <Return> to select another file: ");
-      fgets(s,255,stdin);
+      if (!fgets(s,255,stdin)) {
+	s[0] = '\0';
+      }
       printf("\n");
       //      LoadPos=0;
       MajorCount=0;

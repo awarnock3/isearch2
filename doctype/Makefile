@@ -9,11 +9,11 @@ CC=g++
 #
 # Uncomment the appropriate entry
 #
-#CFLAGS=-g -DUNIX -Wall -Dfar=
+#CFLAGS=-g -std=c++17 -DUNIX -Wall -Dfar=
 
-#CFLAGS=-DUNIX -O2
-#CFLAGS=-g -DUNIX -Wall -O2
-CFLAGS=-g -DUNIX -Wall -D__CSTRING__
+#CFLAGS=-std=c++17 -DUNIX -O2
+#CFLAGS=-g -std=c++17 -DUNIX -Wall -O2
+CFLAGS=-g -std=c++17 -DUNIX -Wall -D__CSTRING__
 
 #
 # Source Files Directory

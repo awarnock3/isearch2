@@ -40,6 +40,7 @@ Description:	Class RESULT - Search Result
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+#include <stdio.h>
 #include "result.hxx"
 
 
@@ -76,9 +77,9 @@ RESULT::SetKey(const STRING& NewKey) {
 
 void 
 RESULT::GetVKey(STRING* StringBuffer) const {
-  CHR DBkey[10];
+  CHR DBkey[32];
   if (DbNum > 0) {
-    sprintf(DBkey,"%d:",DbNum);
+    snprintf(DBkey, sizeof(DBkey), "%d:", DbNum);
   } else {
     DBkey[0] = '\0';
   }
