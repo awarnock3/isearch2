@@ -64,6 +64,12 @@ Index sample files and run a query:
 ./bin/Isearch -d /tmp/ISEARCH_SMOKE dust
 ```
 
+JSON result output (search metadata + hit list only):
+
+```bash
+./bin/Isearch -d /tmp/ISEARCH_SMOKE -json dust
+```
+
 ## Core CLI tools
 
 - `Iindex` - build/update indexes from source documents.
@@ -95,6 +101,9 @@ Treat those generated files as outputs; edit `doctype/dtconf.inf` and templates 
 3. Configure/deploy CGI scripts per your web server setup.
 
 See `Isearch-cgi/README` for legacy CGI deployment details and parameters.
+
+To request JSON from `isrch_srch`, send `OUTPUT=JSON` (or `FORMAT=JSON`) in CGI parameters.
+`search_form` now exposes this as a result format selector.
 
 ## Database model
 

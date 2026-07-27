@@ -60,6 +60,32 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "vidb.hxx"
 #include "thesaurus.hxx"
 
+static void PrintJsonEscaped(const STRING& Value) {
+  CHR* text = Value.NewCString();
+  putchar('"');
+  for (const unsigned char* p = (const unsigned char*)text; *p; ++p) {
+    unsigned char c = *p;
+    switch (c) {
+      case '\"': fputs("\\\"", stdout); break;
+      case '\\': fputs("\\\\", stdout); break;
+      case '\b': fputs("\\b", stdout); break;
+      case '\f': fputs("\\f", stdout); break;
+      case '\n': fputs("\\n", stdout); break;
+      case '\r': fputs("\\r", stdout); break;
+      case '\t': fputs("\\t", stdout); break;
+      default:
+        if (c < 0x20) {
+          printf("\\u%04x", (unsigned int)c);
+        } else {
+          putchar((int)c);
+        }
+        break;
+    }
+  }
+  putchar('"');
+  delete [] text;
+}
+
 int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr,"Isearch v%s\n", IsearchVersion);
@@ -68,6 +94,7 @@ int main(int argc, char** argv) {
     fprintf(stderr,"-V            # Print the version number.\n");
     fprintf(stderr,"-p (X)        # Present element set (X) with results.\n");
     fprintf(stderr,"-f (X)        # Present results in format (X).\n");
+    fprintf(stderr,"-json         # Return search results as JSON.\n");
     fprintf(stderr,"-q            # Print results and quit immediately.\n");
     fprintf(stderr,"-t            # Print terse results and quit immediately.\n");
     fprintf(stderr,"-and          # Perform boolean \"and\" on results.\n");
@@ -134,6 +161,7 @@ int main(int argc, char** argv) {
   INT LastUsed = 0;
   GDT_BOOLEAN TerseFlag=GDT_FALSE;
   GDT_BOOLEAN Synonyms=GDT_FALSE;
+  GDT_BOOLEAN JsonFlag=GDT_FALSE;
 	
   ElementSet = "B";
   while (x < argc) {
@@ -225,6 +253,12 @@ int main(int argc, char** argv) {
       }
       if (Flag.Equals("-byterange")) {
 	ByteRangeFlag = 1;
+	LastUsed = x;
+      }
+      if (Flag.Equals("-json")) {
+	JsonFlag = GDT_TRUE;
+	TerseFlag = GDT_TRUE;
+	QuitFlag = 1;
 	LastUsed = x;
       }
       if (Flag.Equals("-and")) {
@@ -471,6 +505,71 @@ int main(int argc, char** argv) {
   n = prset->GetTotalEntries();
   if(!TerseFlag) {
     printf("%i document(s) displayed.\n\n", n);
+  }
+
+  INT TotalMatches = pirset->GetTotalEntries();
+
+  if (JsonFlag) {
+    RESULT JsonResult;
+    STRING JsonPath, JsonFile, JsonKey, JsonElement, JsonBrief, JsonTotalBrief, JsonTempElementSet;
+    INT score;
+
+    printf("{\"database\":");
+    PrintJsonEscaped(DBName);
+    printf(",\"query\":");
+    PrintJsonEscaped(QueryString);
+    printf(",\"total_matches\":%i", TotalMatches);
+    printf(",\"displayed\":%i", n);
+    printf(",\"start_doc\":%i", x1);
+    printf(",\"end_doc\":%i", x2 == 0 ? n : x2);
+    printf(",\"results\":[");
+
+    for (t=1; t<=n; t++) {
+      prset->GetEntry(t, &JsonResult);
+      score = prset->GetScaledScore(JsonResult.GetScore(), 100);
+      JsonResult.GetPathName(&JsonPath);
+      JsonResult.GetFileName(&JsonFile);
+      JsonResult.GetKey(&JsonKey);
+
+      JsonTotalBrief = "";
+      JsonTempElementSet = ElementSet;
+      while (!JsonTempElementSet.Equals("")) {
+	JsonElement = JsonTempElementSet;
+	if ( (x=JsonTempElementSet.Search(',')) ) {
+	  JsonElement.EraseAfter(x-1);
+	  JsonTempElementSet.EraseBefore(x+1);
+	} else {
+	  JsonTempElementSet = "";
+	}
+	pdb->Present(JsonResult, JsonElement, RecordSyntax, &JsonBrief);
+	if (JsonTotalBrief.GetLength() > 0) {
+	  JsonTotalBrief += " | ";
+	}
+	JsonTotalBrief += JsonBrief;
+      }
+
+      if (t > 1) {
+	printf(",");
+      }
+      printf("{\"rank\":%i,\"score\":%i,\"path\":", t, score);
+      PrintJsonEscaped(JsonPath);
+      printf(",\"file\":");
+      PrintJsonEscaped(JsonFile);
+      printf(",\"key\":");
+      PrintJsonEscaped(JsonKey);
+      printf(",\"brief\":");
+      PrintJsonEscaped(JsonTotalBrief);
+      printf(",\"record_start\":%ld,\"record_end\":%ld}",
+	     (long)JsonResult.GetRecordStart(),
+	     (long)JsonResult.GetRecordEnd());
+    }
+    printf("]}\n");
+    pdb->EndRsetPresent(RecordSyntax);
+    delete [] WordList;
+    delete pirset;
+    delete prset;
+    delete pdb;
+    RETURN_ZERO;
   }
   
   CHR Selection[80];

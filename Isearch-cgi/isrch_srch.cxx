@@ -94,11 +94,14 @@ INT get_term(INT t, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight);
 PCHR get_field(const CHR *fmt, INT n);
 
 INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
-	INT Start, INT MaxHits, INT TYPE);
-void  PutHTTPHeader(void);
+	INT Start, INT MaxHits, INT TYPE, GDT_BOOLEAN JsonOutput);
+void  PutHTTPHeader(GDT_BOOLEAN JsonOutput);
 void  PutHTMLHead(void);
 void  PutHTMLBodyStart(void);
 void  PutHTMLBodyEnd(void);
+void  PrintJsonEscaped(const STRING& Value);
+void  PrintJsonError(const CHR* Message);
+GDT_BOOLEAN WantsJsonOutput(void);
 
 #define MAXHIT_DEFAULT 50
 #define MAXSTR	1024
@@ -121,19 +124,27 @@ INT main(int argc, char **argv)
   }
 
   cgidata = new CGIAPP();
+  GDT_BOOLEAN JsonOutput = WantsJsonOutput();
 
   // Write the preliminary stuff out - these can be customzied
-  PutHTTPHeader();
-  PutHTMLHead();
-  PutHTMLBodyStart();
+  PutHTTPHeader(JsonOutput);
+  if (!JsonOutput) {
+    PutHTMLHead();
+    PutHTMLBodyStart();
+  }
 
   // Good for debugging form values
   // cgidata->Display();
   // exit(0);
 
   if ((db = cgidata->GetValueByName("DATABASE")) == NULL) {
-    cout << "<B>You must specify a database name.</B>" << endl;
-    PutHTMLBodyEnd();
+    if (JsonOutput) {
+      PrintJsonError("You must specify a database name.");
+    } else {
+      cout << "<B>You must specify a database name.</B>" << endl;
+      PutHTMLBodyEnd();
+    }
+    delete cgidata;
     exit(0);
   }
 
@@ -266,23 +277,33 @@ INT main(int argc, char **argv)
       if ((p=cgidata->GetValueByName("OPERATOR")))
 	type = (StrCaseCmp(p,"AND") == 0) ? type|BOOLEAN_AND:type;
     } else {
-      cout << "<B>You must enter a query term</B>" << endl;
-      PutHTMLBodyEnd();
+      if (!JsonOutput) {
+        cout << "<B>You must enter a query term</B>" << endl;
+        PutHTMLBodyEnd();
+      }
+      else {
+	PrintJsonError("You must enter a query term.");
+      }
+      delete cgidata;
       exit(0);
     }
   }
 
-  cout << "<H2>Operation Summary</H2>" << endl;
-  cout << "<B>Query:</B> <CODE>" << endl;
-  cout << PrintQuery << "</CODE><P>" << endl;
+  if (!JsonOutput) {
+    cout << "<H2>Operation Summary</H2>" << endl;
+    cout << "<B>Query:</B> <CODE>" << endl;
+    cout << PrintQuery << "</CODE><P>" << endl;
+  }
 
   INT nhits;
-  nhits = Search(argv[1], db, query, ESName, Start, MaxHits, type);
-  if (nhits > 0) {
+  nhits = Search(argv[1], db, query, ESName, Start, MaxHits, type, JsonOutput);
+  if ((nhits > 0) && (!JsonOutput)) {
     cout << "<HR>" << endl;
   }
   
-  PutHTMLBodyEnd();
+  if (!JsonOutput) {
+    PutHTMLBodyEnd();
+  }
   delete cgidata;
   exit(0);
 }
@@ -483,7 +504,7 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
 */
 
 INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
-	INT Start, INT MaxHits, INT type)
+	INT Start, INT MaxHits, INT type, GDT_BOOLEAN JsonOutput)
 {
   PRSET prset;
   PIRSET pirset;
@@ -533,6 +554,10 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
       Parser.Parse(query_str, &ProcessedQuery);
       
       if (!Parser.InputParsedOK()) {
+	if (JsonOutput) {
+	  PrintJsonError("The query was unparseable.");
+	  return -1;
+	}
 	cout << "The Query <i>" << query_str << "</i>\n";
 	cout << "was unparseable. If you think this is an error in this\n";
 	cout << "gateway, send mail to <a href=\"mailto:isite@cnidr.org\">";
@@ -593,21 +618,42 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
   prset = NewPrset;
   HitCount = prset->GetTotalEntries();
 
-  INT FetchCount 
-    = HitCount > (Start + MaxHits - 1) ? MaxHits : (HitCount - Start + 1);
+  INT FetchCount = 0;
+  if (Start <= HitCount) {
+    FetchCount = HitCount > (Start + MaxHits - 1) ? MaxHits : (HitCount - Start + 1);
+  }
 
-  cout << "<i>Matching Record Count:</i> " << HitCount << "<br>\n";
-  cout << "<i>Total Retrieved:</i> " << FetchCount << "<br>\n";
-  cout << "<i>Interpreted Query:</i> " << query_str << "<br>\n";
-  cout << "<i>Total Database Records:</i> " << pdb->GetTotalRecords();
-  cout << "<br>\n";
-  cout << "<i>Query Time:</i> " << (EndTime - StartTime);
-  cout << " seconds<br>" << endl;
+  if (JsonOutput) {
+    cout << "{";
+    cout << "\"matching_record_count\":" << HitCount << ",";
+    cout << "\"total_retrieved\":" << FetchCount << ",";
+    cout << "\"interpreted_query\":";
+    PrintJsonEscaped(query_str);
+    cout << ",\"total_database_records\":" << pdb->GetTotalRecords() << ",";
+    cout << "\"query_time_seconds\":" << (EndTime - StartTime) << ",";
+    cout << "\"start\":" << Start << ",";
+    cout << "\"max_hits\":" << MaxHits << ",";
+    cout << "\"results\":[";
+  }
+
+  if (!JsonOutput) {
+    cout << "<i>Matching Record Count:</i> " << HitCount << "<br>\n";
+    cout << "<i>Total Retrieved:</i> " << FetchCount << "<br>\n";
+    cout << "<i>Interpreted Query:</i> " << query_str << "<br>\n";
+    cout << "<i>Total Database Records:</i> " << pdb->GetTotalRecords();
+    cout << "<br>\n";
+    cout << "<i>Query Time:</i> " << (EndTime - StartTime);
+    cout << " seconds<br>" << endl;
+  }
 
   if (HitCount == 0) {
-    cout << "<p>\n<b>No matches found.</b>\n<p>" << endl;
+    if (JsonOutput) {
+      cout << "]}" << endl;
+    } else {
+      cout << "<p>\n<b>No matches found.</b>\n<p>" << endl;
+    }
     return 0;
-  } else cout << "<HR>";
+  } else if (!JsonOutput) cout << "<HR>";
 
   pdb->GetDfdt(&dfdt);
   FieldCount = dfdt.GetTotalEntries();
@@ -647,71 +693,98 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
 
     Score = prset->GetScaledScore(RsRecord.GetScore(),100);
 
-    // Construct the URL
-    cout << "<b>Filename:</b> ";
-    if (url)
-      cout << "<a href=\"" << url << "\">";
-    cout << File;
-    if (url)
-      cout << "</a>";
-    cout << "<br>" << endl;
-    cout << "<b>Match Number:</b> " << i << " of " << HitCount 
-         << "<br>" << endl;
-    cout << "<b>Score:</b> " << Score << "<br>";
-    if (!ESName.Equals("F")) {
-      cout << "<b>Headline Field [";
-      cout << ESName;
-      cout << "]:</b> ";
-    }
-    cout << Headline;
-
-    STRING TempDbName;
-    if (!ESName.Equals("F")) {
-      pdb->GetRecordDfdt(RecordKey, &rec_dfdt);
-      FieldCount = rec_dfdt.GetTotalEntries();
-
-      cout << "<br><b>Select:</b> ";
-
-      /* Files not within the given WWW path must be accessed with ifetch
-         for their full text */
-      if (url==NULL) {
-#if defined(_WIN32) || defined (MSDOS)
-        cout << "<a href=\"ifetch.cmd?";
-#else
-        cout << "<a href=\"ifetch?";
-#endif
-	// From Rami Heinisuo <rami@eduix.com>
-  //        cout << DBRootName;
-	pdb->GetDbNameByNumber(RsRecord.GetDbNum(),&TempDbName);
-	cout << TempDbName;
-        cout << "+";
-        cout << RecordKey;
-        cout << "+F\">[<i>Full</i>]</a>  " << endl;
-      } else 		// Just print the URL
-        cout << "<a href=\"" << url << "\">[<i>Full</i>]</a>  " << endl;
-
-      // Provide optional retrieval of each field we know about
-      for(j=1;j <= FieldCount;j++) {
-        rec_dfdt.GetEntry(j, &dfd);
-        dfd.GetFieldName(&Field);
-        cout << "<a href=\"ifetch?";
-
-	// From Rami Heinisuo <rami@eduix.com>
-	//        cout << DBRootName;
-	pdb->GetDbNameByNumber(RsRecord.GetDbNum(),&TempDbName);
-	cout << TempDbName;
-
-        cout << "+";
-        cout << RecordKey;
-        cout << "+";
-        cout << Field;
-        cout << "\">[<i>";
-        cout << Field;
-        cout << "</i>]</a> " << endl;
+    if (JsonOutput) {
+      if (i > Start) cout << ",";
+      cout << "{";
+      cout << "\"match_number\":" << i << ",";
+      cout << "\"score\":" << Score << ",";
+      cout << "\"filename\":";
+      PrintJsonEscaped(File);
+      cout << ",\"headline\":";
+      PrintJsonEscaped(Headline);
+      cout << ",\"record_key\":";
+      PrintJsonEscaped(RecordKey);
+      cout << ",\"url\":";
+      if (url) {
+	STRING UrlString = url;
+	PrintJsonEscaped(UrlString);
+      } else {
+	cout << "null";
       }
+      cout << "}";
+    } else {
+      // Construct the URL
+      cout << "<b>Filename:</b> ";
+      if (url)
+	cout << "<a href=\"" << url << "\">";
+      cout << File;
+      if (url)
+	cout << "</a>";
+      cout << "<br>" << endl;
+      cout << "<b>Match Number:</b> " << i << " of " << HitCount 
+	   << "<br>" << endl;
+      cout << "<b>Score:</b> " << Score << "<br>";
+      if (!ESName.Equals("F")) {
+	cout << "<b>Headline Field [";
+	cout << ESName;
+	cout << "]:</b> ";
+      }
+      cout << Headline;
+
+      STRING TempDbName;
+      if (!ESName.Equals("F")) {
+	pdb->GetRecordDfdt(RecordKey, &rec_dfdt);
+	FieldCount = rec_dfdt.GetTotalEntries();
+
+	cout << "<br><b>Select:</b> ";
+
+	/* Files not within the given WWW path must be accessed with ifetch
+	   for their full text */
+	if (url==NULL) {
+#if defined(_WIN32) || defined (MSDOS)
+	  cout << "<a href=\"ifetch.cmd?";
+#else
+	  cout << "<a href=\"ifetch?";
+#endif
+	  // From Rami Heinisuo <rami@eduix.com>
+	  //        cout << DBRootName;
+	  pdb->GetDbNameByNumber(RsRecord.GetDbNum(),&TempDbName);
+	  cout << TempDbName;
+	  cout << "+";
+	  cout << RecordKey;
+	  cout << "+F\">[<i>Full</i>]</a>  " << endl;
+	} else 		// Just print the URL
+	  cout << "<a href=\"" << url << "\">[<i>Full</i>]</a>  " << endl;
+
+	// Provide optional retrieval of each field we know about
+	for(j=1;j <= FieldCount;j++) {
+	  rec_dfdt.GetEntry(j, &dfd);
+	  dfd.GetFieldName(&Field);
+	  cout << "<a href=\"ifetch?";
+
+	  // From Rami Heinisuo <rami@eduix.com>
+	  //        cout << DBRootName;
+	  pdb->GetDbNameByNumber(RsRecord.GetDbNum(),&TempDbName);
+	  cout << TempDbName;
+
+	  cout << "+";
+	  cout << RecordKey;
+	  cout << "+";
+	  cout << Field;
+	  cout << "\">[<i>";
+	  cout << Field;
+	  cout << "</i>]</a> " << endl;
+	}
+      }
+      if ((i + 1) <= HitCount)
+	cout << "<HR>";
     }
-    if ((i + 1) <= HitCount)
-      cout << "<HR>";
+    delete [] name;
+  }
+
+  if (JsonOutput) {
+    cout << "]}" << endl;
+    return HitCount;
   }
 
   INT Remaining = (HitCount - (Start + MaxHits - 1));
@@ -835,9 +908,13 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
   return HitCount;
 }
 
-void  PutHTTPHeader()
+void  PutHTTPHeader(GDT_BOOLEAN JsonOutput)
 {
-  cout << "Content-type: text/html\n\n";
+  if (JsonOutput) {
+    cout << "Content-type: application/json\n\n";
+  } else {
+    cout << "Content-type: text/html\n\n";
+  }
 }
 
 void  PutHTMLHead()
@@ -857,4 +934,55 @@ void  PutHTMLBodyStart()
 void  PutHTMLBodyEnd()
 {
   cout << "</body></html>" << endl;
+}
+
+void PrintJsonEscaped(const STRING& Value)
+{
+  CHR* Text = Value.NewCString();
+  cout << "\"";
+  for (const unsigned char* p = (const unsigned char*)Text; *p; ++p) {
+    unsigned char c = *p;
+    switch (c) {
+      case '\"': cout << "\\\""; break;
+      case '\\': cout << "\\\\"; break;
+      case '\b': cout << "\\b"; break;
+      case '\f': cout << "\\f"; break;
+      case '\n': cout << "\\n"; break;
+      case '\r': cout << "\\r"; break;
+      case '\t': cout << "\\t"; break;
+      default:
+	if (c < 0x20) {
+	  CHR buf[7];
+	  snprintf(buf, sizeof(buf), "\\u%04x", (unsigned int)c);
+	  cout << buf;
+	} else {
+	  cout << (CHR)c;
+	}
+	break;
+    }
+  }
+  cout << "\"";
+  delete [] Text;
+}
+
+void PrintJsonError(const CHR* Message)
+{
+  cout << "{\"error\":";
+  STRING Error = Message ? Message : "Unknown error";
+  PrintJsonEscaped(Error);
+  cout << "}" << endl;
+}
+
+GDT_BOOLEAN WantsJsonOutput(void)
+{
+  PCHR Output = cgidata->GetValueByName("OUTPUT");
+  if (Output && ((StrCaseCmp(Output, "JSON") == 0) ||
+		 (StrCaseCmp(Output, "APPLICATION/JSON") == 0))) {
+    return GDT_TRUE;
+  }
+  Output = cgidata->GetValueByName("FORMAT");
+  if (Output && (StrCaseCmp(Output, "JSON") == 0)) {
+    return GDT_TRUE;
+  }
+  return GDT_FALSE;
 }

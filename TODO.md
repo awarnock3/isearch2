@@ -1,24 +1,27 @@
 # TODO
 
-Based on the active implementation plan.
-
-## Completed
-
-- [x] Add Markdown doctype support (`doctype/markdown.*`, registered in `doctype/dtconf.inf`)
+Current tracker status: **7 done / 5 pending**.
 
 ## Next ready item
 
-- [ ] Establish modernization baseline (`modernization-baseline`)
-  - Capture current compiler behavior/warnings.
-  - Confirm generated vs hand-edited file boundaries.
+- [ ] Design collection monitoring for auto-indexing (`collection-monitoring-design`)
+  - Hybrid filesystem events plus periodic reconciliation polling.
+  - Detect new/updated documents and trigger safe incremental indexing.
 
-## Pending (sequenced)
+## Pending
 
-- [ ] Upgrade to modern ISO C++ (`iso-cpp-upgrade`) — phased C++17 baseline, then targeted C++20 evaluation
-- [ ] Run comprehensive codebase health + security analysis (`health-security-analysis`)
-- [ ] Regenerate and expand README (`readme-regeneration`)
-- [ ] Design collection monitoring for auto-indexing (`collection-monitoring-design`) — hybrid fs-events + reconciliation polling
+- [ ] Design collection monitoring for auto-indexing (`collection-monitoring-design`)
+- [ ] Design indexing API with authentication (`index-api-auth-design`)
+- [ ] Harden integration and rollout (`integration-rollout-hardening`)
 - [ ] Design JSON search result contract (`json-results-design`)
-- [ ] Design Search API (`search-api-design`) — sidecar service MVP: basic search + document fetch
-- [ ] Design Indexing API with authentication (`index-api-auth-design`) — JWT/OIDC MVP: submit/update + job status
-- [ ] Integration hardening and rollout (`integration-rollout-hardening`)
+- [ ] Design Search API (`search-api-design`)
+
+## Completed
+
+- [x] Run comprehensive health/security analysis (`health-security-analysis`)
+- [x] Fix high-severity security issues (`high-severity-security-fixes`)
+- [x] Upgrade to modern ISO C++ (`iso-cpp-upgrade`)
+- [x] Add Markdown doctype support (`markdown-doctype`)
+- [x] Fix medium and medium-high security issues (`medium-security-fixes`)
+- [x] Establish modernization baseline (`modernization-baseline`)
+- [x] Regenerate and expand README (`readme-regeneration`)
