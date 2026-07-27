@@ -361,7 +361,7 @@ void MAILFOLDER::ParseFields (PRECORD NewRecord)
       NewRecord->GetDocumentType(&doctype);
       if (tags)
 	{
-	  delete tags;
+	  delete [] tags;
 	  cout << "Warning: No `" << doctype << "' fields/tags in \"" << fn << "\" record.\n";
 	}
       else
@@ -439,7 +439,7 @@ void MAILFOLDER::ParseFields (PRECORD NewRecord)
   NewRecord->SetDft (*pdft);
   delete pdft;
   delete[]RecBuffer;
-  delete tags;
+  delete [] tags;
 }
 
 /*-
@@ -452,7 +452,8 @@ PCHR MAILFOLDER::NameKey (PCHR buf, GDT_BOOLEAN name) const
 {
   PCHR s = NULL;
   PCHR e = NULL;
-  char email[256];
+  const size_t input_len = strlen(buf);
+  CHR *email = new CHR[input_len + 1];
   char p1, p2, b1, b2;
 
   if (name)
@@ -483,8 +484,11 @@ PCHR MAILFOLDER::NameKey (PCHR buf, GDT_BOOLEAN name) const
   s = email;
   while(isspace(*s) || *s == '"') s++; // Skip leading space
   strcpy (buf, s);
-  s = buf + strlen(buf) - 1;
-  while (s > buf && (isspace(*s) || *s == '"')) *s-- = '\0'; // Trim trailing space
+  if (*buf != '\0') {
+    s = buf + strlen(buf) - 1;
+    while (s > buf && (isspace(*s) || *s == '"')) *s-- = '\0'; // Trim trailing space
+  }
+  delete [] email;
   return buf;
 }
 

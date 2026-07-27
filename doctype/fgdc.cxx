@@ -342,7 +342,7 @@ FGDC::ParseDate(const STRING& Buffer, DOUBLE* fStart,
   Hold = Buffer.NewCString();
   ParseDate(Hold,fStart,fEnd);
 
-  delete Hold;
+  delete [] Hold;
   return;
 }
 
@@ -499,7 +499,7 @@ FGDC::ParseDateRange(const STRING& Buffer, DOUBLE* fStart,
   Hold = Buffer.NewCString();
   ParseDate(Hold,fStart,fEnd);
 
-  delete Hold;
+  delete [] Hold;
   return;
 }
 
@@ -1094,7 +1094,7 @@ FGDC::ParseFields (RECORD *NewRecord)
   NewRecord->SetDft (*pdft);
   
   // Clean up;
-  delete tags;
+  delete [] tags;
   delete pdft;
   delete[]RecBuffer;
 }

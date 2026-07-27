@@ -1,38 +1,105 @@
 # Isearch2
 
-## This is the original readme for Isearch
+Isearch2 is a C++ search/indexing engine and toolset for local document collections. It supports full-text and fielded search, Boolean queries, ranked results, and multiple document parsers ("doctypes"), plus optional CGI programs for web-based search.
 
-Isearch
+## Current status
 
-Isearch is software for indexing and searching text documents.  It supports full text and field based search, relevance ranked results, Boolean queries, and heterogeneous databases.  Isearch can parse many kinds of documents "out of the box," including HTML, mail folders, list digests, SGML-style tagged data, and USMARC.  It can be extended to support other formats by creating descendant classes in C++ that define the document structure.  It is pretty easy to customize in this way, provided that you know some C++ (and you will need to ftp the source code).  A CGI interface is also included for web based searching.
+- Modernized to build with **ISO C++17** defaults in this repository.
+- Includes a built-in **Markdown doctype** (`doctype/markdown.cxx`), enabled in `doctype/dtconf.inf`.
 
-COMPILATION INSTRUCTIONS (unless you downloaded precompiled binaries):
+## Repository layout
 
-Type `make' to compile.  That's it!  (Make sure you have gcc and the g++ library installed first.)
+- `src/` - core engine and CLI entry points.
+- `doctype/` - pluggable document parsers and presentation logic.
+- `Isearch-cgi/` - CGI frontends (`isrch_srch`, `isrch_fetch`, `isrch_html`, `search_form`).
+- `data/` - sample text corpus for local smoke tests.
+- `bin/` - build output binaries and static library.
+- `doc/`, `html/`, `TUTORIAL*`, `CHANGES`, `COPYRIGHT` - reference docs and history.
 
-INSTALLATION INSTRUCTIONS: Type `make install' to copy binaries into /usr/local/bin/.
+## Build prerequisites
 
-MORE DOCUMENTATION:
+- Linux/Unix-like environment
+- `make`
+- C/C++ toolchain (`gcc`/`g++` or compatible)
+- shell tools used by the build system
 
-	http://www.etymon.com/Isearch/
+## Build and clean
 
-This software was made possible by the National Science Foundation, MCNC/CNIDR, and others.  I also need to acknowledge several people that contributed to the initial development phase of Isearch:
+```bash
+make
+```
 
-	Jim Fullton
-	Erik Scott (Scott Technologies)
-	Kevin Gamiel (Island Edge Research)
-	Archie Warnock (A/WWW Enterprises)
+Builds:
+- core static library: `bin/libIsearch.a`
+- CLI tools: `bin/Iindex`, `bin/Isearch`, `bin/Iutil`, `bin/Iget`, `bin/zsearch`, `bin/zpresent`
+- CGI tools in `Isearch-cgi/`
 
-Many other people have contributed in various ways.  Thanks to all of you.
+Clean targets:
 
-Nassib Nassar <nassar@etymon.com>
+```bash
+make clean
+make realclean
+```
 
---------------------------------------------------------------------------
-This material is based on work sponsored by the National Science
-Foundation under Cooperative Agreement No. NCR-9216963.  The Government
-has certain rights in this material. 
+## Install
 
-Any opinions, findings and conclusions or recommendations expressed in
-this publication are those of the author(s) and do not necessarily reflect
-the views of the National Science Foundation.
---------------------------------------------------------------------------
+Default install path:
+
+```bash
+make install
+```
+
+Custom install path:
+
+```bash
+make install INSTALL=/your/bin/path
+```
+
+## Quick start (local smoke test)
+
+Index sample files and run a query:
+
+```bash
+./bin/Iindex -d /tmp/ISEARCH_SMOKE ./data/*.txt
+./bin/Isearch -d /tmp/ISEARCH_SMOKE dust
+```
+
+## Core CLI tools
+
+- `Iindex` - build/update indexes from source documents.
+- `Isearch` - execute full-text and fielded searches.
+- `Iutil` - maintenance/inspection operations on databases.
+- `Iget` - record/document retrieval utility.
+- `zsearch`, `zpresent` - XML-oriented search/presentation tools.
+
+## Doctype system
+
+Doctypes determine how documents are parsed, indexed, and presented. Enabled doctypes are configured in:
+
+- `doctype/dtconf.inf`
+
+The doctype config generator (`doctype/dtconf`) creates build artifacts in `src/`:
+
+- `src/dtreg.cxx`
+- `src/dtreg.hxx`
+- `src/Makefile`
+
+Treat those generated files as outputs; edit `doctype/dtconf.inf` and templates instead.
+
+## CGI tools
+
+`Isearch-cgi/` provides CGI programs and scripts for browser-based querying. Typical flow:
+
+1. Build core engine (`make` at repo root).
+2. Build CGI binaries (`cd Isearch-cgi && make` or from top-level `make`).
+3. Configure/deploy CGI scripts per your web server setup.
+
+See `Isearch-cgi/README` for legacy CGI deployment details and parameters.
+
+## Database model
+
+Commands use a database root via `-d` (path + stem), and Isearch manages related files (`.mdt`, `.inx*`, `.dfd`, etc.) using that root name.
+
+## Historical credits
+
+Isearch was originally developed through contributions from MCNC/CNIDR, Etymon, and community contributors, with support from the National Science Foundation (NCR-9216963).

@@ -57,6 +57,8 @@ Author:		Nassib Nassar, nrn@cnidr.org
 
 #if defined(_MSDOS) || defined(_WIN32)
 #include <direct.h>
+#else
+#include <glob.h>
 #endif
 
 #include <ctype.h>
@@ -91,19 +93,12 @@ cleanupAfterKillAll(const STRING& db) {
   // by KillAll() or are being written out again,
   // probably in ~IDB().
 #if !defined(_MSDOS) && !defined (WIN32)
-  char* dbs = db.NewCString();
-  char *s;
-  s = new char[db.GetLength() + 16];
-  sprintf(s, "rm -f %s.mdt", dbs);
-  if (system(s) != 0) {
-    perror("system");
-  }
-  sprintf(s, "rm -f %s.num", dbs);
-  if (system(s) != 0) {
-    perror("system");
-  }
-  delete [] dbs;
-  delete [] s;
+  STRING temp = db;
+  temp.Cat(".mdt");
+  StrUnlink(temp);
+  temp = db;
+  temp.Cat(".num");
+  StrUnlink(temp);
 #endif
 }
 
@@ -389,10 +384,10 @@ main(int argc, char** argv) {
       fprintf(stderr,"Database ");
       DBName.Print(stderr);
       fprintf(stderr," does not need optimizing.\n");
-      delete CheckName;
+      delete [] CheckName;
       RETURN_ZERO;
     } else {
-      delete CheckName;
+      delete [] CheckName;
       pdb->MergeIndexFiles(OptimizerMemory);
     }
   }
@@ -405,10 +400,10 @@ main(int argc, char** argv) {
       fprintf(stderr,"Database ");
       DBName.Print(stderr);
       fprintf(stderr," cannot be collapsed.\n");
-      delete CheckName;
+      delete [] CheckName;
       RETURN_ZERO;
     } else {
-      delete CheckName;
+      delete [] CheckName;
       pdb->CollapseIndexFiles(OptimizerMemory);
     }
   }
@@ -760,15 +755,33 @@ main(int argc, char** argv) {
     // get a list of files from IDB.
     RemoveFileName(&dest);
 #if !defined(_MSDOS) && !defined (WIN32)
-    char *s;
-    s = new char [source.GetLength() + dest.GetLength() + 32];
-    char* s1 = source.NewCString();
-    char* s2 = dest.NewCString();
-    sprintf(s, "mv -f %s.* %s.", s1, s2);
-    if (system(s) != 0) {
-      perror("system");
+    STRING sourcePattern = source;
+    sourcePattern.Cat(".*");
+    CHR *pattern = sourcePattern.NewCString();
+    glob_t matches;
+    memset(&matches, 0, sizeof(matches));
+    const int status = glob(pattern, 0, NULL, &matches);
+    if (status == 0) {
+      AddTrailingSlash(&dest);
+      for (size_t i = 0; i < matches.gl_pathc; ++i) {
+        STRING from = matches.gl_pathv[i];
+        STRING base = from;
+        RemovePath(&base);
+        STRING to = dest;
+        to.Cat(base);
+        CHR *fromPath = from.NewCString();
+        CHR *toPath = to.NewCString();
+        if (rename(fromPath, toPath) != 0) {
+          perror(fromPath);
+        }
+        delete [] fromPath;
+        delete [] toPath;
+      }
+    } else if (status != GLOB_NOMATCH) {
+      perror("glob");
     }
-    delete [] s;
+    globfree(&matches);
+    delete [] pattern;
 #endif
   }
 	

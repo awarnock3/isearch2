@@ -120,7 +120,7 @@ INDEX::SortNumericFieldData()
 	CHR *Fname;
 	Fname = Fn.NewCString();
 	unlink(Fname);
-	delete Fname;
+	delete [] Fname;
 
 	NumList.Sort();
 	NumList.WriteTable(0);
@@ -153,7 +153,7 @@ INDEX::SortNumericFieldData()
 	CHR *Fname;
 	Fname = Fn.NewCString();
 	unlink(Fname);
-	delete Fname;
+	delete [] Fname;
 
 	NumList.Sort();
 	NumList.WriteTable(0);
@@ -186,7 +186,7 @@ INDEX::SortNumericFieldData()
 	CHR *Fname;
 	Fname = Fn.NewCString();
 	unlink(Fname);
-	delete Fname;
+	delete [] Fname;
 
 	IntList.SortByStart();
 	IntList.WriteTable(0);

@@ -313,7 +313,7 @@ void MEDLINE::ParseFields (PRECORD NewRecord)
       NewRecord->GetDocumentType(&doctype);
       if (tags)
 	{
-	  delete tags;
+	  delete [] tags;
 	  cout << "Warning: No `" << doctype << "' fields/tags in \"" << fn << "\" record.\n";
 	}
        else
@@ -377,7 +377,7 @@ void MEDLINE::ParseFields (PRECORD NewRecord)
 
   // Clean up
   delete pdft;
-  delete tags;
+  delete [] tags;
   delete [] RecBuffer;
 }
 

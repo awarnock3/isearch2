@@ -345,11 +345,11 @@ get_field(const CHR *f, INT n)
 
   sprintf(bp, f, n);
   if ((field = cgidata->GetValueByName(bp))) {
-    delete bp;
+    delete [] bp;
     return (field);
   }
 
-  delete bp;
+  delete [] bp;
   return ((PCHR)NULL);
 }
 
@@ -363,6 +363,7 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
   PCHR weight;
   PCHR entry;
   INT w, terms;
+  PCHR phrase_term = (PCHR)NULL;
 
   buffer = new CHR[MAXSTR+1];
 
@@ -380,8 +381,10 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
   *buffer = '\0';
   terms = 0;
 
-  if ((argument = get_field("TERM_%i", i)) == (PCHR)NULL)
+  if ((argument = get_field("TERM_%i", i)) == (PCHR)NULL) {
+    delete [] buffer;
     return (0);
+  }
 
   // Even if there's no button, do phrase searching if the phrase is
   // in quotes
@@ -394,11 +397,11 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
   // TOKENGEN routines.
 
   if ((do_phrase) && (argument[0] != '"')) {
-    PCHR p_hold = new CHR[strlen(argument)+3];
-    strcpy(p_hold,"\"");
-    strcat(p_hold,argument);
-    strcat(p_hold,"\"");
-    argument = p_hold;
+    phrase_term = new CHR[strlen(argument)+3];
+    strcpy(phrase_term,"\"");
+    strcat(phrase_term,argument);
+    strcat(phrase_term,"\"");
+    argument = phrase_term;
   }
 
   if ((field = get_field("FIELD_%i", i)) != (PCHR)NULL) {
@@ -459,6 +462,10 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
 
     query.Cat(entry);
     ++terms;
+  }
+  delete [] buffer;
+  if (phrase_term != (PCHR)NULL) {
+    delete [] phrase_term;
   }
   return (terms);
 }

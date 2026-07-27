@@ -248,16 +248,25 @@ CHR x2c(PCHR what) {
     return(digit);
 }
 
+static INT ishex(CHR c) {
+    return isdigit(static_cast<unsigned char>(c)) ||
+           (c >= 'a' && c <= 'f') ||
+           (c >= 'A' && c <= 'F');
+}
 
 void unescape_url(PCHR url) {
-  INT x,y;
-  for(x=0,y=0;url[y];++x,++y) {
-    if((url[x] = url[y]) == '%') {
-      url[x] = x2c(&url[y+1]);
-      y+=2;
+    INT x,y;
+    for(x=0,y=0;url[y];++x,++y) {
+      if((url[x] = url[y]) == '%' &&
+         url[y+1] != '\0' &&
+         url[y+2] != '\0' &&
+         ishex(url[y+1]) &&
+         ishex(url[y+2])) {
+        url[x] = x2c(&url[y+1]);
+        y+=2;
+      }
     }
-  }
-  url[x] = '\0';
+    url[x] = '\0';
 }
 
 void plustospace(PCHR str) {
@@ -274,28 +283,17 @@ void spacetoplus(PCHR str) {
       str[x] = '+';
 }
 
-PCHR c2x(CHR what) {
-  PCHR out=new CHR[4];
-  sprintf(out, "%%%2x", what);
-  return out;
-}
-
 void escape_url(PCHR url, PCHR out) {
-  out[0] = '\0';
-  INT x, y;
-  for(x=0,y=0;url[x];++x,++y) {
-    if (isalnum(url[x]) || (url[x] == ' ')) {
-      out[y] = url[x];
+  INT x, y = 0;
+  for(x = 0; url[x]; ++x) {
+    if (isalnum(static_cast<unsigned char>(url[x])) || (url[x] == ' ')) {
+      out[y++] = url[x];
     } else {
-      PCHR esc = c2x(url[x]);
-      INT plus = strlen(esc);
-      out[y] = '\0';
-      strcat(out, esc);
-      y += (plus - 1);
-      delete esc;
+      const unsigned char byte = static_cast<unsigned char>(url[x]);
+      snprintf(&out[y], 4, "%%%02X", byte);
+      y += 3;
     }
   }
   out[y] = '\0';
   spacetoplus(out);
 }
-

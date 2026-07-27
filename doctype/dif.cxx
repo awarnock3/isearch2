@@ -489,7 +489,7 @@ void DIF::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 	// add butto
 	char child_link[1024];
 	sprintf(child_link,"<CENTER><A HREF=\"/cgi-bin/md/zgatedriver.pl?ESNAME=B&SERVICE=SEARCH&DBNAME=CHILD&ATTRSET=1.2.840.10003.3.4&USE_1=3704&maxrecords=15&RECSYNTAX=1.2.840.10003.5.1000.34.10&TERM_1=%s&ACTION=SEARCH\"><img border=0 src=\"http://%s/children_button.gif\" alt=\"This entry has subsets, Click for a list\"></img></A></CENTER>",temp,IMGPATH);
-	free(temp);
+	delete [] temp;
 	DataBuffer+=child_link;
 	break;
       }
@@ -557,7 +557,7 @@ void DIF::Present(const RESULT& ResultRecord, const STRING& ElementSet,
       DataBuffer.Cat("</pre></body></html>");
     *StringBufferPtr = DataBuffer;
     //Clean up
-    delete pRawData;
+    delete [] pRawData;
     return;
   }
 }
@@ -723,11 +723,11 @@ void DIF::field() {
       if (fld.Search("Entry_ID:")) {
 	char *temp2 = token.NewCString();
 	fprintf(stdout,"(%d) %10s %s\n",(count++),temp1,temp2);
-	delete temp2;
+	delete [] temp2;
       }
       temp1[strlen(temp1)-1]='\0';    // chop off ':'
       writeField(temp1,start_value,stop_value);	  
-      delete temp1;
+      delete [] temp1;
     }      
     // printf("dbg:token=%s, toktype=%d\n",token.NewCString(),toktype);
     toktype=nextToken();
@@ -756,7 +756,7 @@ void DIF::group() {
   stop_value=tell()-11;
   char *temp = fld.NewCString();
   writeField(temp,start_value,stop_value);
-  delete temp;
+  delete [] temp;
   
   toktype=nextToken();
   dbg("</group>");

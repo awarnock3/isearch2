@@ -340,7 +340,7 @@ void REFERBIB::ParseFields (PRECORD NewRecord)
       NewRecord->GetDocumentType(&doctype);
       if (tags)
 	{
-	  delete tags;
+	  delete [] tags;
 	  cout << "Warning: No `" << doctype << "' fields/tags in \"" << fn << "\" record.\n";
 	}
        else
@@ -408,7 +408,7 @@ void REFERBIB::ParseFields (PRECORD NewRecord)
   NewRecord->SetDft (*pdft);
   delete pdft;
   delete[]RecBuffer;
-  delete tags;
+  delete [] tags;
 }
 
 void REFERBIB::Present (const RESULT& ResultRecord,

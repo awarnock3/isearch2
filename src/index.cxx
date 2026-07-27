@@ -841,7 +841,7 @@ INDEX::MergeIndexFiles(INT MemMB)
     printf("Deleting %s\n", p);
 #endif
     unlink(p);
-    delete p;
+    delete [] p;
   }
   fclose(fj);
   
@@ -2500,7 +2500,7 @@ INDEX::CollapseIndexFiles(INT MemMB)
     printf("Deleting %s\n", p);
 #endif
     unlink(p);
-    delete p;
+    delete [] p;
   }
   fclose(fj);
   TmpIndexFileName=IndexFileName;

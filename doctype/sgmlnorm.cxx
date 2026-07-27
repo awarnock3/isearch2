@@ -325,7 +325,7 @@ void SGMLNORM::ParseFields (PRECORD NewRecord)
   NewRecord->SetDft (*pdft);
 
   // Clean up;
-  delete tags;
+  delete [] tags;
   delete pdft;
   delete[]RecBuffer;
 }

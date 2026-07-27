@@ -184,7 +184,7 @@ void COLONDOC::ParseFields (PRECORD NewRecord)
       NewRecord->GetDocumentType(&doctype);
       if (tags)
 	{
-	  delete tags;
+	  delete [] tags;
 	  cout << "Warning: No `" << doctype << "' fields/tags in \"" << fn << "\"\n";
 	}
       else
@@ -245,7 +245,7 @@ void COLONDOC::ParseFields (PRECORD NewRecord)
   NewRecord->SetDft (*pdft);
   delete pdft;
   delete[]RecBuffer;
-  delete tags;
+  delete [] tags;
 }
 
 void COLONDOC::Present (const RESULT& ResultRecord,
