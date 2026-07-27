@@ -93,7 +93,22 @@ int main(int argc, char** argv) {
     fprintf(stderr,"-d (X)        # Search database with root name (X).\n");
     fprintf(stderr,"-V            # Print the version number.\n");
     fprintf(stderr,"-p (X)        # Present element set (X) with results.\n");
+    fprintf(stderr,"              # Values: B (brief filename), F (full record),\n");
+    fprintf(stderr,"              # field name, comma-separated list, or doctype-\n");
+    fprintf(stderr,"              # specific element sets (for example A/S/C/R).\n");
     fprintf(stderr,"-f (X)        # Present results in format (X).\n");
+    fprintf(stderr,"              # Values: TEXT, SUTRS, USMARC, HTML, SGML,\n");
+    fprintf(stderr,"              # XML, GRS-1, or syntax OIDs:\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.101 (SUTRS)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.10 (USMARC)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.109.3 (HTML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.108 (old HTML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.1000.34.1 (CNIDR HTML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.109.9 (SGML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.1000.34.2 (CNIDR SGML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.109.10 (XML)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.105 (GRS-1)\n");
+    fprintf(stderr,"              # 1.2.840.10003.5.109 (MIME->SUTRS)\n");
     fprintf(stderr,"-json         # Return search results as JSON.\n");
     fprintf(stderr,"-q            # Print results and quit immediately.\n");
     fprintf(stderr,"-t            # Print terse results and quit immediately.\n");
@@ -312,19 +327,44 @@ int main(int argc, char** argv) {
     fprintf(stderr,"Warning: Failed to set the locale!\n");
   }
 
-  x = LastUsed + 1;
-  if (x >= argc) {
+  INT NumWords = 0;
+  for (INT argi = 1; argi < argc; ++argi) {
+    STRING Arg = argv[argi];
+    if (Arg.Equals("-o") || Arg.Equals("-d") || Arg.Equals("-p") ||
+	Arg.Equals("-f") || Arg.Equals("-prefix") || Arg.Equals("-suffix") ||
+	Arg.Equals("-startdoc") || Arg.Equals("-enddoc")) {
+      ++argi; // skip value for options that take one argument
+      continue;
+    }
+    if (Arg.Equals("-q") || Arg.Equals("-syn") || Arg.Equals("-t") ||
+	Arg.Equals("-byterange") || Arg.Equals("-json") || Arg.Equals("-and") ||
+	Arg.Equals("-rpn") || Arg.Equals("-infix") || Arg.Equals("-V") ||
+	Arg.Equals("-debug")) {
+      continue;
+    }
+    ++NumWords;
+  }
+  if (NumWords <= 0) {
     RETURN_ERROR;
   }
-  
-  INT NumWords = argc - x;
-  INT z = x;
-  //	STRING WordList[NumWords];
+
   STRING *WordList = new STRING[NumWords];
-  for (z=0; z<NumWords; z++) {
-    WordList[z] = argv[z+x];
-    //    WordList[z].Print();
-    //    cout << endl;
+  INT z = 0;
+  for (INT argi = 1; argi < argc; ++argi) {
+    STRING Arg = argv[argi];
+    if (Arg.Equals("-o") || Arg.Equals("-d") || Arg.Equals("-p") ||
+	Arg.Equals("-f") || Arg.Equals("-prefix") || Arg.Equals("-suffix") ||
+	Arg.Equals("-startdoc") || Arg.Equals("-enddoc")) {
+      ++argi;
+      continue;
+    }
+    if (Arg.Equals("-q") || Arg.Equals("-syn") || Arg.Equals("-t") ||
+	Arg.Equals("-byterange") || Arg.Equals("-json") || Arg.Equals("-and") ||
+	Arg.Equals("-rpn") || Arg.Equals("-infix") || Arg.Equals("-V") ||
+	Arg.Equals("-debug")) {
+      continue;
+    }
+    WordList[z++] = argv[argi];
   }
   
   STRING DBPathName, DBFileName;
