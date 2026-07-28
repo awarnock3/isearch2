@@ -1,6 +1,8 @@
 # TODO
 
-Current tracker status: **7 done / 5 pending**.
+Current tracker status: **8 done / 4 pending**.
+
+Latest project update: **`iso` branch has been merged into `main`**.
 
 ## Next ready item
 
@@ -13,7 +15,6 @@ Current tracker status: **7 done / 5 pending**.
 - [ ] Design collection monitoring for auto-indexing (`collection-monitoring-design`)
 - [ ] Design indexing API with authentication (`index-api-auth-design`)
 - [ ] Harden integration and rollout (`integration-rollout-hardening`)
-- [ ] Design JSON search result contract (`json-results-design`)
 - [ ] Design Search API (`search-api-design`)
 
 ## Completed
@@ -25,3 +26,4 @@ Current tracker status: **7 done / 5 pending**.
 - [x] Fix medium and medium-high security issues (`medium-security-fixes`)
 - [x] Establish modernization baseline (`modernization-baseline`)
 - [x] Regenerate and expand README (`readme-regeneration`)
+- [x] Design JSON search result contract (`json-results-design`)
