@@ -3,7 +3,7 @@
 #
 # Answer a couple of questions and type 'make'
 #
-VER=1.47g
+VER=2.00
 
 # Compiler  
 # Must be an ANSI c++ compiler

@@ -1,6 +1,6 @@
-# CNIDR Isearch-cgi 1.20
+# CNIDR Isearch-cgi 2.00
 
-*6 February 1997*
+*02 August 2026*
 
 ## Overview
 
@@ -12,14 +12,13 @@ the World Wide Web.
 
 1. Install a CGI-compliant HTTP server.
 
-   NCSA's latest server is recommended, but any CGI-compliant server will
-   suffice.
+   Apache is recommended, but any CGI-compliant server will suffice.
 
 2. Retrieve, compile, and install the latest version of CNIDR Isearch.
 
-   Isearch is available at:
+   Isearch2 is available at:
 
-   <ftp://ftp.cnidr.org/pub/software/Isearch>
+   <https://github.com/awarnock3/isearch2.git>
 
    You must successfully compile Isearch before compiling Isearch-cgi.
 
