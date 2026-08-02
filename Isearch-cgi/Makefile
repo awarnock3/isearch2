@@ -125,7 +125,11 @@ srcdist:
 
 clean:
 	rm -f *.o *~ isrch_srch isrch_fetch isrch_html isrch_api search_form \
-		isearch ifetch ihtml *.html
+		isearch ifetch ihtml isearch_api *.html
+
+realclean: clean
+
+distclean: clean
 
 install:
 	@echo "Run the Configure script in the Isearch-cgi subdirectory"
