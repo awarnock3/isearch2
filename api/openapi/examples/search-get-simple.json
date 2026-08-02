@@ -1,0 +1,12 @@
+{
+  "database": "XMLtest",
+  "q": "dust",
+  "search_type": "simple",
+  "operator": "or",
+  "start": 1,
+  "max_hits": 5,
+  "include_url": true,
+  "include_headline": true,
+  "include_record_key": true,
+  "score_scale": 100
+}

@@ -1,0 +1,7 @@
+{
+  "type": "https://isearch.invalid/problems/invalid-request",
+  "title": "Invalid request parameters",
+  "status": 400,
+  "detail": "Missing required parameter: database",
+  "instance": "/api/v1/search"
+}

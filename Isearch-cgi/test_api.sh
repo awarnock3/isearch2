@@ -1,0 +1,115 @@
+#!/bin/sh
+set -eu
+
+ROOT_DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+CGI_DIR="$ROOT_DIR/Isearch-cgi"
+DB_PATH="$ROOT_DIR/db"
+API_WRAPPER="$CGI_DIR/isearch_api"
+API_BINARY="$CGI_DIR/isrch_api"
+
+fail() {
+  echo "FAIL: $1" >&2
+  exit 1
+}
+
+assert_status() {
+  expected="$1"
+  actual="$2"
+  label="$3"
+  [ "$actual" = "$expected" ] || fail "$label expected HTTP status $expected, got $actual"
+}
+
+parse_status() {
+  printf '%s\n' "$1" | sed -n '1s/^Status: \([0-9][0-9][0-9]\).*/\1/p'
+}
+
+parse_body() {
+  printf '%s\n' "$1" | awk 'seen { print } /^$/{ seen=1 }'
+}
+
+run_get() {
+  path_info="$1"
+  query="$2"
+  output=$(ISEARCH_DB_PATH="$DB_PATH" REQUEST_METHOD=GET QUERY_STRING="$query" PATH_INFO="$path_info" "$API_WRAPPER" "$DB_PATH")
+  RESPONSE_STATUS=$(parse_status "$output")
+  RESPONSE_BODY=$(parse_body "$output")
+}
+
+run_post() {
+  path_info="$1"
+  body="$2"
+  output=$(printf '%s' "$body" | ISEARCH_DB_PATH="$DB_PATH" REQUEST_METHOD=POST CONTENT_TYPE="application/json" PATH_INFO="$path_info" "$API_WRAPPER" "$DB_PATH")
+  RESPONSE_STATUS=$(parse_status "$output")
+  RESPONSE_BODY=$(parse_body "$output")
+}
+
+cd "$CGI_DIR"
+
+[ -x "$API_BINARY" ] || make isrch_api
+[ -x "$API_WRAPPER" ] || ./Configure "$DB_PATH"
+
+# 1) GET /api/v1/health -> status == "ok"
+run_get "/api/v1/health" ""
+assert_status "200" "$RESPONSE_STATUS" "health endpoint"
+printf '%s' "$RESPONSE_BODY" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+assert d.get("status") == "ok", d
+'
+
+# 2) GET /api/v1/capabilities -> valid JSON
+run_get "/api/v1/capabilities" ""
+assert_status "200" "$RESPONSE_STATUS" "capabilities endpoint"
+printf '%s' "$RESPONSE_BODY" | python3 -c 'import json, sys; json.load(sys.stdin)'
+
+# 3) GET /api/v1/search?database=XMLtest&q=dust -> matching_record_count > 0
+run_get "/api/v1/search" "database=XMLtest&q=dust"
+assert_status "200" "$RESPONSE_STATUS" "GET /search dust"
+GET_DUST_COUNT=$(printf '%s' "$RESPONSE_BODY" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print(int(d["matching_record_count"]))
+')
+[ "$GET_DUST_COUNT" -gt 0 ] || fail "GET /search dust expected matching_record_count > 0"
+
+# 4) POST /api/v1/search {"database":"XMLtest","q":"dust"} -> same count as GET
+run_post "/api/v1/search" '{"database":"XMLtest","q":"dust"}'
+assert_status "200" "$RESPONSE_STATUS" "POST /search dust"
+POST_DUST_COUNT=$(printf '%s' "$RESPONSE_BODY" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+print(int(d["matching_record_count"]))
+')
+[ "$POST_DUST_COUNT" -eq "$GET_DUST_COUNT" ] || fail "POST/GET dust count mismatch ($POST_DUST_COUNT != $GET_DUST_COUNT)"
+
+# 5) GET /api/v1/search?database=XMLtest&q=xml&start=2&max_hits=1 -> results length 1, start 2
+run_get "/api/v1/search" "database=XMLtest&q=xml&start=2&max_hits=1"
+assert_status "200" "$RESPONSE_STATUS" "GET /search pagination"
+printf '%s' "$RESPONSE_BODY" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+assert int(d["start"]) == 2, d
+assert len(d["results"]) == 1, d
+'
+
+# 6) GET /api/v1/search (missing database) -> 400 problem with type/title
+run_get "/api/v1/search" "q=dust"
+assert_status "400" "$RESPONSE_STATUS" "GET /search missing database"
+printf '%s' "$RESPONSE_BODY" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+assert isinstance(d.get("type"), str) and d["type"], d
+assert isinstance(d.get("title"), str) and d["title"], d
+'
+
+# 7) GET /api/v1/search?database=no_such_db&q=dust -> 404 problem object
+run_get "/api/v1/search" "database=no_such_db&q=dust"
+assert_status "404" "$RESPONSE_STATUS" "GET /search missing database root"
+printf '%s' "$RESPONSE_BODY" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+assert isinstance(d.get("type"), str) and d["type"], d
+assert isinstance(d.get("title"), str) and d["title"], d
+'
+
+echo "PASS: API smoke tests completed successfully."

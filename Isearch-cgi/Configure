@@ -58,4 +58,17 @@ echo exec `pwd`/isrch_html $1 >> ihtml
 echo " " >> ihtml
 chmod 755 ihtml
 
+rm -f isearch_api
+echo "#!/bin/sh" > isearch_api
+echo " " >> isearch_api
+echo "# From this script, run the isrch_api utility and pass a single argument" >> isearch_api
+echo "# that is the directory where your database are stored." >> isearch_api
+echo "#" >> isearch_api
+echo "# For example:" >> isearch_api
+echo "#" >> isearch_api
+echo "# /path/to/Isearch-cgi/isrch_api /path/to/my/databases" >> isearch_api
+echo " " >> isearch_api
+echo exec `pwd`/isrch_api $1 >> isearch_api
+echo " " >> isearch_api
+chmod 755 isearch_api
 

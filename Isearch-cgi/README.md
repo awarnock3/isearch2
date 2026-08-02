@@ -40,21 +40,29 @@ the World Wide Web.
    - `isrch_fetch`
    - `isrch_srch`
    - `isrch_html`
+   - `isrch_api`
    - `search_form`
 
 4. Install the Isearch-cgi scripts.
 
-   There are three shell scripts, one for each cgi-bin utility, that must be
+   There are four shell scripts, one for each cgi-bin utility, that must be
    configured and then installed in the cgi-bin directory as well:
 
    - `ifetch`
    - `isearch`
    - `ihtml`
+   - `isearch_api`
 
    Isearch-cgi includes a script that will produce these files for you. The
    script's name is `Configure` and it requires a single argument: the path to
-   your databases. After `Configure` is run, the files it produces can be
-   edited by hand, if needed.
+   your databases.
+
+   ```bash
+   ./Configure /absolute/path/to/databases
+   ```
+
+   After `Configure` is run, the files it produces can be edited by hand, if
+   needed.
 
 ## Configuration of Isearch-cgi
 
@@ -74,9 +82,35 @@ the World Wide Web.
 2. Configure scripts.
 
    The only configuration required by Isearch-cgi takes place in the
-   `Makefile` and three scripts: `ifetch`, `isearch`, and `ihtml`.
+   `Makefile` and scripts: `ifetch`, `isearch`, `ihtml`, and `isearch_api`.
 
    Edit those files (or run `Configure`) and answer the questions.
+
+3. API environment variables.
+
+   The `isrch_api` endpoint runner reads these optional environment variables:
+
+   - `ISEARCH_DB_PATH` - base directory containing Isearch database roots
+   - `ISEARCH_API_MAX_HITS` - maximum allowed `max_hits` request value
+   - `ISEARCH_API_ALLOWLIST` - comma-separated list of permitted database names
+
+4. API CGI deployment example.
+
+   Copy `isearch_api` into your CGI directory and route `/api/v1` to it. For
+   Apache, one workable setup is:
+
+   ```apacheconf
+   ScriptAlias /api/v1 /usr/lib/cgi-bin/isearch_api
+   <Location /api/v1>
+     Options +ExecCGI
+     SetEnv ISEARCH_DB_PATH /absolute/path/to/databases
+     SetEnv ISEARCH_API_MAX_HITS 200
+     SetEnv ISEARCH_API_ALLOWLIST XMLtest,MDtest
+   </Location>
+   ```
+
+   The API runner accepts `PATH_INFO`, so requests such as
+   `/api/v1/search?database=XMLtest&q=dust` are dispatched correctly.
 
 ## Operation of Isearch-cgi
 

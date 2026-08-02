@@ -31,12 +31,13 @@ Installation
 
 3)  Build the distribution
 
-	Type 'make'.  If all goes well, four binaries should be
+	Type 'make'.  If all goes well, five binaries should be
 	created in the Isearch-cgi directory: 
 
 		isrch_fetch
 		isrch_srch
 		isrch_html
+		isrch_api
 		search_form
 
 	If all doesn't go well, send us mail or post to the Isite
@@ -44,17 +45,23 @@ Installation
 
 7)  Install the Isearch-cgi scripts
 
-	There are three shell scripts, one for each cgi-bin utility, that
+	There are four shell scripts, one for each cgi-bin utility, that
 	must be configured and then installed in the cgi-bin directory
 	as well. These scripts are:
 
 		ifetch
 		isearch
 		ihtml
+		isearch_api
 
 	Isearch-cgi includes a script that will produce these files
 	for you.  The script's name is "Configure" and it requires a
-	single argument, the path to your databases.  After Configure is
+	single argument, the path to your databases.
+	For example:
+
+		./Configure /absolute/path/to/databases
+
+	After Configure is
 	run, the files it produces can be edited by hand, if needed.
 	
 
@@ -77,9 +84,33 @@ Configuration of Isearch-cgi
 2)  Configure scripts
 
 	The only configuration required by Isearch-cgi takes place in
-	the Makefile and three scripts: ifetch, isearch and ihtml.
+	the Makefile and scripts: ifetch, isearch, ihtml, and isearch_api.
 
 	Edit those files (or run "Configure") and answer the questions. 
+
+3) API environment variables
+
+	The isrch_api endpoint runner reads these optional variables:
+
+		ISEARCH_DB_PATH		- base directory containing database roots
+		ISEARCH_API_MAX_HITS	- max allowed max_hits value
+		ISEARCH_API_ALLOWLIST	- comma-separated list of allowed databases
+
+4) API CGI deployment example
+
+	Copy "isearch_api" into your cgi-bin directory and route /api/v1
+	to it.  One Apache example:
+
+		ScriptAlias /api/v1 /usr/lib/cgi-bin/isearch_api
+		<Location /api/v1>
+		  Options +ExecCGI
+		  SetEnv ISEARCH_DB_PATH /absolute/path/to/databases
+		  SetEnv ISEARCH_API_MAX_HITS 200
+		  SetEnv ISEARCH_API_ALLOWLIST XMLtest,MDtest
+		</Location>
+
+	isrch_api accepts PATH_INFO, so requests such as
+	/api/v1/search?database=XMLtest&q=dust route to the search handler.
 
 Operation of Isearch-cgi
 ------------------------
