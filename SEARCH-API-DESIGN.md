@@ -32,7 +32,7 @@ Optional but recommended for enforcement:
 
 ## API Base and Versioning
 
-- Base path: `/api/v1`
+- Base path: `/v1/api`
 - Media type:
   - success payloads: `application/json; charset=utf-8`
   - error payloads: `application/problem+json; charset=utf-8`
@@ -42,13 +42,13 @@ Optional but recommended for enforcement:
 
 | Method | Path | operationId | Purpose |
 |---|---|---|---|
-| GET | `/api/v1/search` | `searchRecordsGet` | Query-string search |
-| POST | `/api/v1/search` | `searchRecordsPost` | JSON-body search |
-| GET | `/api/v1/health` | `getHealth` | Liveness/readiness |
-| GET | `/api/v1/capabilities` | `getCapabilities` | Query modes, element sets, limits |
-| GET | `/api/v1/databases` | `listDatabases` | Optional configured database list |
+| GET | `/v1/api/search` | `searchRecordsGet` | Query-string search |
+| POST | `/v1/api/search` | `searchRecordsPost` | JSON-body search |
+| GET | `/v1/api/health` | `getHealth` | Liveness/readiness |
+| GET | `/v1/api/capabilities` | `getCapabilities` | Query modes, element sets, limits |
+| GET | `/v1/api/databases` | `listDatabases` | Optional configured database list |
 
-## `/api/v1/search` Parameters
+## `/v1/api/search` Parameters
 
 ### Required
 
@@ -145,19 +145,19 @@ Alias parsing for migration from current CGI clients:
 
 ## MCP Server Design (on top of Search API)
 
-The MCP layer is a separate front end that calls `/api/v1/*` rather than linking to engine internals.
+The MCP layer is a separate front end that calls `/v1/api/*` rather than linking to engine internals.
 
 ### MCP tools to expose
 
 1. `search_records`
    - Input: database/query/search_type/operator/terms/element_set/start/max_hits.
-   - Backend call: `GET` or `POST /api/v1/search`.
+   - Backend call: `GET` or `POST /v1/api/search`.
 2. `get_capabilities`
-   - Backend call: `GET /api/v1/capabilities`.
+   - Backend call: `GET /v1/api/capabilities`.
 3. `health_check`
-   - Backend call: `GET /api/v1/health`.
+   - Backend call: `GET /v1/api/health`.
 4. `list_databases` (optional)
-   - Backend call: `GET /api/v1/databases`.
+   - Backend call: `GET /v1/api/databases`.
 
 ### New modules to add (MCP server)
 
@@ -192,8 +192,8 @@ The MCP layer is a separate front end that calls `/api/v1/*` rather than linking
 
 - Build `isrch_api` and deploy wrapper script into `cgi-bin`.
 - Route:
-  - `ScriptAlias /api/v1/search /usr/lib/cgi-bin/isearch_api`
-  - optional `ScriptAlias /api/v1 /usr/lib/cgi-bin/isearch_api` with `PATH_INFO` routing.
+  - `ScriptAlias /v1/api/search /usr/lib/cgi-bin/isearch_api`
+  - optional `ScriptAlias /v1/api /usr/lib/cgi-bin/isearch_api` with `PATH_INFO` routing.
 - Set environment:
   - `ISEARCH_DB_PATH`
   - `ISEARCH_API_MAX_HITS`

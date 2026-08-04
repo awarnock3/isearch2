@@ -21,8 +21,8 @@ phases may optionally depend on earlier ones as noted.
    ```
 2. Write `api/openapi/search-api.v1.yaml` covering:
    - `openapi: 3.1.0`, `info`, `servers`, `tags`
-   - All five paths: `/api/v1/search` (GET + POST), `/api/v1/health`,
-     `/api/v1/capabilities`, `/api/v1/databases`
+   - All five paths: `/v1/api/search` (GET + POST), `/v1/api/health`,
+     `/v1/api/capabilities`, `/v1/api/databases`
    - Every parameter from the design doc with `in`, `name`, `required`,
      `schema`, defaults, and enum/range constraints
    - `components/schemas` for `SearchResponse`, `SearchHit`,
@@ -220,7 +220,7 @@ handler based on `PATH_INFO` and HTTP method.
      - Instantiate `CGIAPP` to obtain query-string parameters
      - Read `PATH_INFO` from the environment (e.g. `/search`, `/health`,
        `/capabilities`, `/databases`)
-     - Strip the `/api/v1` prefix if present (for installations that do not
+     - Strip the `/v1/api` prefix if present (for installations that do not
        use a URL rewrite rule)
      - Dispatch:
        - `/search` → `ParseRequest` (Phase 4) then `ExecuteSearch` (Phase 5)
@@ -286,16 +286,16 @@ generated and executable; invoke it from the shell with a test query.
 
 1. Write `Isearch-cgi/test_api.sh` — a shell script that exercises every
    endpoint with known inputs and asserts expected JSON field values:
-   - `GET /api/v1/health` → `status == "ok"`
-   - `GET /api/v1/capabilities` → parses without error
-   - `GET /api/v1/search?database=XMLtest&q=dust` → `matching_record_count > 0`
-   - `POST /api/v1/search` with JSON body `{"database":"XMLtest","q":"dust"}`
+   - `GET /v1/api/health` → `status == "ok"`
+   - `GET /v1/api/capabilities` → parses without error
+   - `GET /v1/api/search?database=XMLtest&q=dust` → `matching_record_count > 0`
+   - `POST /v1/api/search` with JSON body `{"database":"XMLtest","q":"dust"}`
      → same count as GET result
-   - `GET /api/v1/search?database=XMLtest&q=dust&start=2&max_hits=1`
+   - `GET /v1/api/search?database=XMLtest&q=dust&start=2&max_hits=1`
      → `results` has exactly 1 element, `start == 2`
-   - `GET /api/v1/search` (no `database`) → HTTP-like 400 error object with
+   - `GET /v1/api/search` (no `database`) → HTTP-like 400 error object with
      `"type"` and `"title"` fields
-   - `GET /api/v1/search?database=no_such_db&q=dust` → 404 error object
+   - `GET /v1/api/search?database=no_such_db&q=dust` → 404 error object
 2. Confirm JSON output is field-compatible with the existing `isrch_srch.cxx`
    JSON output when `OUTPUT=JSON` (same field names).
 
@@ -317,11 +317,11 @@ the deployed API.  This phase is entirely independent of the C++ code.
 2. Create `mcp-search-server/`:
    - `README.md` — operator docs: installation, env vars, client config
    - `server.py` — MCP stdio server exposing four tools:
-     - `search_records` — calls `GET /api/v1/search`, maps params 1-to-1 with
+     - `search_records` — calls `GET /v1/api/search`, maps params 1-to-1 with
        the OpenAPI schema; returns `SearchResponse` envelope
-     - `get_capabilities` — calls `GET /api/v1/capabilities`
-     - `health_check` — calls `GET /api/v1/health`
-     - `list_databases` — calls `GET /api/v1/databases`
+     - `get_capabilities` — calls `GET /v1/api/capabilities`
+     - `health_check` — calls `GET /v1/api/health`
+     - `list_databases` — calls `GET /v1/api/databases`
    - `client.py` — typed HTTP client (`urllib` or `httpx`) wrapping the four
      endpoints; handles `application/problem+json` errors by raising a typed
      exception
@@ -382,11 +382,11 @@ environments in the design doc.
 
 1. Create `doc/api-deployment.md` covering:
    - **Apache CGI**: `ScriptAlias`, `SetEnv ISEARCH_DB_PATH`, `Options ExecCGI`
-   - **Nginx + fcgiwrap**: `location /api/v1`, `fastcgi_pass` to `fcgiwrap`
+   - **Nginx + fcgiwrap**: `location /v1/api`, `fastcgi_pass` to `fcgiwrap`
      socket, `fastcgi_param PATH_INFO`, env var passthrough
    - **Native daemon + reverse proxy**: run `isrch_api` as a persistent process
      (systemd unit file example), bind to `127.0.0.1:8765`, proxy via
-     `ProxyPass /api/v1 http://127.0.0.1:8765`
+     `ProxyPass /v1/api http://127.0.0.1:8765`
    - **MCP sidecar**: systemd unit and Claude Desktop JSON config snippet
 2. Update root `README.md` to reference `doc/api-deployment.md`.
 
