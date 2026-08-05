@@ -257,3 +257,31 @@ the 256-entry `translate[]` table used by `transcode()`) and
 `sprintf` → `snprintf` (6 call sites, all writing into fixed 256-byte
 stack buffers — `snprintf`'s bound is real protection here, since
 `%f` on an extreme `DOUBLE` can print hundreds of digits).
+
+## src/string.cxx
+
+Processed out of order via `/process string.cxx` (its `Order` is 173),
+immediately after `src/string.hxx` above via `/process string.hxx`. All
+three bugs found in this file — `ReadFile()`'s double-free,
+`transcode()`'s undersized buffer, and `Replace()`'s infinite-loop trap
+— were already discovered, fixed, and tested during that `string.hxx`
+turn (`string.cxx` is where all three actually live; see
+`## src/string.hxx` above for the full writeup, standalone repros, and
+`BUGFIX #1`–`#3` in source). This turn re-read the file fresh end to
+end specifically looking for anything the last pass missed, added the
+`ISEARCH2-CLEANUP: processed` marker to `string.cxx` itself (only
+`string.hxx` had it), and confirmed `make tests`/`make tests-asan`
+still pass clean.
+
+One additional finding, documented rather than fixed:
+
+- **`Cmp()` compares with `strcmp()`, not `memcmp()`** — unlike
+  `Equals()`/`CaseEquals()` just above it (both `memcmp()`-based,
+  bounded by `Length`, so they correctly handle embedded null bytes),
+  `Cmp()` stops at the first embedded null in either buffer. Every real
+  caller (`src/thesaurus.cxx`, 4 call sites, all comparing thesaurus
+  terms for sorting) only ever holds plain text, never embedded-null
+  data, so this doesn't currently misbehave — flagged as a documented
+  inconsistency rather than changed, since "fixing" a comparison
+  function's semantics without a concrete failing case felt riskier
+  than leaving it alone. Noted inline above `Cmp()` in source.

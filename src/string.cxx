@@ -41,6 +41,8 @@ $Revision: 1.41 $
 Description:	Class STRING
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-05
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -1299,6 +1301,12 @@ STRING::TrimLeading() {
 }
 
 
+// Unlike Equals()/CaseEquals() above (which use memcmp() bounded by
+// Length, correctly handling embedded null bytes), this stops comparing
+// at the first embedded null in either buffer, same as any strcmp().
+// Not changed: every real caller (src/thesaurus.cxx) compares plain-text
+// terms, never embedded-null data, so this is a documented inconsistency
+// rather than a fix -- see BUG_CATALOG.md.
 INT
 STRING::Cmp(const STRING& OtherString) {
   return(strcmp((const CHR*)Buffer,(const CHR*)OtherString.Buffer));

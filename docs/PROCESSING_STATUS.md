@@ -174,7 +174,7 @@
 | 170 | src/squery.cxx | pending | | |
 | 171 | src/sterm.cxx | pending | | |
 | 172 | src/stopword.cxx | pending | | |
-| 173 | src/string.cxx | pending | | |
+| 173 | src/string.cxx | done | 2026-08-05 | [src/string.cxx](BUG_CATALOG.md#srcstringcxx) |
 | 174 | src/strlist.cxx | pending | | |
 | 175 | src/strstack.cxx | pending | | |
 | 176 | src/termobj.cxx | pending | | |
