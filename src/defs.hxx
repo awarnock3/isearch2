@@ -48,7 +48,7 @@ Author:		Nassib Nassar, nrn@cnidr.org
 
 #ifdef UNIX
 #include <unistd.h>
-#else
+#elif defined(_WIN32) || defined(_MSC_VER)
 #include <process.h>
 #endif
 
