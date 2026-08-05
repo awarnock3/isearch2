@@ -12,7 +12,7 @@
 | 8 | src/irset.hxx | done | 2026-08-05 | [src/irset.hxx](BUG_CATALOG.md#srcirsethxx) |
 | 9 | src/opstack.hxx | done | 2026-08-05 | [src/opstack.hxx](BUG_CATALOG.md#srcopstackhxx) |
 | 10 | src/filemap.hxx | done | 2026-08-05 | [src/filemap.hxx](BUG_CATALOG.md#srcfilemaphxx) |
-| 11 | src/termobj.hxx | pending | | |
+| 11 | src/termobj.hxx | done | 2026-08-05 | [src/termobj.hxx](BUG_CATALOG.md#srctermobjhxx) |
 | 12 | src/memcntl.hxx | pending | | |
 | 13 | src/operator.hxx | pending | | |
 | 14 | src/sterm.hxx | pending | | |

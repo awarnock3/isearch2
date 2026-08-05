@@ -39,16 +39,32 @@ Version:	1.00
 Description:	Class TERMOBJ - Search Term Base Class
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-05
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef TERMOBJ_HXX
 #define TERMOBJ_HXX
-/*
-#include "defs.hxx"
-#include "string.hxx"
-#include "operand.hxx"
-*/
+
+#include "defs.hxx"   // BUGFIX #1: was commented out; INT/TypeTerm below need it.
+#include "string.hxx" // BUGFIX #1: was commented out; OPERAND's interface needs it.
+#include "operand.hxx" // BUGFIX #1: was commented out; base class.
+
+// Abstract intermediate base for concrete search-term operand classes
+// (e.g. STERM), distinguished from IRSET (the other OPERAND subtype) by
+// GetOperandType() returning TypeTerm instead of TypeRset. Adds no state
+// of its own beyond what OPERAND already provides.
 class TERMOBJ : public OPERAND {
 public:
+	// BUGFIX #2: un-hides OPERAND::operator=(const OPOBJ&). Without
+	// this, the compiler-generated TERMOBJ::operator=(const TERMOBJ&)
+	// hides the inherited virtual overload from ordinary (non-virtual)
+	// lookup -- confirmed by the standing "-Woverloaded-virtual" warning
+	// this class has been causing in every build since src/operand.hxx's
+	// turn introduced that operator=. Assigning through a polymorphic
+	// OPOBJ&/OPERAND& reference already dispatched correctly regardless
+	// (virtual dispatch doesn't care about hiding); this only affects
+	// direct same-type assignment.
+	using OPERAND::operator=;
 	TERMOBJ();
 	INT GetOperandType() const { return TypeTerm; };
 	virtual ~TERMOBJ();

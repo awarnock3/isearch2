@@ -764,3 +764,53 @@ directly adjacent to code already being touched for the fixes above.
   code path; flagged as an implicit assumption worth confirming
   whenever `mdt.hxx`/`mdt.cxx` or the indexing pipeline (`index.cxx`,
   Order 137) reach their own turns.
+
+## src/termobj.hxx
+
+`TERMOBJ` is a tiny abstract intermediate base (adds no state of its
+own beyond `OPERAND`) for concrete search-term operand classes; `STERM`
+(Order 14, not yet processed) is its only real subclass.
+
+1. **Header not self-contained** — same defect as `src/fc.hxx`
+   `BUGFIX #1`: commented-out includes for `defs.hxx`/`string.hxx`/
+   `operand.hxx`. Confirmed real by compiling `termobj.hxx` as the sole
+   `#include` in a translation unit: it failed with 2 errors. Fixed by
+   restoring the three includes. See `BUGFIX #1` in source.
+
+2. **`TERMOBJ` hid `OPERAND`'s virtual `operator=`** — the same
+   `-Woverloaded-virtual` pattern already flagged as pre-existing noise
+   under `src/operand.hxx` above (there, about `COLONDOC`/`SGMLNORM`/
+   `TERMOBJ` itself, found but not fixed since none of those files had
+   reached their own turn). Now that `termobj.hxx` *is* the file being
+   processed, fixed for real: added `using OPERAND::operator=;`, a
+   purely additive declaration that re-exposes the inherited virtual
+   overload without changing or removing anything. Confirmed fixed by
+   recompiling the same standalone reproduction, which no longer
+   triggers the warning. See `BUGFIX #2` in source. `COLONDOC`/
+   `SGMLNORM` (and any other undiscovered class in the same situation)
+   still have this warning — it's specific to each derived class, not
+   inherited transitively (confirmed while writing this turn's own test
+   helper, which needed the identical `using` declaration itself even
+   though it derives from the now-fixed `TERMOBJ`) — worth applying the
+   same one-line fix whenever those files reach their own turns.
+
+### Found but out of scope (pre-existing, not triggered by any real caller)
+
+- **Direct same-type assignment fails to *link*, anywhere in the
+  `OPOBJ` hierarchy** — discovered while drafting this turn's own test:
+  `TESTTERMOBJ a, b; a = b;` (both the exact same concrete type) needs
+  the compiler-generated `TESTTERMOBJ::operator=(const TESTTERMOBJ&)`,
+  whose base-subobject assignment step chains down through `TERMOBJ`
+  and `OPERAND`'s own compiler-generated same-type `operator=`s, and
+  bottoms out needing `OPOBJ::operator=(const OPOBJ&)` — declared pure
+  virtual (`= 0`) with no definition anywhere, since every real usage
+  goes through the polymorphic `OPOBJ&`/`OPERAND&` interface instead
+  (confirmed by grepping for direct same-type assignment across `src/`,
+  `doctype/`, `Isearch-cgi/`: none found for any `OPOBJ` subclass).
+  That's a link error (`undefined reference to OPOBJ::operator=`), not
+  a runtime bug, and it's a structural property of the whole hierarchy
+  predating this cleanup effort, not something introduced or fixable by
+  `BUGFIX #2` above or by any single file's turn — flagging it here
+  since `termobj.hxx`'s turn is where it was first actually triggered
+  and confirmed. This turn's test file documents the finding instead of
+  exercising the broken path.
