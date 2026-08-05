@@ -333,3 +333,63 @@ implementation, Order 165, needed to write `tests/src/test_record.cxx`)
   specifier), while `Read()` parses them back via `STRING::GetInt()`
   (signed 32-bit `atoi()`). Values above `INT_MAX` would print as
   negative and/or fail to round-trip.
+
+## src/rcache.hxx
+
+`RCACHE` (Result Set Cache) is currently dormant in this tree — its one
+real call site, `SetCache=new RCACHE(Parent);` in `src/index.cxx`, is
+commented out, and no other file constructs or calls it. All bugs below
+were still confirmed with standalone repros independent of that dormant
+caller, since the class's own logic is broken regardless of who (if
+anyone) currently exercises it.
+
+1. **Header not self-contained** — same defect as `src/fc.hxx`
+   `BUGFIX #1`: `rcache.hxx` declared `STRING`/`IRSET`/`PIDBOBJ`/
+   `INT`-typed members and methods without including anything that
+   defines those names (`#include "defs.hxx"`, `"string.hxx"`,
+   `"irset.hxx"`, `"idbobj.hxx"` were all commented out). Confirmed real
+   by compiling `rcache.hxx` as the sole `#include` in a translation
+   unit: it failed with 24 errors. Fixed by restoring the four includes.
+   See `BUGFIX #1` in source. Note: `irset.hxx` itself isn't
+   self-contained yet (its own turn, Order 8, hasn't come up) — both
+   this fix and `tests/src/test_rcache.cxx` still need to pre-include
+   its dependencies manually, the same way `rcache.cxx` itself always
+   has.
+
+2. **`Add()`'s eviction path deletes the wrong pointer — confirmed
+   out-of-bounds access plus a memory leak** — when the cache is full,
+   `Add()` loops over `ResultSet[0..Count)` to find `MinPos`, the index
+   of the entry with the fewest total results (the one to evict), then
+   ran `delete ResultSet[i]` — using the *loop variable* `i`, which by
+   then equals `Count` (`== MAXCACHE`, since the loop always runs to
+   completion), not `MinPos`. `ResultSet` is a fixed `IRSET*[MAXCACHE]`
+   member array, so `ResultSet[MAXCACHE]` reads one element past its
+   end and `delete`s whatever garbage pointer was there. Confirmed real
+   with a standalone repro: fill the cache to `MAXCACHE` entries, add
+   one more. Under ASan+UBSan this produced `runtime error: index 20
+   out of bounds for type 'IRSET *[20]'` at the `delete` line, plus a
+   LeakSanitizer-reported leak of the entry that should have been
+   evicted (`ResultSet[MinPos]`) — never freed, since the wrong pointer
+   was deleted, then silently overwritten and lost. Fixed by deleting
+   `ResultSet[MinPos]` instead of `ResultSet[i]`. See `BUGFIX #2` in
+   source. Verified fixed: the same standalone reproduction now exits
+   cleanly under ASan+UBSan, and `tests/src/test_rcache.cxx`'s eviction
+   test (which fills the cache and adds one more) passes under
+   `make tests-asan`.
+
+3. **`Fetch()` had no bounds check** — indexed `ResultSet[w]` directly
+   with no validation that `w` was a real, currently-occupied slot.
+   Callers are expected to pass a value returned by `Check()` (which
+   returns `-1` for "not found"), but nothing enforced that contract,
+   unlike every other indexed accessor already seen in this tree (e.g.
+   `DFT::GetEntry`, `FCT::GetEntry`, both of which validate their index
+   and no-op on out of range). No current caller exists to demonstrate
+   misuse (the whole class is dormant, as noted above), so this wasn't
+   a confirmed *active* bug the way `BUGFIX #2` was — but it's a public
+   method with an obviously exploitable contract gap, cheap to close,
+   and required no header change. Fixed by returning `nullptr` for
+   `w < 0` or `w >= Count`. See `BUGFIX #3` in source.
+
+Also applied: file-level and per-method doc comments in `rcache.hxx`,
+including a note on the class's current dormancy so a future reader
+doesn't assume its confirmed bugs were exercised in production.
