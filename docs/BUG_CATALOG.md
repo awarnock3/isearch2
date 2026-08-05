@@ -285,3 +285,51 @@ One additional finding, documented rather than fixed:
   inconsistency rather than changed, since "fixing" a comparison
   function's semantics without a concrete failing case felt riskier
   than leaving it alone. Noted inline above `Cmp()` in source.
+
+## src/record.hxx
+
+1. **Header not self-contained** — same defect as `src/fc.hxx`
+   `BUGFIX #1`, independently present here: `record.hxx` declared
+   `STRING`/`PSTRING`/`DFT`/`PDFT`/`GPTYPE`/`PFILE`-typed members and
+   methods without including anything that defines those names
+   (`#include "defs.hxx"`, `"string.hxx"`, `"dft.hxx"` were all
+   commented out). Confirmed real by compiling `record.hxx` as the sole
+   `#include` in a translation unit: it failed with 24 errors.
+   Currently silent in the tree only because every existing includer
+   happens to include those headers first — fragile, not guaranteed.
+   Fixed by restoring the three includes. See `BUGFIX #1` in source.
+   Verified fixed by recompiling the same standalone reproduction,
+   which now succeeds with zero warnings under `-Wall -Wextra`.
+
+2. **Previously flagged `RECORD` copy risk — confirmed resolved, not a
+   live bug** — `src/dft.hxx`'s catalog entry above flagged that
+   `RECORD` holds a `DFT Dft;` member and declares no copy constructor
+   of its own, so any copy of a `RECORD` would inherit whatever `DFT`'s
+   copy semantics were at the time. That was written when `DFT` still
+   had the shallow-copy double-free bug (`BUGFIX #2` in that section);
+   since it's since been fixed with a proper deep-copying copy
+   constructor, `RECORD`'s own (still compiler-generated, still
+   undeclared) copy constructor is now correct by construction — each
+   member (`STRING`×4, `DFT`, `GPTYPE`×2) has proper value semantics of
+   its own. Verified with a standalone repro under ASan+UBSan:
+   copy-construct a `RECORD` with a non-trivial `DFT`, let both copies
+   destruct — exits cleanly, no double-free. (There's still a
+   `-Wdeprecated-copy` warning, the same class of latent-but-unconfirmed
+   finding already noted for `DF`/`FCT` under `src/dft.hxx` above — not
+   fixed here for the same reason: no concrete failure to fix, and
+   adding an explicit copy constructor would be a header change with no
+   bug motivating it.)
+
+### Found but out of scope for this file (deferred to its own turn)
+
+Discovered while reading `src/record.cxx` (the header's existing
+implementation, Order 165, needed to write `tests/src/test_record.cxx`)
+— not fixed here since `record.cxx` hasn't reached its own turn yet:
+
+- **`src/record.cxx`, `Write()`/`Read()`** — the same signed/unsigned
+  round-trip mismatch pattern already cataloged for `src/fc.cxx` and
+  `src/fct.cxx` above: `Write()` emits `RecordStart`/`RecordEnd` (both
+  `GPTYPE`, i.e. unsigned) via `fprintf(fp, "%d\n", ...)` (signed format
+  specifier), while `Read()` parses them back via `STRING::GetInt()`
+  (signed 32-bit `atoi()`). Values above `INT_MAX` would print as
+  negative and/or fail to round-trip.

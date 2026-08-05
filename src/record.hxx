@@ -39,14 +39,19 @@ Version:	1.00
 Description:	Class RECORD - Database Record
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-05
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef RECORD_HXX
 #define RECORD_HXX
-/*
-#include "defs.hxx"
-#include "string.hxx"
-#include "dft.hxx"
-*/
+
+#include "defs.hxx"  // BUGFIX #1: was commented out; GPTYPE/PFILE below need it.
+#include "string.hxx" // BUGFIX #1: was commented out; STRING/PSTRING below need it.
+#include "dft.hxx"    // BUGFIX #1: was commented out; DFT/PDFT below need it.
+
+// One indexed document's metadata: its key, source path/filename, byte
+// range within the merged database, document type, and the DFT (Data
+// Field Table) of fields found while parsing it.
 class RECORD {
 public:
 	RECORD();
