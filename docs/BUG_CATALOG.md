@@ -441,9 +441,8 @@ reached its own turn:
   (implicit copy constructor) aborted under ASan with
   `heap-use-after-free` in `IRSET::~IRSET()` — the second destructor
   reading/freeing memory the first destructor had already freed, the
-  same double-free shape as `DFT`'s confirmed-and-fixed bug. This
-  should be fixable the same way (add a deep-copying
-  `IRSET(const IRSET&)`) when `irset.hxx` reaches its own turn.
+  same double-free shape as `DFT`'s confirmed-and-fixed bug.
+  **Fixed** — see `## src/irset.hxx` below, `BUGFIX #2`.
 
 Also applied: file-level and per-method doc comments in `operand.hxx`.
 
@@ -571,3 +570,82 @@ their own turn yet:
   `-Wdeprecated-copy` warning, not a crash. Would become a real
   double-free (of `HitTable`) under a `DO_HIGHLIGHTING` build, the same
   shape as `DFT`'s original bug.
+
+## src/irset.hxx
+
+The `IRSET` copy-constructor double-free flagged as "found but out of
+scope" under `src/operand.hxx` above is now fixed here — see item 2
+below.
+
+1. **Header had no includes at all** — unlike every other file in this
+   tree (which at least had a commented-out include block to restore),
+   `irset.hxx` had *no* `#include`s whatsoever despite needing `OPERAND`
+   (base class), `PIDBOBJ`, `IRESULT`/`PIRESULT`, `PRSET`, `MDT`, and
+   more. It only "worked" because every real includer happened to bring
+   in the right headers first, in the right order — confirmed by
+   compiling it standalone (fails without the includes, succeeds with
+   them). Fixed by adding the same include list `irset.cxx` itself
+   already needed to use this header at all. See `BUGFIX #1` in source.
+
+2. **Missing copy constructor → confirmed double-free / use-after-free**
+   — `IRSET` owns a heap-allocated array (`Table`) and declares
+   `operator=`/`~IRSET()`, but no copy constructor — the same pattern
+   as `DFT`'s and `RSET`'s confirmed-and-fixed bugs (both with your
+   prior approval). This one was already confirmed during the
+   `operand.hxx` turn: `IRSET b = a;` aborted under ASan with
+   heap-use-after-free in `~IRSET()`. Per your go-ahead, fixed by adding
+   `IRSET(const IRSET&)` to `irset.hxx` and implementing it in
+   `irset.cxx`. **Fixing this surfaced a second, deeper bug**: the
+   first implementation attempt base-constructed via
+   `OPERAND(OtherIrset)`, which invokes `OPERAND`'s own *implicit*
+   copy constructor — and since `ATTRLIST` (the type of
+   `OPERAND::Attributes`) has the identical missing-copy-constructor
+   defect one level down (flagged as latent/unconfirmed under
+   `src/operand.hxx` above), that shallow-copies `ATTRLIST`'s own
+   `Table` and produces the exact same double-free, just one hop
+   deeper — confirmed by hitting it: the standalone repro aborted in
+   `ATTRLIST::~ATTRLIST()` instead of `IRSET::~IRSET()`. This
+   *confirms* the `ATTRLIST` latent risk noted earlier is real and
+   reachable, without needing to fix `attrlist.hxx` itself (out of
+   scope, its own turn hasn't come up): `IRSET`'s copy constructor was
+   reworked to default-construct the `OPERAND` base and copy
+   `Attributes` through `GetAttributes()`/`SetAttributes()` instead,
+   both of which go through `ATTRLIST::operator=` — which, unlike its
+   copy constructor, already deep-copies correctly. See `BUGFIX #2` in
+   source. Verified fixed: the standalone reproduction (both the
+   original `IRSET`-level crash and the follow-up `ATTRLIST`-level one)
+   now exits cleanly under ASan, and
+   `tests/src/test_irset.cxx`'s copy-constructor test (which also
+   verifies `Attributes` survive the copy correctly, not just avoid
+   crashing) passes under `make tests-asan`.
+
+3. **`Init()` initialized a local shadow of `ScoreSort`, not the member**
+   — was `INT ScoreSort=0;`, declaring a same-named local that shadowed
+   the `ScoreSort` member instead of setting it, leaving the member
+   uninitialized garbage until the first `SortByScore()`/`SortByIndex()`
+   call (both of which correctly assign the member, having no local to
+   shadow it). No current caller reads `ScoreSort`, so this had no
+   observable effect, but it's still a real uninitialized-member bug
+   and was the source of a `-Wunused-variable` warning present in every
+   build since this file first appeared in `TEST_ENGINE_SRCS`. Fixed by
+   removing the `INT` type prefix so the assignment targets the member.
+   See `BUGFIX #3` in source.
+
+4. **`operator=()` had no self-assignment guard → confirmed silent data
+   loss** — unconditionally freed `Table` and re-`Init()`'d *before*
+   reading `OtherIrset.GetTotalEntries()`. On self-assignment (`x = x;`,
+   which real code can reach through the virtual `OPOBJ&` interface),
+   `OtherIrset` *is* `*this`, so by the time that count was read, `Init()`
+   had already reset it to 0 — every entry silently vanished. The same
+   shape as the `ATTRLIST::operator=` self-assignment bug already
+   cataloged under `src/operand.hxx` above, just confirmed here with a
+   standalone repro instead of by inspection: a 1-entry `IRSET`
+   self-assigned through its `OPOBJ&` interface dropped to 0 entries.
+   Fixed with an early return when `&OtherIrset == this`. See
+   `BUGFIX #4` in source. Verified fixed: the same standalone repro now
+   preserves the entry count, and `tests/src/test_irset.cxx` has a
+   dedicated self-assignment regression test.
+
+Also applied: 2 remaining `NULL` → `nullptr` in `And()`/`AndNot()`
+(`bsearch()` result comparisons), and a dead `DOUBLE x;` local removed
+from `FastAddEntry()` (another source of a standing warning).

@@ -103,11 +103,46 @@ IRSET::Init(const PIDBOBJ DbParent)
   Parent = DbParent;
   MinScore=999999.0;
   MaxScore=0.0;
-  INT ScoreSort=0;		// 1 if sorted by score
+  // BUGFIX #3: was `INT ScoreSort=0;`, declaring a local that shadowed
+  // (and was never read past) the ScoreSort member instead of
+  // initializing it, leaving the member uninitialized garbage until the
+  // first SortByScore()/SortByIndex() call. No current caller reads
+  // ScoreSort, so this had no observable effect, but it's still an
+  // uninitialized member and the source of a standing -Wunused-variable
+  // warning on every build.
+  ScoreSort=0;		// 1 if sorted by score
 }
 
 
-DOUBLE 
+// BUGFIX #2: see the declaration in irset.hxx for why this is needed.
+// Deliberately does NOT base-construct via `OPERAND(OtherIrset)`: that
+// would invoke OPERAND's own implicit copy constructor, which -- since
+// ATTRLIST (OPERAND::Attributes' type) has the identical missing-copy-
+// constructor defect one level down (see docs/BUG_CATALOG.md under
+// src/operand.hxx) -- shallow-copies ATTRLIST's own Table and produces
+// the exact same double-free, just one hop deeper. Confirmed by hitting
+// it: the standalone repro below aborted in ATTRLIST::~ATTRLIST() until
+// this was reworked to default-construct the OPERAND base instead and
+// copy Attributes through GetAttributes()/SetAttributes(), both of
+// which go through ATTRLIST::operator=, which -- unlike its copy
+// constructor -- already deep-copies correctly.
+IRSET::IRSET(const IRSET& OtherIrset) : OPERAND()
+{
+  Init(OtherIrset.Parent);
+  ATTRLIST Attrs;
+  OtherIrset.GetAttributes(&Attrs);
+  SetAttributes(Attrs);
+  INT x;
+  for (x = 0; x < OtherIrset.TotalEntries; x++) {
+    FastAddEntry(OtherIrset.Table[x], 0);
+  }
+  MinScore = OtherIrset.MinScore;
+  MaxScore = OtherIrset.MaxScore;
+  ScoreSort = OtherIrset.ScoreSort;
+}
+
+
+DOUBLE
 IRSET::GetMaxScore(){
   return(MaxScore);
 }
@@ -119,8 +154,18 @@ IRSET::GetMinScore(){
 }
 
 
-OPOBJ& 
+// BUGFIX #4: was missing a self-assignment guard. On `x = x;`,
+// OtherIrset *is* `*this`, so the original unconditionally deleted
+// Table and re-Init()'d before ever reading OtherIrset.GetTotalEntries()
+// -- by which point that count (reading the same, just-reset object)
+// was 0, silently discarding every entry. Confirmed real with a
+// standalone repro: a 1-entry IRSET self-assigned through its OPOBJ&
+// interface dropped to 0 entries.
+OPOBJ&
 IRSET::operator=(const OPOBJ& OtherIrset) {
+  if (&OtherIrset == this) {
+    return *this;
+  }
   if (Table) {
     delete [] Table;
   }
@@ -209,10 +254,9 @@ IRSET::MergeEntries(const INT AddHitCounts)
 }
 
 
-void 
-IRSET::FastAddEntry(const IRESULT& ResultRecord, const INT AddHitCounts) 
+void
+IRSET::FastAddEntry(const IRESULT& ResultRecord, const INT AddHitCounts)
 {
-  DOUBLE x;
   if (TotalEntries == MaxEntries)
     Expand();
   Table[TotalEntries] = ResultRecord;
@@ -548,7 +592,7 @@ IRSET::AndNot(const OPOBJ& OtherIrset)
 			      TotalEntries, sizeof(IRESULT), 
 			      IrsetIndexCompare);
 #endif
-    if (match == NULL) {
+    if (match == nullptr) {
       MyResult.FastAddEntry(OtherIresult, 0);
       count++;
     }
@@ -589,7 +633,7 @@ IRSET::And(const OPOBJ& OtherIrset)
 			      sizeof(IRESULT), IrsetIndexCompare);
     
 #endif
-    if (match != NULL) {
+    if (match != nullptr) {
 #ifdef DO_HIGHLIGHTING  
       match->AddToHitTable(OtherIresult);
 #endif
