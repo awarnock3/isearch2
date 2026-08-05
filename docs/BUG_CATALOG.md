@@ -157,3 +157,103 @@ its public behavior is left alone until then:
   user-declared destructor and `Next`/`Prev` raw pointers but no copy
   constructor) reach their own turns, and considering whether `fct.hxx`
   needs a `PROCESS fct.hxx` re-run at that point.
+
+## src/string.hxx
+
+Processed out of order via `/process string.hxx` (its `Order` in
+`PROCESSING_STATUS.md` is 26) at the user's request. Per CLAUDE.md's
+history note, this is the STRING module previously flagged as having
+been cleaned up once already in a parallel `isearch2-modern/` tree —
+that directory doesn't exist anywhere in this environment, so this was
+treated as a fresh, from-scratch pass with no prior work to port in.
+
+1. **`ReadFile()` (both overloads) — confirmed double-free /
+   use-after-free** — this is the exact "STRING::ReadFile double-free"
+   referenced (but not yet re-validated in this environment) in
+   `src/fc.hxx`'s catalog entry above. Both overloads unconditionally
+   ran `if (Buffer) delete [] Buffer;` as their first action, *before*
+   checking whether the target file even existed. On the common failure
+   path — file doesn't exist — the function returned `GDT_FALSE`
+   immediately afterward, leaving `Buffer` a dangling pointer to
+   already-freed memory instead of `nullptr` or a fresh allocation. Any
+   later use of that `STRING` — another method call, or simply letting
+   it go out of scope — would then free the same memory a second time.
+   Confirmed real with a standalone ASan repro: default-construct a
+   `STRING`, call `ReadFile()` on a nonexistent path, let it go out of
+   scope → `AddressSanitizer: attempting double-free` in `~STRING()`.
+   A second, related defect lived one level deeper: on success, both
+   overloads got the file's size via a **second**, redundant
+   `GetFileSize()` call (which re-`stat()`s the same file) rather than
+   reusing the `struct stat` already obtained by the first `stat()` a
+   few lines above — a TOCTOU race (if the file vanished between the
+   two `stat()` calls, `GetFileSize()` returns `-1`, which silently
+   becomes a huge value once assigned to the unsigned `Length`
+   (`STRINGINDEX`), passing the original's `if (Length >= 0)` check
+   — always true for an unsigned type, and the exact dead code the
+   `-Wtype-limits` warning on this line has been flagging in every
+   build since `src/fc.hxx`'s turn — and overflowing `BufferSize` via
+   `Length + 1`). Fixed by: not touching `Buffer` until `stat()`
+   confirms the file exists; reusing `status.st_size` directly instead
+   of a second racy `GetFileSize()` call (which also makes the
+   `Length >= 0` dead code moot, since `st_size` from a `stat()` that
+   just succeeded can't be negative); and resetting `Length` to 0
+   (rather than leaving it at the pre-read file size over an
+   all-garbage, never-written buffer) if `fopen()` fails after a
+   successful `stat()`. The `STRING&` overload now delegates to the
+   `CHR*` overload instead of duplicating the fix a second time. See
+   `BUGFIX #1` in source. Verified fixed: the same standalone
+   reproduction now exits cleanly, and
+   `tests/src/test_string.cxx`'s two `ReadFile` regression tests pass
+   under `make tests-asan`. `-Wtype-limits` no longer fires anywhere in
+   this file.
+
+2. **`transcode()` (used by `XmlCleanup()`) — undersized output buffer
+   silently truncates the last entity** — `lennbuf = strlen(obuf)*6`
+   sized the output buffer for the worst case (every character
+   expanding to a 6-byte `&#NNN;` entity) with **no** slack for the
+   trailing null terminator, while `maxipnt = nbuf+lennbuf-1` reserves
+   the *last* byte of that buffer for the terminator by refusing to
+   write into it. In the worst case those two facts collide: the byte
+   reserved for the terminator is the same byte the last entity needed
+   for its closing `;`, so that `;` is silently dropped. Confirmed real
+   with a standalone program: transcoding three bytes ≥ 128 (forcing
+   three 6-byte entities) produced `&#200;&#201;&#202` (17 chars)
+   instead of the correct `&#200;&#201;&#202;` (18 chars) — malformed
+   XML/HTML output. (An adjacent theory — that an empty input causes a
+   heap-buffer-overflow via `new char[0]` — did not hold up under ASan
+   in this toolchain: this environment's `operator new[]` rounds a
+   0-byte request up to at least 1 usable byte, so writing the
+   terminator into it doesn't overflow here. The fix below removes the
+   reliance on that implementation-defined behavior anyway.) Fixed by
+   allocating `strlen(obuf)*6 + 1`, giving every worst-case entity its
+   full 6 bytes plus one guaranteed byte for the terminator. See
+   `BUGFIX #2` in source. Verified fixed: the same standalone program
+   now produces the correct, non-truncated output, and
+   `tests/src/test_string.cxx` has both a targeted regression test for
+   this exact scenario and a general `XmlCleanup` correctness test.
+
+3. **`Replace()` (both overloads) — infinite loop on an empty search
+   string** — `Search("")` matches at position 1 every time (`strstr()`
+   semantics: an empty needle always matches at the start), and the
+   subsequent `EraseBefore(Position + CSLen)` becomes `EraseBefore(1)`,
+   which `EraseBefore` itself defines as a no-op (`if (Index <= 1)
+   return;`). So `*this` never shrinks, `Search` never stops matching,
+   and the loop runs forever, growing `NewString` without bound (an
+   eventual `std::bad_alloc` or OOM, on however long that takes). Not
+   exercised by any of the ~90 real call sites in this tree — all pass
+   non-empty string literals — so this wasn't run to failure (doing so
+   would just hang a build), but the mechanism is deterministic given
+   `Search()`'s and `EraseBefore()`'s own documented behavior, both
+   read directly rather than inferred. Fixed with an early return when
+   the search string is empty. See `BUGFIX #3` in both overloads.
+   Verified with a regression test that calls `Replace("", ...)` and
+   asserts it returns immediately with the string unchanged — which,
+   pre-fix, would have hung the test binary rather than failed an
+   assertion, so this test is meaningful specifically because it
+   terminates at all.
+
+Also applied file-wide: `NULL` → `nullptr` (43 occurrences, including
+the 256-entry `translate[]` table used by `transcode()`) and
+`sprintf` → `snprintf` (6 call sites, all writing into fixed 256-byte
+stack buffers — `snprintf`'s bound is real protection here, since
+`%f` on an extreme `DOUBLE` can print hundreds of digits).

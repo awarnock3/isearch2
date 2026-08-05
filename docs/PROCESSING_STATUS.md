@@ -27,7 +27,7 @@
 | 23 | src/confwin.h | pending | | |
 | 24 | src/gdt.h | pending | | |
 | 25 | src/defs.hxx | pending | | |
-| 26 | src/string.hxx | pending | | |
+| 26 | src/string.hxx | done | 2026-08-05 | [src/string.hxx](BUG_CATALOG.md#srcstringhxx) |
 | 27 | src/vlist.hxx | pending | | |
 | 28 | src/common.hxx | pending | | |
 | 29 | src/strlist.hxx | pending | | |
