@@ -2,7 +2,7 @@
 
 | Order | File                          | Status  | Last Processed | Bug Catalog |
 |-------|-------------------------------|---------|-----------------|-------------|
-| 1 | src/fc.hxx | pending | | |
+| 1 | src/fc.hxx | done | 2026-08-05 | [src/fc.hxx](BUG_CATALOG.md#srcfchxx) |
 | 2 | src/fct.hxx | pending | | |
 | 3 | src/dft.hxx | pending | | |
 | 4 | src/record.hxx | pending | | |

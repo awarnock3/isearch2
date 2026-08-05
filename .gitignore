@@ -69,3 +69,7 @@ Testing/
 .cache/
 db/
 
+# Isearch2 cleanup: Catch2 test build output (see CLAUDE.md TESTING)
+tests/run_tests
+tests/reports/
+

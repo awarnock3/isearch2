@@ -249,3 +249,47 @@ bindist:
 		$(DIST)/html  \
 		$(DIST)/COPYRIGHT; \
 		gzip $(DIST)-$(VER)_$(OS)$(LDFLAGS).tar
+
+#
+# Isearch2 cleanup: Catch2 unit tests (see CLAUDE.md TESTING)
+#
+CATCH2_DIR := tests/vendor/catch2
+TEST_SRCS  := $(shell find tests -name '*.cxx')
+TEST_CXXFLAGS := -std=c++17 -Wall -Wextra -DUNIX -Isrc -Idoctype -IIsearch-cgi -I$(CATCH2_DIR)
+
+# Real engine sources that processed files' tests link against directly,
+# so tests exercise actual behavior instead of reimplementing it. Grows
+# as each file's turn adds tests that need more of the engine; compiled
+# separately from the production build (tests/obj/, TEST_CXXFLAGS) so the
+# two builds never fight over the same .o.
+TEST_ENGINE_SRCS := src/fc.cxx src/string.cxx src/common.cxx
+TEST_ENGINE_OBJS := $(patsubst src/%.cxx,tests/obj/%.o,$(TEST_ENGINE_SRCS))
+
+TEST_OBJS := $(TEST_SRCS:.cxx=.o) $(TEST_ENGINE_OBJS) $(CATCH2_DIR)/catch_amalgamated.o
+
+$(CATCH2_DIR)/catch_amalgamated.o: $(CATCH2_DIR)/catch_amalgamated.cpp
+	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
+
+tests/obj/%.o: src/%.cxx
+	@mkdir -p tests/obj
+	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
+
+tests/%.o: tests/%.cxx
+	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
+
+tests: $(TEST_OBJS)
+	@mkdir -p tests/reports
+	$(CXX) $(TEST_CXXFLAGS) $(TEST_OBJS) -o tests/run_tests
+	@REPORT=tests/reports/report-$$(date +%Y%m%d-%H%M%S).txt; \
+	tests/run_tests | tee $$REPORT; \
+	echo "Report saved to $$REPORT"
+
+tests-asan: TEST_CXXFLAGS += -fsanitize=address,undefined -g
+tests-asan: tests
+
+# "tests" collides with the tests/ directory that already exists on
+# disk, and "tests-asan" only differs from "tests" by a variable
+# addition make can't see in file timestamps -- without .PHONY, make
+# considers both satisfied as soon as tests/ exists and TEST_OBJS look
+# up to date, and silently skips rebuilding/relinking.
+.PHONY: tests tests-asan

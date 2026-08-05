@@ -4,14 +4,17 @@ Version:	1.00
 Description:	Class FC - Field Coordinates
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-05
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef FC_HXX
 #define FC_HXX
 
 #include <iostream>
-/*
-#include "defs.hxx"
-*/
+#include "defs.hxx"  // BUGFIX #1: was commented out; GPTYPE/PFILE below need it.
+
+// Field Coordinates: a [FieldStart, FieldEnd) byte-offset pair delimiting
+// one field occurrence within an indexed document.
 class FC {
 public:
 	FC();
@@ -19,10 +22,16 @@ public:
 	GPTYPE GetFieldStart();
 	void SetFieldEnd(const GPTYPE NewFieldEnd);
 	GPTYPE GetFieldEnd();
+	// Serializes the pair as text to fp.
 	void Write(PFILE fp) const;
+	// Reads the pair back from text previously written by Write().
 	void Read(PFILE fp);
+	// Swaps byte order of both fields in place, for cross-endian file I/O.
 	void FlipBytes();
-	friend ostream& operator<<(ostream& os, const FC& Fc);
+	// BUGFIX #1: qualified std::ostream so this header doesn't depend on
+	// some other translation unit's "using namespace std;" being in
+	// effect first (e.g. string.hxx's, seen only transitively today).
+	friend std::ostream& operator<<(std::ostream& os, const FC& Fc);
 	~FC();
 private:
 	GPTYPE FieldStart;
