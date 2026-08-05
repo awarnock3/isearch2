@@ -94,3 +94,66 @@ its public behavior is left alone until then:
   TotalEntries)` (a `SIZE_T`), but `Read()` parses it back via
   `STRING::GetInt()` (signed 32-bit). A table with more than
   `INT_MAX` entries would fail to round-trip.
+
+## src/dft.hxx
+
+1. **Header not self-contained** — same defect as `src/fc.hxx`
+   `BUGFIX #1`, independently present here: `dft.hxx` declared
+   `INT`/`PFILE`/`DF`/`PDF`-typed members and methods without including
+   anything that defines those names (`#include "defs.hxx"` and
+   `"df.hxx"` were both commented out). Confirmed real by compiling
+   `dft.hxx` as the sole `#include` in a translation unit: it failed
+   with 10 errors. Currently silent in the tree only because every
+   existing includer happens to include `defs.hxx` and `df.hxx` first —
+   fragile, not guaranteed. Fixed by restoring the two includes. See
+   `BUGFIX #1` in source. Verified fixed by recompiling the same
+   standalone reproduction, which now succeeds with zero warnings under
+   `-Wall -Wextra`.
+
+2. **Missing copy constructor → double-free / use-after-free** — `DFT`
+   owns a heap-allocated array (`Table`) and declares its own
+   `operator=` and `~DFT()`, but never declared a copy constructor, so
+   the compiler synthesized one that shallow-copies the `Table`
+   pointer instead of the entries it points to. Confirmed real with a
+   minimal standalone reproduction: default-construct a `DFT`,
+   copy-construct a second from it (`DFT b = a;`), and let both go out
+   of scope. Under ASan this aborted with a heap-use-after-free in
+   `DFT::~DFT()` (`src/dft.cxx:110`) — the second destructor call
+   reading/freeing memory the first destructor had already freed, i.e.
+   a double-free. Real-world exposure isn't just theoretical: `RECORD`
+   (`src/record.hxx:79`) holds a `DFT Dft;` member and itself declares
+   no copy constructor either, so any copy of a `RECORD` (pass/return
+   by value, container storage) would trigger this transitively. Per
+   CLAUDE.md's rule to stop and ask before changing a header
+   declaration, this was confirmed and then fixed with the user's
+   explicit go-ahead: added `DFT(const DFT& OtherDft);` to `dft.hxx`
+   and implemented it in `dft.cxx` (Order 126, ahead of its own turn,
+   since the declaration and its only sane implementation are
+   inseparable) by deep-copying entries the same way `operator=`
+   already does. See `BUGFIX #2` in both files. Verified fixed by
+   rerunning the same standalone reproduction under ASan+UBSan — exits
+   cleanly — and by `tests/src/test_dft.cxx`'s copy-constructor test,
+   which passes under `make tests-asan`.
+
+### Found but out of scope for this file (deferred to their own turns)
+
+- **`src/df.hxx`'s `DF` and `src/fct.hxx`'s `FCT`** (the latter already
+  processed, Order 2) **have the same missing-copy-constructor smell as
+  `DFT` above, unconfirmed** — both declare `operator=` without a copy
+  constructor. Noticed via a `-Wdeprecated-copy` warning while writing
+  this file's test (`DF MakeDf(...) { ...; return df; }` needed `DF`'s
+  implicit copy constructor for the by-value return, which triggered
+  the deprecation warning, which named `FCT`'s user-provided
+  `operator=` as the reason `FCT`'s own implicit copy constructor is
+  also deprecated — `DF` embeds an `FCT Fct;` member). Rewrote the test
+  helper to fill an out-parameter instead of returning by value, so
+  this doesn't block `dft.hxx`'s own turn. Unlike `DFT`, no concrete
+  copy-construction call site (as opposed to assignment) was found for
+  either class in the existing tree, so this is flagged as a latent
+  risk rather than a confirmed active bug — worth checking for a real
+  double-free repro (same technique as `BUGFIX #2` above) when
+  `df.hxx` (Order 31) or `vlist.hxx` (Order 27, `FCT`'s base class,
+  which has the identical pattern one level further down: a
+  user-declared destructor and `Next`/`Prev` raw pointers but no copy
+  constructor) reach their own turns, and considering whether `fct.hxx`
+  needs a `PROCESS fct.hxx` re-run at that point.

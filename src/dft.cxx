@@ -23,6 +23,18 @@ void DFT::Init() {
 	MaxEntries = 100;
 }
 
+// BUGFIX #2: see the declaration in dft.hxx for why this is needed.
+DFT::DFT(const DFT& OtherDft) {
+	Init();
+	INT y = OtherDft.GetTotalEntries();
+	INT x;
+	DF df;
+	for (x=1; x<=y; x++) {
+		OtherDft.GetEntry(x, &df);
+		AddEntry(df);
+	}
+}
+
 DFT& DFT::operator=(const DFT& OtherDft) {
 	if (Table) {
 		delete [] Table;
