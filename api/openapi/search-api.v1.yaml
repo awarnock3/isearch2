@@ -1,0 +1,658 @@
+openapi: 3.1.0
+info:
+  title: Isearch Search API
+  version: 1.0.0
+  description: |
+    OpenAPI contract for the Isearch HTTP Search API.
+    This v1 contract provides anonymous read endpoints for searching,
+    service health, capabilities discovery, and database listing.
+servers:
+  - url: /api/v1
+    description: Default API base path
+tags:
+  - name: search
+    description: Search records in an indexed database
+  - name: system
+    description: Service health and capability endpoints
+  - name: databases
+    description: Database discovery endpoint
+security: []
+paths:
+  /search:
+    get:
+      tags: [search]
+      operationId: searchRecordsGet
+      summary: Search records (query parameters)
+      description: Executes a search request using query-string parameters.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/database'
+        - $ref: '#/components/parameters/q'
+        - $ref: '#/components/parameters/searchType'
+        - $ref: '#/components/parameters/operator'
+        - $ref: '#/components/parameters/term'
+        - $ref: '#/components/parameters/field'
+        - $ref: '#/components/parameters/weight'
+        - $ref: '#/components/parameters/phrase'
+        - $ref: '#/components/parameters/elementSet'
+        - $ref: '#/components/parameters/start'
+        - $ref: '#/components/parameters/maxHits'
+        - $ref: '#/components/parameters/includeUrl'
+        - $ref: '#/components/parameters/includeHeadline'
+        - $ref: '#/components/parameters/includeRecordKey'
+        - $ref: '#/components/parameters/scoreScale'
+      responses:
+        '200':
+          description: Search completed successfully
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+              examples:
+                success:
+                  summary: Simple query response
+                  externalValue: ./examples/search-response-200.json
+        '400':
+          $ref: '#/components/responses/BadRequestProblem'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '406':
+          $ref: '#/components/responses/NotAcceptableProblem'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaTypeProblem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityProblem'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsProblem'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorProblem'
+    post:
+      tags: [search]
+      operationId: searchRecordsPost
+      summary: Search records (JSON body)
+      description: Executes a search request using a JSON request body.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+            examples:
+              booleanQuery:
+                summary: Boolean query with terms array
+                externalValue: ./examples/search-post-boolean.json
+      responses:
+        '200':
+          description: Search completed successfully
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResponse'
+              examples:
+                success:
+                  summary: Search response
+                  externalValue: ./examples/search-response-200.json
+        '400':
+          $ref: '#/components/responses/BadRequestProblem'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '406':
+          $ref: '#/components/responses/NotAcceptableProblem'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaTypeProblem'
+        '422':
+          $ref: '#/components/responses/UnprocessableEntityProblem'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsProblem'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorProblem'
+  /health:
+    get:
+      tags: [system]
+      operationId: getHealth
+      summary: Get service health
+      description: Returns liveness information for the API service.
+      security: []
+      responses:
+        '200':
+          description: Service is healthy
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+        '406':
+          $ref: '#/components/responses/NotAcceptableProblem'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorProblem'
+  /capabilities:
+    get:
+      tags: [system]
+      operationId: getCapabilities
+      summary: Get search capabilities
+      description: Returns supported search modes, operators, and configured limits.
+      security: []
+      responses:
+        '200':
+          description: Capabilities document
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CapabilitiesResponse'
+        '406':
+          $ref: '#/components/responses/NotAcceptableProblem'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorProblem'
+  /databases:
+    get:
+      tags: [databases]
+      operationId: listDatabases
+      summary: List configured databases
+      description: Returns known database roots available for querying.
+      security: []
+      responses:
+        '200':
+          description: Database list response
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DatabaseListResponse'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '406':
+          $ref: '#/components/responses/NotAcceptableProblem'
+        '429':
+          $ref: '#/components/responses/TooManyRequestsProblem'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorProblem'
+components:
+  headers:
+    XRequestId:
+      description: Correlation identifier assigned to this request.
+      schema:
+        type: string
+    CacheControl:
+      description: Cache policy for the response.
+      schema:
+        type: string
+        example: no-store
+  parameters:
+    database:
+      name: database
+      in: query
+      required: true
+      description: Database root/stem (equivalent to CGI DATABASE).
+      schema:
+        type: string
+        minLength: 1
+    q:
+      name: q
+      in: query
+      required: false
+      description: Interpreted query string.
+      schema:
+        type: string
+    searchType:
+      name: search_type
+      in: query
+      required: false
+      description: Query parser mode.
+      schema:
+        type: string
+        enum: [simple, advanced, boolean]
+        default: simple
+    operator:
+      name: operator
+      in: query
+      required: false
+      description: Boolean operator mode.
+      schema:
+        type: string
+        enum: [and, or, andnot, near]
+        default: or
+    term:
+      name: term
+      in: query
+      required: false
+      description: Repeated search terms (GET equivalent of terms[].term).
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+    field:
+      name: field
+      in: query
+      required: false
+      description: Repeated fields aligned by index with term.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+    weight:
+      name: weight
+      in: query
+      required: false
+      description: Repeated weights aligned by index with term.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+    phrase:
+      name: phrase
+      in: query
+      required: false
+      description: Repeated phrase flags aligned by index with term.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: boolean
+    elementSet:
+      name: element_set
+      in: query
+      required: false
+      description: Record presentation element set.
+      schema:
+        type: string
+        default: B
+    start:
+      name: start
+      in: query
+      required: false
+      description: 1-based offset into ranked result set.
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    maxHits:
+      name: max_hits
+      in: query
+      required: false
+      description: Maximum number of hits to return.
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 1000
+        default: 50
+    includeUrl:
+      name: include_url
+      in: query
+      required: false
+      description: Include URL field in each result.
+      schema:
+        type: boolean
+        default: true
+    includeHeadline:
+      name: include_headline
+      in: query
+      required: false
+      description: Include headline field in each result.
+      schema:
+        type: boolean
+        default: true
+    includeRecordKey:
+      name: include_record_key
+      in: query
+      required: false
+      description: Include record key field in each result.
+      schema:
+        type: boolean
+        default: true
+    scoreScale:
+      name: score_scale
+      in: query
+      required: false
+      description: Display scale for scores.
+      schema:
+        type: integer
+        minimum: 1
+        default: 100
+  responses:
+    BadRequestProblem:
+      description: Invalid request or parameter values
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+          examples:
+            badRequest:
+              summary: Missing required database
+              externalValue: ./examples/search-response-400.json
+    NotFoundProblem:
+      description: Requested resource was not found
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    NotAcceptableProblem:
+      description: Accept header cannot be satisfied
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnsupportedMediaTypeProblem:
+      description: Unsupported content type
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    UnprocessableEntityProblem:
+      description: Query could not be parsed or interpreted
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    TooManyRequestsProblem:
+      description: Too many requests
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    InternalServerErrorProblem:
+      description: Internal server error
+      headers:
+        X-Request-Id:
+          $ref: '#/components/headers/XRequestId'
+        Cache-Control:
+          $ref: '#/components/headers/CacheControl'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+  schemas:
+    SearchRequest:
+      type: object
+      additionalProperties: false
+      required: [database]
+      properties:
+        database:
+          type: string
+          minLength: 1
+        q:
+          type: string
+        search_type:
+          type: string
+          enum: [simple, advanced, boolean]
+          default: simple
+        operator:
+          type: string
+          enum: [and, or, andnot, near]
+          default: or
+        terms:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchTerm'
+        element_set:
+          type: string
+          default: B
+        start:
+          type: integer
+          minimum: 1
+          default: 1
+        max_hits:
+          type: integer
+          minimum: 1
+          maximum: 1000
+          default: 50
+        include_url:
+          type: boolean
+          default: true
+        include_headline:
+          type: boolean
+          default: true
+        include_record_key:
+          type: boolean
+          default: true
+        score_scale:
+          type: integer
+          minimum: 1
+          default: 100
+        request_id:
+          type: string
+          description: Optional caller-provided request identifier.
+    SearchTerm:
+      type: object
+      additionalProperties: false
+      required: [term]
+      properties:
+        term:
+          type: string
+          minLength: 1
+        field:
+          type: string
+        weight:
+          type: string
+        phrase:
+          type: boolean
+          default: false
+    SearchResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - request_id
+        - database
+        - search_type
+        - matching_record_count
+        - total_retrieved
+        - interpreted_query
+        - total_database_records
+        - query_time_seconds
+        - start
+        - max_hits
+        - results
+        - links
+      properties:
+        request_id:
+          type: string
+        database:
+          type: string
+        search_type:
+          type: string
+          enum: [simple, advanced, boolean]
+        matching_record_count:
+          type: integer
+          minimum: 0
+        total_retrieved:
+          type: integer
+          minimum: 0
+        interpreted_query:
+          type: string
+        total_database_records:
+          type: integer
+          minimum: 0
+        query_time_seconds:
+          type: number
+          minimum: 0
+        start:
+          type: integer
+          minimum: 1
+        max_hits:
+          type: integer
+          minimum: 1
+        results:
+          type: array
+          items:
+            $ref: '#/components/schemas/SearchHit'
+        links:
+          $ref: '#/components/schemas/PaginationLinks'
+    SearchHit:
+      type: object
+      additionalProperties: false
+      required: [match_number, score]
+      properties:
+        match_number:
+          type: integer
+          minimum: 1
+        score:
+          type: integer
+          minimum: 0
+        filename:
+          type: string
+        headline:
+          type: string
+        record_key:
+          type: string
+        url:
+          type: string
+          format: uri
+    PaginationLinks:
+      type: object
+      additionalProperties: false
+      required: [next, prev]
+      properties:
+        next:
+          type: [string, "null"]
+          format: uri
+        prev:
+          type: [string, "null"]
+          format: uri
+    CapabilitiesResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - api_version
+        - search_types
+        - operators
+        - defaults
+        - limits
+        - element_sets
+      properties:
+        api_version:
+          type: string
+        search_types:
+          type: array
+          items:
+            type: string
+            enum: [simple, advanced, boolean]
+        operators:
+          type: array
+          items:
+            type: string
+            enum: [and, or, andnot, near]
+        defaults:
+          type: object
+          additionalProperties: false
+          required: [search_type, operator, element_set, start, max_hits, score_scale]
+          properties:
+            search_type:
+              type: string
+            operator:
+              type: string
+            element_set:
+              type: string
+            start:
+              type: integer
+            max_hits:
+              type: integer
+            score_scale:
+              type: integer
+        limits:
+          type: object
+          additionalProperties: false
+          required: [max_hits_ceiling]
+          properties:
+            max_hits_ceiling:
+              type: integer
+              minimum: 1
+        element_sets:
+          type: array
+          items:
+            type: string
+    HealthResponse:
+      type: object
+      additionalProperties: false
+      required: [status, version]
+      properties:
+        status:
+          type: string
+          enum: [ok]
+        version:
+          type: string
+    DatabaseListResponse:
+      type: object
+      additionalProperties: false
+      required: [databases]
+      properties:
+        databases:
+          type: array
+          items:
+            type: string
+    Problem:
+      type: object
+      additionalProperties: false
+      required: [type, title, status]
+      properties:
+        type:
+          type: string
+          format: uri
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        instance:
+          type: string
+          format: uri

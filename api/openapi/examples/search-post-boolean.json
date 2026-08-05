@@ -1,0 +1,26 @@
+{
+  "database": "XMLtest",
+  "search_type": "boolean",
+  "operator": "and",
+  "terms": [
+    {
+      "term": "dust",
+      "field": "BODY",
+      "weight": "3",
+      "phrase": false
+    },
+    {
+      "term": "storm",
+      "field": "TITLE",
+      "weight": "2",
+      "phrase": true
+    }
+  ],
+  "element_set": "B",
+  "start": 1,
+  "max_hits": 10,
+  "include_url": true,
+  "include_headline": true,
+  "include_record_key": true,
+  "score_scale": 100
+}

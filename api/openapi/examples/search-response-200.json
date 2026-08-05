@@ -1,0 +1,42 @@
+{
+  "request_id": "req-20260801-0001",
+  "database": "XMLtest",
+  "search_type": "simple",
+  "matching_record_count": 3,
+  "total_retrieved": 3,
+  "interpreted_query": "dust",
+  "total_database_records": 5,
+  "query_time_seconds": 0.012,
+  "start": 1,
+  "max_hits": 5,
+  "results": [
+    {
+      "match_number": 1,
+      "score": 100,
+      "filename": "dust.xml",
+      "headline": "Dust storm updates for the region",
+      "record_key": "XMLtest/1",
+      "url": "https://example.invalid/dust.xml"
+    },
+    {
+      "match_number": 2,
+      "score": 84,
+      "filename": "goes_9_conus.xml",
+      "headline": "Weather satellite imagery and dust transport",
+      "record_key": "XMLtest/2",
+      "url": "https://example.invalid/goes_9_conus.xml"
+    },
+    {
+      "match_number": 3,
+      "score": 71,
+      "filename": "cgia-wswtemp.xml",
+      "headline": "Climate observations and airborne particles",
+      "record_key": "XMLtest/3",
+      "url": "https://example.invalid/cgia-wswtemp.xml"
+    }
+  ],
+  "links": {
+    "next": null,
+    "prev": null
+  }
+}
