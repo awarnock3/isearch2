@@ -74,7 +74,57 @@ RSET::RSET() {
 }
 
 
-void 
+// BUGFIX #2: see the declaration in rset.hxx for why this is needed.
+RSET::RSET(const RSET& OtherRset) {
+  Table = new RESULT[100];
+  TotalEntries = 0;
+  MaxEntries = 100;
+  HighScore = OtherRset.HighScore;
+  LowScore = OtherRset.LowScore;
+  Resize(OtherRset.TotalEntries);
+  SIZE_T x;
+  for (x = 0; x < OtherRset.TotalEntries; x++) {
+    Table[x] = OtherRset.Table[x];
+  }
+  TotalEntries = OtherRset.TotalEntries;
+}
+
+
+// BUGFIX #2: see the declaration in rset.hxx for why this is needed.
+RSET& RSET::operator=(const RSET& OtherRset) {
+  if (&OtherRset == this) {
+    return *this;
+  }
+  if (Table) {
+    delete [] Table;
+  }
+  Table = new RESULT[100];
+  TotalEntries = 0;
+  MaxEntries = 100;
+  HighScore = OtherRset.HighScore;
+  LowScore = OtherRset.LowScore;
+  Resize(OtherRset.TotalEntries);
+  SIZE_T x;
+  for (x = 0; x < OtherRset.TotalEntries; x++) {
+    Table[x] = OtherRset.Table[x];
+  }
+  TotalEntries = OtherRset.TotalEntries;
+  return *this;
+}
+
+
+// BUGFIX #4: was `fread((char*)Table, 1, FSize, fp)` -- a raw memory dump
+// straight into Table, restoring RESULT's STRING fields' internal Buffer
+// pointers as whatever raw bytes SaveTable happened to write, i.e.
+// pointer values from a since-freed (or entirely different process's)
+// heap. Confirmed real with a standalone repro: SaveTable() a populated
+// RSET, LoadTable() it into a fresh RSET (forcing other heap activity in
+// between), then read back an entry's Key -- aborted under ASan with
+// heap-use-after-free in STRING::Copy()'s memcpy. Fixed by serializing
+// each RESULT field through its own public getters/setters (the same
+// text-based, newline-delimited approach used throughout this tree, e.g.
+// RECORD::Write/Read) instead of copying RESULT's raw in-memory bytes.
+void
 RSET::LoadTable(const STRING& FileName) {
   PFILE fp = fopen(FileName, "rb");
   if (!fp) {
@@ -82,18 +132,41 @@ RSET::LoadTable(const STRING& FileName) {
     EXIT_ERROR;
   }
   else {
-    LONG FSize = GetFileSize(fp);
-    SIZE_T TSize = sizeof(RESULT);
-    SIZE_T ArraySize = (FSize / TSize) + 1;
-    Resize(ArraySize);
-    TotalEntries = fread((char*)Table, 1, FSize, fp) / TSize; // explicit cast
+    TotalEntries = 0;
+    STRING s;
+    s.FGet(fp, 32);
+    SIZE_T Count = (SIZE_T)s.GetLong();
+    Resize(Count);
+    RESULT r;
+    STRING Field;
+    SIZE_T x;
+    for (x = 0; x < Count; x++) {
+      s.FGet(fp, 32);
+      r.SetDbNum(s.GetInt());
+      Field.FGet(fp, DocumentKeySize);
+      r.SetKey(Field);
+      Field.FGet(fp, DocumentTypeSize);
+      r.SetDocumentType(Field);
+      Field.FGet(fp, DocPathNameSize);
+      r.SetPathName(Field);
+      Field.FGet(fp, DocFileNameSize);
+      r.SetFileName(Field);
+      s.FGet(fp, 32);
+      r.SetRecordStart((GPTYPE)s.GetLong());
+      s.FGet(fp, 32);
+      r.SetRecordEnd((GPTYPE)s.GetLong());
+      s.FGet(fp, 32);
+      r.SetScore(s.GetFloat());
+      AddEntry(r);
+    }
     fclose(fp);
-    MaxEntries = ArraySize;
   }
 }
 
 
-void 
+// BUGFIX #4: see LoadTable above for why this no longer writes Table's
+// raw bytes.
+void
 RSET::SaveTable(const STRING& FileName) {
   PFILE fp = fopen(FileName, "wb");
   if (!fp) {
@@ -101,7 +174,27 @@ RSET::SaveTable(const STRING& FileName) {
     EXIT_ERROR;
   }
   else {
-    fwrite((char*)Table, 1, sizeof(RESULT)*TotalEntries, fp); // explicit cast
+    fprintf(fp, "%zu\n", TotalEntries);
+    STRING Field;
+    SIZE_T x;
+    for (x = 0; x < TotalEntries; x++) {
+      fprintf(fp, "%d\n", Table[x].GetDbNum());
+      Table[x].GetKey(&Field);
+      Field.Print(fp);
+      fprintf(fp, "\n");
+      Table[x].GetDocumentType(&Field);
+      Field.Print(fp);
+      fprintf(fp, "\n");
+      Table[x].GetPathName(&Field);
+      Field.Print(fp);
+      fprintf(fp, "\n");
+      Table[x].GetFileName(&Field);
+      Field.Print(fp);
+      fprintf(fp, "\n");
+      fprintf(fp, "%u\n", Table[x].GetRecordStart());
+      fprintf(fp, "%u\n", Table[x].GetRecordEnd());
+      fprintf(fp, "%.17g\n", Table[x].GetScore());
+    }
     fclose(fp);
   }
 }
@@ -124,21 +217,30 @@ RSET::AddEntry(const RESULT& ResultRecord) {
 }
 
 
-void 
+void
 RSET::GetEntry(const INT Index, PRESULT ResultRecord) const {
-  if ( (Index > 0) && (Index <= TotalEntries) ) {
+  // BUGFIX #3: was `Index <= TotalEntries`, comparing a signed INT
+  // against an unsigned SIZE_T directly (-Wsign-compare). Index > 0 is
+  // already checked first, so the cast below is always value-preserving.
+  if ( (Index > 0) && ((SIZE_T)Index <= TotalEntries) ) {
     *ResultRecord = Table[Index-1];
   }
 }
 
 
-static int 
+// BUGFIX #6: was `return (Key1 == Key2);` -- STRING::operator== returns
+// a boolean (1 if equal, 0 otherwise), never a negative value. A qsort
+// comparator that can never return negative doesn't implement a valid
+// ordering (undefined behavior per the C standard), so SortByKey() below
+// didn't reliably sort at all. Fixed to use STRING::Cmp(), which returns
+// a proper strcmp()-style negative/zero/positive result.
+static int
 RsetCompareKeys(const void* ResultPtr1, const void* ResultPtr2) {
   static STRING Key1;
   static STRING Key2;
   ((RESULT*)ResultPtr1)->GetKey(&Key1);
   ((RESULT*)ResultPtr2)->GetKey(&Key2);
-  return ( Key1 == Key2 );
+  return Key1.Cmp(Key2);
 }
 
 
@@ -148,9 +250,23 @@ RSET::SortByKey() {
 }
 
 
-static int 
+// BUGFIX #5: was `(int)(Score1*100 - Score2*100)` -- ascending (lowest
+// score first), the opposite of IRSET::SortByScore's own comparator
+// (IrsetScoreCompare, src/irset.cxx) for the same conceptual operation,
+// which sorts descending -- the sensible order for a *search* result set
+// (best matches first). It also truncated the difference through an int
+// cast, which could round a small-but-real score difference to 0,
+// treating genuinely unequal scores as equal. Fixed to sort descending
+// using a sign check instead, matching IrsetScoreCompare's approach.
+static int
 RsetCompareScores(const void* ResultPtr1, const void* ResultPtr2) {
-  return ( (int)( ((RESULT*)ResultPtr1)->GetScore()*100 - ((RESULT*)ResultPtr2)->GetScore()*100 ) );
+  DOUBLE Difference = ((RESULT*)ResultPtr2)->GetScore() - ((RESULT*)ResultPtr1)->GetScore();
+  if (Difference < 0) {
+    return -1;
+  } else if (Difference > 0) {
+    return 1;
+  }
+  return 0;
 }
 
 

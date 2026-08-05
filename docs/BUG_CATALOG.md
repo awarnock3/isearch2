@@ -446,3 +446,128 @@ reached its own turn:
   `IRSET(const IRSET&)`) when `irset.hxx` reaches its own turn.
 
 Also applied: file-level and per-method doc comments in `operand.hxx`.
+
+## src/rset.hxx
+
+1. **Header not self-contained** — same defect as `src/fc.hxx`
+   `BUGFIX #1`: `rset.hxx` declared `STRING`/`RESULT`/`PRESULT`/`INT`/
+   `SIZE_T`/`DOUBLE`-typed members and methods without including
+   anything that defines those names (`#include "defs.hxx"`,
+   `"string.hxx"`, `"result.hxx"` were all commented out). Confirmed
+   real by compiling `rset.hxx` as the sole `#include` in a translation
+   unit. Fixed by restoring the three includes. See `BUGFIX #1` in
+   source.
+
+2. **Missing copy constructor *and* `operator=` → confirmed double-free
+   / use-after-free** — `RSET` owns a heap-allocated array (`Table`)
+   and declares a destructor, but declared *neither* a copy constructor
+   *nor* an assignment operator at all (unlike `DFT`, which at least
+   had a buggy `operator=` before its own fix). Confirmed real with two
+   standalone ASan repros: `RSET b = a;` (copy construction) and
+   `b = a;` (copy assignment) both aborted with heap-use-after-free in
+   `RSET::~RSET()` — the classic shallow-copy-then-double-free shape.
+   No current caller copy-constructs or copy-assigns an `RSET` (all
+   real usage is via `RSET*`/`PRSET`), so — like `rcache.hxx`'s bugs —
+   this was dormant, not actively triggered today. Per CLAUDE.md's rule
+   to stop and ask before changing a header declaration, this was
+   confirmed and then fixed with the user's explicit go-ahead: added
+   `RSET(const RSET&)` and `RSET& operator=(const RSET&)` to `rset.hxx`
+   and implemented both in `rset.cxx`, deep-copying entries and
+   including a self-assignment guard (which `operator=` didn't have at
+   all before, so self-assignment was never a distinct hazard the way
+   it is for `ATTRLIST` — there was no `operator=` to guard). See
+   `BUGFIX #2` in both files. Verified fixed: both standalone
+   reproductions now exit cleanly under ASan+UBSan, and
+   `tests/src/test_rset.cxx` has dedicated copy-constructor and
+   `operator=` regression tests (plus a self-assignment test) that pass
+   under `make tests-asan`.
+
+3. **`GetEntry()`'s bounds check compared signed vs. unsigned** — was
+   `Index <= TotalEntries` (`INT` vs `SIZE_T`), the same
+   `-Wsign-compare` pattern already seen elsewhere in this tree. Fixed
+   with an explicit cast, safe because `Index > 0` is already checked
+   first in the same condition. See `BUGFIX #3` in source.
+
+4. **`SaveTable()`/`LoadTable()` — confirmed heap-use-after-free from a
+   raw memory dump of `Table`** — the most serious bug found in this
+   file. Both functions used `fwrite`/`fread` to copy `RESULT`'s raw
+   in-memory bytes directly to/from disk — but `RESULT` contains
+   `STRING Key/DocumentType/PathName/FileName` members, each of which
+   owns a heap-allocated `Buffer` pointer. A raw byte dump writes out
+   those *pointer values themselves*, not the character data they point
+   to; reading them back restores pointer values that point at memory
+   the writing process has since freed (or, across a real process
+   boundary, memory that never existed in the reading process at all).
+   Confirmed real with a standalone repro: `SaveTable()` a populated
+   `RSET`, `LoadTable()` it into a *fresh* `RSET` (forcing other heap
+   allocations to happen in between so the stale pointer bytes can't
+   coincidentally still be valid), then read back an entry's `Key` —
+   aborted under ASan with `heap-use-after-free` inside
+   `STRING::Copy()`'s `memcpy`. Fixed by rewriting both functions to
+   serialize each `RESULT` field individually through its existing
+   public getters/setters (`GetKey`/`SetKey`, etc.), text-based and
+   newline-delimited, the same pattern already used throughout this
+   tree (e.g. `RECORD::Write`/`Read`) — no `result.hxx` changes needed,
+   since every field already had a public accessor. `GPTYPE` fields
+   are now written with `%u` and round-tripped via `STRING::GetLong()`
+   (not `GetInt()`), avoiding the signed/unsigned mismatch already
+   cataloged for `fc.cxx`/`fct.cxx`'s own `Write`/`Read` pairs, since
+   this is new code with no reason to repeat that mistake. See
+   `BUGFIX #4` in source. Verified fixed: the same standalone
+   reproduction now round-trips every field correctly (confirmed with a
+   two-entry, all-fields version too), and
+   `tests/src/test_rset.cxx`'s `SaveTable`/`LoadTable` test passes
+   under `make tests-asan`.
+
+5. **`SortByScore()`'s comparator sorted ascending, and truncated score
+   differences through an `int` cast** — `RsetCompareScores` computed
+   `(int)((Score1 - Score2) * 100)`, which (a) sorts *lowest* score
+   first — the opposite of `IRSET::SortByScore`'s own comparator
+   (`IrsetScoreCompare`, `src/irset.cxx`) for the same conceptual
+   operation, which sorts descending (best match first, the sensible
+   order for a search result set), and (b) truncates the difference
+   through `int`, so a small-but-real score difference (e.g. 0.004)
+   could round to 0 and be treated as a tie. `RSET::SortByScore()`
+   isn't called anywhere in the current tree either (dormant, like
+   `BUGFIX #2` above), so this wasn't actively producing bad search
+   results today, but it's a genuine logic bug found by comparing
+   against the sibling implementation. Fixed to sort descending using a
+   sign check instead of a truncating subtraction, matching
+   `IrsetScoreCompare`'s approach. See `BUGFIX #5` in source. Verified
+   with a test asserting the actual sort order (highest score first).
+
+6. **`SortByKey()`'s comparator returned a boolean, not a three-way
+   comparison — `qsort` couldn't sort with it** — `RsetCompareKeys`
+   returned `(Key1 == Key2)`, i.e. `STRING::operator==()`'s result: `1`
+   if equal, `0` otherwise, *never* negative. A `qsort` comparator that
+   can never return negative doesn't implement a valid ordering
+   (undefined behavior per the C standard), so `SortByKey()` didn't
+   reliably sort at all. Fixed to use `STRING::Cmp()`, which returns a
+   proper `strcmp()`-style negative/zero/positive result. See
+   `BUGFIX #6` in source. Verified with a test asserting the actual
+   sorted order.
+
+### Found but out of scope for this file (deferred to its own turn)
+
+Discovered while reading `src/result.cxx` (needed to fix `BUGFIX #4`
+above) — not fixed here since `result.cxx`/`result.hxx` haven't reached
+their own turn yet:
+
+- **`RESULT`'s default constructor doesn't initialize `DbNum`,
+  `RecordStart`, `RecordEnd`, `Score`, or `MyMdt`** — only `HitTable`
+  (under `#ifdef DO_HIGHLIGHTING`, not defined in this build) is set;
+  every other non-`STRING` member is left uninitialized garbage until
+  explicitly `Set*()`. Not a crash by itself (nothing reads these
+  before setting them in the paths exercised so far), but a real
+  uninitialized-read hazard for any caller that constructs a `RESULT`
+  and reads a field before setting it.
+- **`RESULT` has the same missing-copy-constructor smell as `DF`/`FCT`/
+  `ATTRLIST`** — declares `operator=` but no copy constructor. Under
+  this build (no `DO_HIGHLIGHTING`), `RESULT` owns no raw pointer
+  directly (its only pointer member, `MyMdt`, isn't deleted by
+  `~RESULT()`), so the compiler-generated copy constructor happens to
+  be safe here — confirmed by this turn's own test helper
+  (`MakeResult`) needing to avoid return-by-value only to dodge a
+  `-Wdeprecated-copy` warning, not a crash. Would become a real
+  double-free (of `HitTable`) under a `DO_HIGHLIGHTING` build, the same
+  shape as `DFT`'s original bug.

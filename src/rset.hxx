@@ -39,27 +39,53 @@ Version:	1.00
 Description:	Class RSET - Search Result Set
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-05
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef RSET_HXX
 #define RSET_HXX
-/*
-#include "defs.hxx"
-#include "string.hxx"
-#include "result.hxx"
-*/
+
+#include "defs.hxx"   // BUGFIX #1: was commented out; INT/SIZE_T/DOUBLE below need it.
+#include "string.hxx" // BUGFIX #1: was commented out; STRING below needs it.
+#include "result.hxx" // BUGFIX #1: was commented out; RESULT/PRESULT below need it.
+
+// A dynamically resizing array of RESULT entries (a materialized,
+// user-facing search result set), sortable by key or score.
 class RSET {
 public:
 	RSET();
+	// BUGFIX #2: added -- previously absent, so copy-constructing an RSET
+	// (e.g. `RSET b = a;`, pass/return by value) used the compiler-
+	// generated shallow copy of Table, and both copies' destructors then
+	// deleted the same heap array: confirmed double-free/use-after-free
+	// under ASan. Deep-copies entries the same way operator= does, below.
+	RSET(const RSET& OtherRset);
+	// BUGFIX #2: added for the same reason -- previously absent entirely
+	// (not even a shallow one), so `b = a;` used the compiler-generated
+	// shallow copy-assignment, confirmed to double-free the same way.
+	RSET& operator=(const RSET& OtherRset);
+	// Replaces this table's contents with FileName's contents, previously
+	// written by SaveTable(). See BUGFIX #4 for why this matters: this
+	// isn't a raw memory dump of Table (RESULT's STRING fields own heap
+	// buffers that can't survive one), but a field-by-field serialization
+	// through RESULT's own public getters/setters.
 	void LoadTable(const STRING& FileName);
 	void SaveTable(const STRING& FileName);
 	void AddEntry(const RESULT& ResultRecord);
+	// Copies the Index'th entry (1-based) into *ResultRecord; leaves
+	// *ResultRecord untouched if Index is out of [1, GetTotalEntries()]
+	// range.
 	void GetEntry(const INT Index, PRESULT ResultRecord) const;
+	// Sorts entries ascending by key.
 	void SortByKey();
+	// Sorts entries descending by score (best match first), matching
+	// IRSET::SortByScore's convention for the same conceptual operation.
 	void SortByScore();
 	INT GetScaledScore(const DOUBLE UnscaledScore, const INT ScaleFactor);
 	void Expand();
 	void CleanUp();
 	void Resize(const SIZE_T Entries);
+	// 1-based, like GetEntry.
 	void SetEntry(const INT x, const RESULT& ResultRecord );
 	SIZE_T GetTotalEntries();
 	void SetScoreRange(DOUBLE High, DOUBLE Low);
