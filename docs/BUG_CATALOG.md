@@ -709,3 +709,58 @@ from `FastAddEntry()` (another source of a standing warning).
   that call site can ever see a non-`IRSET` top-of-stack would require
   tracing `index.cxx`'s full RPN evaluation control flow, which wasn't
   done here. Flagged as a design smell, not a confirmed bug.
+
+## src/filemap.hxx
+
+Maps a "global" byte offset back to the on-disk file it falls within
+(built from the parent database's main MDT), used by the indexing/merge
+tools (`src/index.cxx`, `src/mergeunit.cxx`) — not on the CGI
+search-request path.
+
+1. **Header had no includes at all** — same defect as `src/irset.hxx`
+   and `src/opstack.hxx`: not even a commented-out block, despite
+   needing `GPTYPE`, `STRING`, `PSTRING`, `INT`, `PMDT`, and `PIDBOBJ`
+   below. Confirmed real by compiling `filemap.hxx` as the sole
+   `#include` in a translation unit: it failed with 10 errors. Fixed by
+   adding the same include list `filemap.cxx` itself already needed to
+   use this header at all. See `BUGFIX #1` in source.
+
+2. **`printf("Lookup failed for %d\n", gp)` used a signed format
+   specifier for `gp`, a `GPTYPE` (unsigned)** — the same
+   signed/unsigned printf mismatch pattern already cataloged for
+   `src/fc.cxx`/`src/fct.cxx`'s `Write()` functions, this time in a
+   diagnostic message rather than a persisted file: a `gp` value above
+   `INT_MAX` would print as negative. Low real-world severity (a
+   cosmetic diagnostic, not a memory-safety issue, and `GetKeyByGlobal`/
+   `GetNameByGlobal` are index-time-only), but a one-token fix directly
+   in the file being processed. Fixed both occurrences to `%u`. See
+   `BUGFIX #2` in source.
+
+Also removed: a genuinely dead `STRING a;` local (declared, never used)
+and two stale commented-out lines in the constructor, plus commented-out
+`//  INT i;` / `//  key.GpEnd=0;` lines in both lookup functions — all
+directly adjacent to code already being touched for the fixes above.
+
+### Found but out of scope (latent, not confirmed active)
+
+- **`FILEMAP` has the same missing-copy-constructor smell as `DF`/
+  `FCT`/`ATTRLIST`/`RESULT`** — owns a heap array (`struct _table
+  *Items`, each entry itself containing a `STRING Path`) and declares a
+  correct destructor, but no copy constructor or `operator=` at all.
+  Every real usage found (`src/index.cxx`, `src/mergeunit.hxx`) is via
+  a local value or a `FILEMAP*` member, never a direct copy — no
+  concrete copy-construction call site, so (like the other latent
+  findings) this wasn't fixed without a confirmed bug to point to. Also
+  unlike `IRSET`/`RSET`/`OPSTACK`, `FILEMAP`'s constructor
+  unconditionally dereferences `Parent->GetMainMdt()`, making it
+  impractical to build a minimal standalone repro the way those were
+  confirmed (would need a real, populated `MDT` either way — see this
+  turn's own test for what that setup requires).
+- **`bsearch()`-based lookups assume `Items` is sorted ascending by
+  `GpStart`**, which the constructor never explicitly sorts for — it
+  relies on MDT entries already being added in that order (true by
+  construction: each document's global start is the running total of
+  bytes indexed so far). Not verified against MDT's actual indexing
+  code path; flagged as an implicit assumption worth confirming
+  whenever `mdt.hxx`/`mdt.cxx` or the indexing pipeline (`index.cxx`,
+  Order 137) reach their own turns.
