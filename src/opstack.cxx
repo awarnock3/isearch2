@@ -68,6 +68,19 @@ OPSTACK::OPSTACK() {
 	Head = 0;
 }
 
+// BUGFIX #2: see the declaration in opstack.hxx for why this is needed.
+// Mirrors operator='s push-then-Reverse() logic below (there's nothing
+// to pop first here, since a freshly constructed stack starts empty).
+OPSTACK::OPSTACK(const OPSTACK& OtherOpstack) {
+	Head = 0;
+	POPOBJ OpPtr = OtherOpstack.Head;
+	while (OpPtr) {
+		*this << *OpPtr;
+		OpPtr = OpPtr->Next;
+	}
+	Reverse();
+}
+
 OPSTACK& OPSTACK::operator=(const OPSTACK& OtherOpstack) {
 	// [faster method using OPSTACK::Reverse()]
 	// pop everything off this stack
@@ -162,5 +175,16 @@ POPOBJ OPSTACK::Pop() {
 	}
 }
 
+// BUGFIX #3: was empty, so any OPSTACK destroyed with entries still on
+// it (Head non-null) leaked every remaining node -- confirmed real with
+// a standalone repro (LeakSanitizer) that caught a full leak from a
+// single un-popped entry. Live impact: OPSTACK is constructed and
+// destroyed constantly in src/squery.cxx's query evaluation. Fixed by
+// popping and deleting everything still on the stack, the same pattern
+// operator= already used to clear *this before reassigning.
 OPSTACK::~OPSTACK() {
+	POPOBJ OpPtr;
+	while (*this >> OpPtr) {
+		delete OpPtr;
+	}
 }

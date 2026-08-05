@@ -649,3 +649,63 @@ below.
 Also applied: 2 remaining `NULL` → `nullptr` in `And()`/`AndNot()`
 (`bsearch()` result comparisons), and a dead `DOUBLE x;` local removed
 from `FastAddEntry()` (another source of a standing warning).
+
+## src/opstack.hxx
+
+1. **Header not self-contained** — same defect as `src/fc.hxx`
+   `BUGFIX #1`: `opstack.hxx` declared `OPOBJ`/`POPOBJ`/`PIRSET`-typed
+   members and methods without including anything that defines those
+   names (`#include "defs.hxx"`, `"string.hxx"`, `"opobj.hxx"`,
+   `"irset.hxx"` were all commented out). Confirmed real by compiling
+   `opstack.hxx` as the sole `#include` in a translation unit: it
+   failed with 8 errors. Fixed by restoring the four includes. See
+   `BUGFIX #1` in source.
+
+2. **Missing copy constructor** — `OPSTACK` owns a linked chain of
+   heap-allocated `OPOBJ*` entries but declared no copy constructor
+   (only `operator=`, which was already correctly deep-copying).
+   Harmless on its own only because `~OPSTACK()` didn't free anything
+   (see `BUGFIX #3`) — a shallow copy of two stacks sharing the same
+   node chain was inert as long as neither destructor ever touched
+   those nodes. Fixing the destructor leak below would have turned this
+   into the same double-free shape as `DFT`/`RSET`/`IRSET`'s confirmed
+   bugs the moment anyone copy-constructed an `OPSTACK`. Per your
+   go-ahead (bundled with `BUGFIX #3`, since the two are inseparable —
+   fixing one without the other either leaves the leak or introduces a
+   double-free), added `OPSTACK(const OPSTACK&)` to `opstack.hxx`,
+   mirroring `operator=`'s already-correct push-then-`Reverse()` deep
+   copy. See `BUGFIX #2` in source. Verified with a standalone repro:
+   copy-construct a stack with two entries, drain and delete both
+   copies independently — clean under ASan — and with
+   `tests/src/test_opstack.cxx`'s dedicated copy-constructor test.
+
+3. **`~OPSTACK()` was empty → confirmed memory leak** — any `OPSTACK`
+   destroyed with entries still on it (`Head` non-null) leaked every
+   remaining node, since nothing ever popped and deleted them. Live
+   impact, not dormant: `OPSTACK` is constructed and destroyed
+   constantly in `src/squery.cxx`'s query evaluation (`OPSTACK Stack,
+   TempStack, NewStack;` as locals in multiple functions) and held as a
+   value member of `SQUERY` itself. Confirmed real with a standalone
+   repro: push one entry onto a stack, let it go out of scope without
+   popping — LeakSanitizer caught the full leak (all 17 nested
+   allocations reachable from the one un-popped `IRSET`, ~32KB).
+   Fixed by popping and deleting everything still on the stack in the
+   destructor, the same pattern `operator=` already used to clear
+   `*this` before reassigning. See `BUGFIX #3` in source. Verified
+   fixed: the same standalone reproduction now exits clean under
+   LeakSanitizer, and `tests/src/test_opstack.cxx` has a dedicated
+   regression test that deliberately leaves entries un-popped, passing
+   under `make tests-asan` (which enables LeakSanitizer by default
+   alongside ASan).
+
+### Found but out of scope for this file (not fixed, no concrete evidence yet)
+
+- **`operator>>(PIRSET&)` downcasts an popped `OPOBJ*` to `IRSET*` with
+  a C-style cast and no type check** — if the actual popped object
+  isn't an `IRSET` (e.g. it's an operator object elsewhere in the
+  `OPOBJ` hierarchy), this is an invalid pointer used as if it were
+  valid. Only one real call site uses this overload
+  (`src/index.cxx:1300`, `TempStack >> NewIrset;`); verifying whether
+  that call site can ever see a non-`IRSET` top-of-stack would require
+  tracing `index.cxx`'s full RPN evaluation control flow, which wasn't
+  done here. Flagged as a design smell, not a confirmed bug.

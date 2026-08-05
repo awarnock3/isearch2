@@ -39,19 +39,33 @@ Version:	1.01
 Description:	Class OPSTACK - Operand/operator Stack
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-05
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef OPSTACK_HXX
 #define OPSTACK_HXX
-/*
-#include "defs.hxx"
-#include "string.hxx"
-#include "opobj.hxx"
-#include "irset.hxx"
-*/
 
+#include "defs.hxx"  // BUGFIX #1: was commented out; below needs it transitively.
+#include "string.hxx" // BUGFIX #1: was commented out; below needs it transitively.
+#include "opobj.hxx" // BUGFIX #1: was commented out; OPOBJ/POPOBJ below need it.
+#include "irset.hxx" // BUGFIX #1: was commented out; PIRSET below needs it.
+
+// A singly linked stack of owned, heap-allocated OPOBJ* entries (query
+// operators/operands), used while evaluating a query's RPN expression.
+// operator<<(OPOBJ&) pushes a Duplicate() of its argument; operator<<
+// (OPOBJ*) takes ownership of the pointer directly. Either way, popped
+// entries (via operator>>) become the caller's responsibility to delete.
 class OPSTACK {
 public:
 	OPSTACK();
+	// BUGFIX #2: added -- previously absent, so copy-constructing an
+	// OPSTACK (e.g. `OPSTACK b = a;`) used the compiler-generated shallow
+	// copy of Head. This was harmless only because ~OPSTACK() didn't free
+	// anything (see BUGFIX #3); now that it does, an unguarded shallow
+	// copy would double-free the shared chain of nodes the same way
+	// DFT/RSET/IRSET's missing copy constructors did. Deep-copies
+	// entries the same way operator= does, below.
+	OPSTACK(const OPSTACK& OtherOpstack);
 	OPSTACK& operator=(const OPSTACK& OtherOpstack);
 	OPSTACK& operator<<(OPOBJ& Op);
 	OPSTACK& operator<<(OPOBJ* Op);

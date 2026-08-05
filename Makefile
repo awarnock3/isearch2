@@ -262,7 +262,7 @@ TEST_CXXFLAGS := -std=c++17 -Wall -Wextra -DUNIX -DVERS=\"$(VER)\" -Isrc -Idocty
 # as each file's turn adds tests that need more of the engine; compiled
 # separately from the production build (tests/obj/, TEST_CXXFLAGS) so the
 # two builds never fight over the same .o.
-TEST_ENGINE_SRCS := src/fc.cxx src/fct.cxx src/vlist.cxx src/df.cxx src/dft.cxx src/string.cxx src/common.cxx src/record.cxx src/rcache.cxx src/irset.cxx src/operand.cxx src/opobj.cxx src/rset.cxx src/result.cxx src/iresult.cxx src/attr.cxx src/attrlist.cxx src/mdtrec.cxx src/mdt.cxx src/dfd.cxx src/dfdt.cxx src/strlist.cxx src/defs.cxx
+TEST_ENGINE_SRCS := src/fc.cxx src/fct.cxx src/vlist.cxx src/df.cxx src/dft.cxx src/string.cxx src/common.cxx src/record.cxx src/rcache.cxx src/irset.cxx src/operand.cxx src/opobj.cxx src/rset.cxx src/result.cxx src/iresult.cxx src/attr.cxx src/attrlist.cxx src/mdtrec.cxx src/mdt.cxx src/dfd.cxx src/dfdt.cxx src/strlist.cxx src/defs.cxx src/opstack.cxx
 TEST_ENGINE_OBJS := $(patsubst src/%.cxx,tests/obj/%.o,$(TEST_ENGINE_SRCS))
 
 TEST_OBJS := $(TEST_SRCS:.cxx=.o) $(TEST_ENGINE_OBJS) $(CATCH2_DIR)/catch_amalgamated.o
