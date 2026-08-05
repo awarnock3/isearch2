@@ -393,3 +393,56 @@ anyone) currently exercises it.
 Also applied: file-level and per-method doc comments in `rcache.hxx`,
 including a note on the class's current dormancy so a future reader
 doesn't assume its confirmed bugs were exercised in production.
+
+## src/operand.hxx
+
+1. **Header not self-contained** — same defect as `src/fc.hxx`
+   `BUGFIX #1`: `operand.hxx` declared `INT`/`TypeOperand`/`ATTRLIST`/
+   `PATTRLIST`/`OPOBJ`-typed members and a base class without including
+   anything that defines those names (`#include "defs.hxx"`,
+   `"string.hxx"`, `"opobj.hxx"` were all commented out). Confirmed real
+   by compiling `operand.hxx` as the sole `#include` in a translation
+   unit: it failed with 6 errors. Fixed by restoring the three includes.
+   See `BUGFIX #1` in source. Verified fixed by recompiling the same
+   standalone reproduction, which now succeeds with zero warnings under
+   `-Wall -Wextra`.
+
+### Found but out of scope for this file (deferred to their own turns)
+
+Discovered while auditing `OPERAND`'s `ATTRLIST Attributes;` member for
+the same missing-copy-constructor risk already flagged for `DF`/`FCT`
+under `src/dft.hxx` above — not fixed here since neither class has
+reached its own turn:
+
+- **`src/attrlist.hxx`'s `ATTRLIST` has the identical missing-copy-
+  constructor pattern as `DFT`'s confirmed bug** — a heap-allocated
+  `PATTR Table;` array, a user-provided `operator=` and `~ATTRLIST()`,
+  but no declared copy constructor. Unlike `DFT`, no concrete
+  copy-construction call site was found in the tree, so this is a
+  latent risk, not (yet) a confirmed active bug — same status as the
+  `DF`/`FCT` finding.
+- **`src/attrlist.cxx`, `operator=()` has no self-assignment guard** —
+  unlike `STRING::operator=` (which explicitly checks `&OtherString ==
+  this`), `ATTRLIST::operator=` unconditionally does
+  `if (Table) delete [] Table; Init(); ... OtherAttrlist.GetTotalEntries()`.
+  On self-assignment (`x = x;`), `OtherAttrlist` *is* `*this`, so by the
+  time `GetTotalEntries()` runs, `Init()` has already reset it to 0 --
+  every entry silently vanishes instead of being preserved. Found while
+  verifying it would be safe to write an `OPERAND::operator=`
+  self-assignment test (it isn't, for this reason -- so that test was
+  deliberately not written; see `tests/src/test_operand.cxx`).
+- **`src/irset.hxx`'s `IRSET` (Order 8, coming up next after
+  `rset.hxx`) has its own, separate, *confirmed* version of the exact
+  same missing-copy-constructor bug** — for its own `IRESULT* Table;`
+  member (unrelated to the `ATTRLIST` finding above; `IRSET` derives
+  from `OPERAND` but this is `IRSET`'s own bug, one level further down).
+  Found and confirmed while testing whether copy-constructing an
+  `OPERAND`-derived object was safe: `IRSET a(nullptr); IRSET b = a;`
+  (implicit copy constructor) aborted under ASan with
+  `heap-use-after-free` in `IRSET::~IRSET()` — the second destructor
+  reading/freeing memory the first destructor had already freed, the
+  same double-free shape as `DFT`'s confirmed-and-fixed bug. This
+  should be fixable the same way (add a deep-copying
+  `IRSET(const IRSET&)`) when `irset.hxx` reaches its own turn.
+
+Also applied: file-level and per-method doc comments in `operand.hxx`.

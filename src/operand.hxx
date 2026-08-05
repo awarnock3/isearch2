@@ -39,14 +39,20 @@ Version:	1.00
 Description:	Class OPERAND - Query Operand
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-05
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef OPERAND_HXX
 #define OPERAND_HXX
-/*
-#include "defs.hxx"
-#include "string.hxx"
-#include "opobj.hxx"
-*/
+
+#include "defs.hxx"   // BUGFIX #1: was commented out; INT/TypeOperand below need it.
+#include "string.hxx" // BUGFIX #1: was commented out; OPOBJ's interface needs it.
+#include "opobj.hxx"  // BUGFIX #1: was commented out; base class, ATTRLIST/PATTRLIST.
+
+// A leaf query operand (a search term) that carries its own ATTRLIST
+// (e.g. Bib-1 search attributes) alongside the base OPOBJ interface.
+// Distinguished from operators (see src/operator.hxx) by GetOpType()
+// returning TypeOperand.
 class OPERAND : public OPOBJ {
 public:
 	OPERAND();

@@ -7,7 +7,7 @@
 | 3 | src/dft.hxx | done | 2026-08-05 | [src/dft.hxx](BUG_CATALOG.md#srcdfthxx) |
 | 4 | src/record.hxx | done | 2026-08-05 | [src/record.hxx](BUG_CATALOG.md#srcrecordhxx) |
 | 5 | src/rcache.hxx | done | 2026-08-05 | [src/rcache.hxx](BUG_CATALOG.md#srcrcachehxx) |
-| 6 | src/operand.hxx | pending | | |
+| 6 | src/operand.hxx | done | 2026-08-05 | [src/operand.hxx](BUG_CATALOG.md#srcoperandhxx) |
 | 7 | src/rset.hxx | pending | | |
 | 8 | src/irset.hxx | pending | | |
 | 9 | src/opstack.hxx | pending | | |
