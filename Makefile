@@ -262,7 +262,7 @@ TEST_CXXFLAGS := -std=c++17 -Wall -Wextra -DUNIX -Isrc -Idoctype -IIsearch-cgi -
 # as each file's turn adds tests that need more of the engine; compiled
 # separately from the production build (tests/obj/, TEST_CXXFLAGS) so the
 # two builds never fight over the same .o.
-TEST_ENGINE_SRCS := src/fc.cxx src/string.cxx src/common.cxx
+TEST_ENGINE_SRCS := src/fc.cxx src/fct.cxx src/vlist.cxx src/string.cxx src/common.cxx
 TEST_ENGINE_OBJS := $(patsubst src/%.cxx,tests/obj/%.o,$(TEST_ENGINE_SRCS))
 
 TEST_OBJS := $(TEST_SRCS:.cxx=.o) $(TEST_ENGINE_OBJS) $(CATCH2_DIR)/catch_amalgamated.o
