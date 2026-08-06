@@ -40,10 +40,18 @@ Version:        $Revision: 1.6 $
 Description:    Version number
 Authors:        Archie Warnock (warnock@clark.net), A/WWW Enterprises
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-06
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef _config_
 #define _config_
 
+// BUGFIX #1: header used CHR without including its definition; see
+// docs/BUG_CATALOG.md#isearch-cgiconfighxx.
+#include "gdt.h"
+
+/// Human-readable build/version string for the Isearch CGI frontends,
+/// defined in config.cxx from the build-time VERS macro.
 extern const CHR *IsearchCGIVersion;
 
 #endif

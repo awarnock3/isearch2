@@ -265,7 +265,13 @@ TEST_CXXFLAGS := -std=c++17 -Wall -Wextra -DUNIX -DVERS=\"$(VER)\" -Isrc -Idocty
 TEST_ENGINE_SRCS := src/fc.cxx src/fct.cxx src/vlist.cxx src/df.cxx src/dft.cxx src/string.cxx src/common.cxx src/record.cxx src/rcache.cxx src/irset.cxx src/operand.cxx src/opobj.cxx src/rset.cxx src/result.cxx src/iresult.cxx src/attr.cxx src/attrlist.cxx src/mdtrec.cxx src/mdt.cxx src/dfd.cxx src/dfdt.cxx src/strlist.cxx src/defs.cxx src/opstack.cxx src/filemap.cxx src/hash.cxx src/termobj.cxx src/memcntl.cxx src/operator.cxx src/sterm.cxx
 TEST_ENGINE_OBJS := $(patsubst src/%.cxx,tests/obj/%.o,$(TEST_ENGINE_SRCS))
 
-TEST_OBJS := $(TEST_SRCS:.cxx=.o) $(TEST_ENGINE_OBJS) $(CATCH2_DIR)/catch_amalgamated.o
+# Same idea as TEST_ENGINE_SRCS above, for engine sources living outside
+# src/ (e.g. Isearch-cgi/). Kept as a separate list/pattern rule because
+# TEST_ENGINE_OBJS's patsubst assumes a src/ prefix.
+TEST_ENGINE_CGI_SRCS := Isearch-cgi/config.cxx
+TEST_ENGINE_CGI_OBJS := $(patsubst Isearch-cgi/%.cxx,tests/obj/cgi-%.o,$(TEST_ENGINE_CGI_SRCS))
+
+TEST_OBJS := $(TEST_SRCS:.cxx=.o) $(TEST_ENGINE_OBJS) $(TEST_ENGINE_CGI_OBJS) $(CATCH2_DIR)/catch_amalgamated.o
 
 $(CATCH2_DIR)/catch_amalgamated.o: $(CATCH2_DIR)/catch_amalgamated.cpp
 	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
@@ -274,15 +280,31 @@ tests/obj/%.o: src/%.cxx
 	@mkdir -p tests/obj
 	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
 
+tests/obj/cgi-%.o: Isearch-cgi/%.cxx
+	@mkdir -p tests/obj
+	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
+
 tests/%.o: tests/%.cxx
 	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
 
-tests: $(TEST_OBJS)
+tests: clean-test-objs $(TEST_OBJS)
 	@mkdir -p tests/reports
 	$(CXX) $(TEST_CXXFLAGS) $(TEST_OBJS) -o tests/run_tests
 	@REPORT=tests/reports/report-$$(date +%Y%m%d-%H%M%S).txt; \
 	tests/run_tests | tee $$REPORT; \
 	echo "Report saved to $$REPORT"
+
+# BUGFIX (Isearch-cgi/config.hxx turn, see docs/BUG_CATALOG.md): none of
+# the .o pattern rules above depend on TEST_CXXFLAGS, and both `tests`
+# and `tests-asan` write to the same object paths. Without this, running
+# `make tests` and then `make tests-asan` in the same tree (exactly the
+# documented pipeline order) silently relinked the plain, uninstrumented
+# .o files instead of recompiling under -fsanitize -- confirmed via `nm`
+# showing no asan symbols in the resulting objects. Forcing a clean
+# before every `tests`/`tests-asan` run makes each invocation a true
+# from-scratch build under whatever TEST_CXXFLAGS is active.
+clean-test-objs:
+	$(RM) $(TEST_OBJS) tests/run_tests
 
 tests-asan: TEST_CXXFLAGS += -fsanitize=address,undefined -g
 tests-asan: tests
@@ -292,4 +314,4 @@ tests-asan: tests
 # addition make can't see in file timestamps -- without .PHONY, make
 # considers both satisfied as soon as tests/ exists and TEST_OBJS look
 # up to date, and silently skips rebuilding/relinking.
-.PHONY: tests tests-asan
+.PHONY: tests tests-asan clean-test-objs

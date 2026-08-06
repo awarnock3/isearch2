@@ -953,3 +953,43 @@ survives), it has no self-assignment guard. The actual fix belongs to
 the call when `&OtherOp == this`) — not `sterm.hxx`, which merely
 inherits the behavior. `tests/src/test_sterm.cxx` deliberately has no
 self-assignment test for the same reason `test_operand.cxx` doesn't.
+
+## Isearch-cgi/config.hxx
+
+Tiny header: just an `extern const CHR *IsearchCGIVersion;` declaration
+for the version string the CGI frontends print, defined in
+`Isearch-cgi/config.cxx` (Order 233, not yet processed) from the
+build-time `VERS` macro.
+
+1. **Header not self-contained** — same defect class as `src/fc.hxx`
+   `BUGFIX #1` and `src/sterm.hxx` `BUGFIX #1`: `CHR` is used without
+   including anything that defines it (`CHR` comes from `src/gdt.h`).
+   Confirmed real by compiling `config.hxx` as the sole `#include` in a
+   translation unit: it failed with `'CHR' does not name a type`.
+   Currently silent in the tree only because every existing includer
+   (`search_form.cxx`, `isrch_html.cxx`, `isrch_srch.cxx`,
+   `isrch_fetch.cxx`) happens to include `gdt.h` first — fragile, not
+   guaranteed, and the same pattern already fixed elsewhere in this
+   tree. Fixed by adding `#include "gdt.h"`. See `BUGFIX #1` in source.
+   Confirmed fixed by recompiling the same standalone reproduction,
+   which now succeeds with zero warnings under `-Wall -Wextra`.
+
+### Build infrastructure bug found and fixed while adding this file's test
+
+2. **`make tests-asan` silently reused non-instrumented objects** — none
+   of the `.o` pattern rules in the top-level `Makefile` depend on
+   `TEST_CXXFLAGS`, and `tests`/`tests-asan` write to the same object
+   paths. Running the documented pipeline order — `make tests` then
+   `make tests-asan` in the same tree, exactly what GENERAL step 9 does
+   for every file — left every prior `tests-asan` run silently relinking
+   the plain objects instead of recompiling under `-fsanitize=address,
+   undefined`. Confirmed via `nm`: objects built this way had zero
+   `asan` symbols. Not specific to `config.hxx`; it's shared test
+   tooling, so fixed in place rather than deferred. Fixed by adding a
+   `clean-test-objs` prerequisite (`.PHONY`) to both `tests` and
+   `tests-asan` that removes `$(TEST_OBJS)` before every build, forcing
+   a real from-scratch recompile under whichever flags are active.
+   Confirmed fixed: after the fix, `nm` on the same object built via
+   `make tests-asan` shows real `__asan_*`/`__ubsan_*` symbols, and the
+   full suite (275 assertions, 126 cases) still passes under genuine
+   instrumentation.
