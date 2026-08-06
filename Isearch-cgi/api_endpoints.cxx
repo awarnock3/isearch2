@@ -36,11 +36,13 @@ void HandleCapabilities(const ApiConfig& cfg)
   cout << "\"api_version\":\"" << API_VERSION << "\",";
   cout << "\"search_types\":[\"simple\",\"advanced\",\"boolean\"],";
   cout << "\"operators\":[\"or\",\"and\",\"andnot\",\"near\"],";
-  cout << "\"element_sets\":[\"B\",\"F\"],";
+  cout << "\"element_sets\":[\"B\",\"F\",\"S\"],";
+  cout << "\"record_syntaxes\":[\"HTML\",\"SUTRS\"],";
   cout << "\"defaults\":{";
   cout << "\"search_type\":\"simple\",";
   cout << "\"operator\":\"or\",";
   cout << "\"element_set\":\"B\",";
+  cout << "\"record_syntax\":\"HTML\",";
   cout << "\"start\":1,";
   cout << "\"max_hits\":" << API_DEFAULT_MAX_HITS << ",";
   cout << "\"score_scale\":100";

@@ -35,6 +35,7 @@ struct ApiRequest {
   BoolOperator op;
   std::vector<ApiTerm> terms;
   STRING element_set;
+  STRING record_syntax;
   INT start;
   INT max_hits;
   bool include_url;

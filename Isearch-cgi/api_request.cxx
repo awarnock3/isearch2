@@ -16,8 +16,8 @@ ApiTerm::ApiTerm()
 }
 
 ApiRequest::ApiRequest()
-  : search_type(SEARCH_SIMPLE), op(OP_OR), element_set("B"), start(1),
-    max_hits(API_DEFAULT_MAX_HITS), include_url(true),
+  : search_type(SEARCH_SIMPLE), op(OP_OR), element_set("B"),
+    record_syntax("HTML"), start(1), max_hits(API_DEFAULT_MAX_HITS), include_url(true),
     include_headline(true), include_record_key(true), score_scale(100)
 {
 }
@@ -30,6 +30,22 @@ static bool IsMethod(const CHR *method, const CHR *target)
     return false;
   }
   return StrCaseCmp(method, target) == 0;
+}
+
+static bool ParseRecordSyntax(const CHR *raw, STRING *out)
+{
+  if (raw == NULL || out == NULL) {
+    return true;
+  }
+  if (StrCaseCmp(raw, "HTML") == 0) {
+    *out = "HTML";
+    return true;
+  }
+  if (StrCaseCmp(raw, "SUTRS") == 0) {
+    *out = "SUTRS";
+    return true;
+  }
+  return false;
 }
 
 static void SetError(STRING& error_detail, const CHR *message)
@@ -518,6 +534,14 @@ static bool ParsePostJson(const CHR *body, ApiRequest& out, STRING& error_detail
           SetError(error_detail, "element_set must be a string.");
           return false;
         }
+      } else if (key.CaseEquals("record_syntax") || key.CaseEquals("RecordSyntax")) {
+        STRING value;
+        if (!jr.ParseString(&value) ||
+            !ParseRecordSyntax(value, &value)) {
+          SetError(error_detail, "record_syntax must be HTML or SUTRS.");
+          return false;
+        }
+        out.record_syntax = value;
       } else if (key.CaseEquals("start")) {
         STRING token;
         if (!jr.ParseNumberToken(&token) || !ParsePositiveInt(token, &out.start)) {
@@ -646,6 +670,14 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
 
   value = GetValue(cgi, "element_set", "ELEMENT_SET");
   if (value != NULL && value[0] != '\0') out.element_set = value;
+
+  value = GetValue(cgi, "record_syntax", "RecordSyntax");
+  if (value != NULL && value[0] != '\0') {
+    if (!ParseRecordSyntax(value, &out.record_syntax)) {
+      SetError(error_detail, "record_syntax must be HTML or SUTRS.");
+      return false;
+    }
+  }
 
   value = GetValue(cgi, "start", "START");
   if (value != NULL && value[0] != '\0') {

@@ -16,6 +16,8 @@ public:
   MARKDOWN(PIDBOBJ DbParent);
   virtual void Present(const RESULT& ResultRecord, const STRING& ElementSet,
 		       PSTRING StringBuffer);
+  virtual void Present(const RESULT& ResultRecord, const STRING& ElementSet,
+		       const STRING& RecordSyntax, PSTRING StringBuffer);
   virtual ~MARKDOWN();
 };
 

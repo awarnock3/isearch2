@@ -6,6 +6,7 @@ Author:		Copilot
 @@@*/
 
 #include <ctype.h>
+
 #include "isearch.hxx"
 #include "markdown.hxx"
 
@@ -74,17 +75,76 @@ ExtractMarkdownBrief(const STRING& RecordText, PSTRING BriefBuffer) {
   delete [] Text;
 }
 
+static void
+ExtractMarkdownHeaders(const STRING& RecordText, PSTRING HeaderBuffer) {
+  *HeaderBuffer = "";
+
+  CHR* Text = RecordText.NewCString();
+  const CHR* p = Text;
+  bool first_header = true;
+
+  while (*p) {
+    const CHR* LineStart = p;
+    while (*p && *p != '\n' && *p != '\r') {
+      p++;
+    }
+    const CHR* LineEnd = p;
+
+    while (*p == '\r' || *p == '\n') {
+      p++;
+    }
+
+    const CHR* s = LineStart;
+    while (s < LineEnd && isspace((unsigned char)*s)) {
+      s++;
+    }
+    const CHR* e = LineEnd;
+    while (e > s && isspace((unsigned char)*(e - 1))) {
+      e--;
+    }
+
+    if (s < e && *s == '#') {
+      if (!first_header) {
+        HeaderBuffer->Cat("\n");
+      }
+      HeaderBuffer->Cat((const CHR*)s, (STRINGINDEX)(e - s));
+      first_header = false;
+    }
+  }
+
+  delete [] Text;
+}
+
 void
 MARKDOWN::Present(const RESULT& ResultRecord, const STRING& ElementSet,
                   PSTRING StringBuffer) {
+  Present(ResultRecord, ElementSet, SutrsRecordSyntax, StringBuffer);
+}
+
+void
+MARKDOWN::Present(const RESULT& ResultRecord, const STRING& ElementSet,
+                  const STRING& RecordSyntax, PSTRING StringBuffer) {
+  (void)RecordSyntax;
+
+  STRING RecordText;
+  ResultRecord.GetRecordData(&RecordText);
+
+  if (ElementSet.Equals("F")) {
+    *StringBuffer = RecordText;
+    return;
+  }
+
+  if (ElementSet.Equals("S")) {
+    ExtractMarkdownHeaders(RecordText, StringBuffer);
+    return;
+  }
+
   if (ElementSet.Equals("B")) {
-    STRING RecordText;
-    ResultRecord.GetRecordData(&RecordText);
     ExtractMarkdownBrief(RecordText, StringBuffer);
     return;
   }
 
-  DOCTYPE::Present(ResultRecord, ElementSet, StringBuffer);
+  *StringBuffer = RecordText;
 }
 
 MARKDOWN::~MARKDOWN() {

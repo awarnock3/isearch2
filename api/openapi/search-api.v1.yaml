@@ -35,6 +35,7 @@ paths:
         - $ref: '#/components/parameters/weight'
         - $ref: '#/components/parameters/phrase'
         - $ref: '#/components/parameters/elementSet'
+        - $ref: '#/components/parameters/recordSyntax'
         - $ref: '#/components/parameters/start'
         - $ref: '#/components/parameters/maxHits'
         - $ref: '#/components/parameters/includeUrl'
@@ -287,6 +288,15 @@ components:
       schema:
         type: string
         default: B
+    recordSyntax:
+      name: record_syntax
+      in: query
+      required: false
+      description: Record syntax used when presenting results.
+      schema:
+        type: string
+        enum: [HTML, SUTRS]
+        default: HTML
     start:
       name: start
       in: query
@@ -447,6 +457,10 @@ components:
         element_set:
           type: string
           default: B
+        record_syntax:
+          type: string
+          enum: [HTML, SUTRS]
+          default: HTML
         start:
           type: integer
           minimum: 1
@@ -578,6 +592,7 @@ components:
         - defaults
         - limits
         - element_sets
+        - record_syntaxes
       properties:
         api_version:
           type: string
@@ -594,13 +609,15 @@ components:
         defaults:
           type: object
           additionalProperties: false
-          required: [search_type, operator, element_set, start, max_hits, score_scale]
+          required: [search_type, operator, element_set, record_syntax, start, max_hits, score_scale]
           properties:
             search_type:
               type: string
             operator:
               type: string
             element_set:
+              type: string
+            record_syntax:
               type: string
             start:
               type: integer
@@ -617,6 +634,10 @@ components:
               type: integer
               minimum: 1
         element_sets:
+          type: array
+          items:
+            type: string
+        record_syntaxes:
           type: array
           items:
             type: string

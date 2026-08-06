@@ -242,7 +242,7 @@ int ExecuteSearch(const ApiRequest& req, const ApiConfig& cfg,
 
   for (INT i = req.start; i <= (req.start + fetch_count - 1); i++) {
     prset->GetEntry(i, &rs_record);
-    pdb->Present(rs_record, req.element_set, HtmlRecordSyntax, &headline);
+    pdb->Present(rs_record, req.element_set, req.record_syntax, &headline);
     rs_record.GetFullFileName(&full_name);
     rs_record.GetFileName(&file);
     rs_record.GetKey(&record_key);

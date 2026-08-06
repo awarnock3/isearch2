@@ -46,11 +46,19 @@ static bool WantsProblemOnly(const CHR *accept_header)
 
 static STRING BuildSearchLink(const ApiRequest& req, INT start)
 {
-  STRING link = "/api/v1/search?database=";
+  STRING link = "/v1/api/search?database=";
   link.Cat(req.database);
   if (req.q.GetLength() > 0) {
     link.Cat("&q=");
     link.Cat(req.q);
+  }
+  if (req.element_set.GetLength() > 0) {
+    link.Cat("&element_set=");
+    link.Cat(req.element_set);
+  }
+  if (req.record_syntax.GetLength() > 0) {
+    link.Cat("&record_syntax=");
+    link.Cat(req.record_syntax);
   }
   link.Cat("&start=");
   link.Cat((INT)start);
@@ -64,6 +72,12 @@ static STRING NormalizePath(const CHR *raw_path)
   STRING path = raw_path != NULL ? raw_path : "";
   if (path.GetLength() == 0) {
     return "/";
+  }
+  if (path.Search("/v1/api") == 1) {
+    path.EraseBefore(8);
+    if (path.GetLength() == 0) {
+      return "/";
+    }
   }
   if (path.Search("/api/v1") == 1) {
     path.EraseBefore(8);
