@@ -13,7 +13,7 @@
 | 9 | src/opstack.hxx | done | 2026-08-05 | [src/opstack.hxx](BUG_CATALOG.md#srcopstackhxx) |
 | 10 | src/filemap.hxx | done | 2026-08-05 | [src/filemap.hxx](BUG_CATALOG.md#srcfilemaphxx) |
 | 11 | src/termobj.hxx | done | 2026-08-05 | [src/termobj.hxx](BUG_CATALOG.md#srctermobjhxx) |
-| 12 | src/memcntl.hxx | pending | | |
+| 12 | src/memcntl.hxx | done | 2026-08-06 | [src/memcntl.hxx](BUG_CATALOG.md#srcmemcntlhxx) |
 | 13 | src/operator.hxx | pending | | |
 | 14 | src/sterm.hxx | pending | | |
 | 15 | Isearch-cgi/config.hxx | pending | | |

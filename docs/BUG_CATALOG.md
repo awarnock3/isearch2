@@ -814,3 +814,64 @@ own beyond `OPERAND`) for concrete search-term operand classes; `STERM`
   since `termobj.hxx`'s turn is where it was first actually triggered
   and confirmed. This turn's test file documents the finding instead of
   exercising the broken path.
+
+## src/memcntl.hxx
+
+A standalone C-linkage (`extern "C"`) malloc-style allocator tracking
+every block it hands out in a linked list (`struct MemBlock`), so they
+can all be freed together later. Ported from an original Amiga/Intuition
+UI-toolkit memory tracker (per the file's own comments) to plain `new`/
+`delete`. Used only by `src/marclib.cxx` (MARC bibliographic record
+parsing) — a single call site each for `AllocSafe`/`FreeSafe`.
+
+1. **Header had no includes at all** — same defect as `src/irset.hxx`/
+   `src/opstack.hxx`/`src/filemap.hxx`: needs `INT4` (from `gdt.h`) for
+   both the `MemBlock` struct and both function signatures, but included
+   nothing. Confirmed real by compiling `memcntl.hxx` as the sole
+   `#include` in a translation unit: it failed with 6 errors. Fixed by
+   adding `#include "gdt.h"`, the same header `memcntl.cxx` itself
+   already needed to use this header at all. See `BUGFIX #1` in source.
+
+2. **`AllocSafe()` used plain `new`, making its own "not enough memory"
+   error handling permanently unreachable dead code** — both
+   allocations (`new (struct MemBlock)` and `new char[size]`) were
+   plain, throwing `new`, which never returns `nullptr` on failure —
+   it throws `std::bad_alloc` instead. The surrounding `if (block)`/
+   `if (mem)` checks, and the `fprintf(stderr, "memcntl: Not enough
+   memory...")` diagnostics they guard, were therefore dead code: on a
+   real allocation failure, an exception would propagate out of this
+   `extern "C"` function instead (this codebase has no exception
+   handling anywhere, so that means an uncaught-exception crash via
+   `std::terminate()` with no diagnostic at all) rather than the
+   graceful `nullptr`-returning failure this code — and its only
+   caller, `src/marclib.cxx`, which checks `AllocSafe`'s return value —
+   were written to expect. Fixed by switching both allocations to
+   `new (std::nothrow)`, restoring the intended contract. Also fixed a
+   related gap the `nothrow` change made newly reachable: on the "data
+   allocation failed" path, the just-linked `block` (allocation
+   control struct) was left in the list with a null `data` pointer
+   instead of being unlinked — a zombie node for later traversal to
+   trip over. See `BUGFIX #2` in source.
+
+3. **`FreeSafe()`'s "free everything" mode left `*base` dangling —
+   confirmed heap-use-after-free / double-free** — after the `flag!=0`
+   loop deletes every node in the list, `*base` (the caller's own
+   list-head variable, passed by pointer specifically so this function
+   can update it) was never reset to `nullptr`; it kept pointing at the
+   first, now-deleted block. Confirmed real with a standalone repro:
+   free everything, allocate one new block (which silently absorbs the
+   dangling pointer into its own `->nextmem`, while `*base` itself gets
+   patched back to something valid — so this step alone doesn't crash),
+   then free everything a second time — the second pass walks into the
+   dangling pointer, reads `->nextmem` from already-freed memory
+   (heap-use-after-free, confirmed under ASan), and would go on to
+   `delete` it a second time. Not triggered by any real caller today
+   (the only call site in this tree always passes `flag=0`, the
+   single-node-removal mode, which was already correct), but a real bug
+   in the `flag!=0` path regardless, and a one-line fix. See `BUGFIX #3`
+   in source. Verified fixed: the same standalone reproduction now
+   exits cleanly, and `tests/src/test_memcntl.cxx` has a dedicated
+   regression test exercising the exact free-all/reallocate/free-all
+   sequence, passing under `make tests-asan`.
+
+Also applied: all `NULL` → `nullptr` (6 occurrences).
