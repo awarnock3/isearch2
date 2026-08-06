@@ -875,3 +875,40 @@ parsing) — a single call site each for `AllocSafe`/`FreeSafe`.
    sequence, passing under `make tests-asan`.
 
 Also applied: all `NULL` → `nullptr` (6 occurrences).
+
+## src/operator.hxx
+
+`OPERATOR` is `OPERAND`'s sibling in the `OPOBJ` hierarchy (an AND/OR/
+ANDNOT node for the RPN expression stack, vs. `OPERAND`'s search terms/
+result sets), and — unlike `OPERAND`/`TERMOBJ` — fully concrete: it
+implements every `OPOBJ` pure virtual itself.
+
+1. **Header not self-contained** — same defect as `src/fc.hxx`
+   `BUGFIX #1`: commented-out includes for `defs.hxx`/`string.hxx`/
+   `opobj.hxx`. Confirmed real by compiling `operator.hxx` as the sole
+   `#include` in a translation unit: it failed with 8 errors. Fixed by
+   restoring the three includes. See `BUGFIX #1` in source.
+
+2. **`OPERATOR` hid `OPOBJ`'s virtual `operator=`** — the same
+   `-Woverloaded-virtual` pattern just fixed for `TERMOBJ`
+   (`src/termobj.hxx`), and worth spelling out why it applies here too
+   despite `OPERATOR` declaring its *own* `operator=(const OPOBJ&)`
+   override: per the standard's precise definition, a declared
+   `operator=` only counts as a class's "own" copy-assignment operator
+   if the parameter type is that exact class, so `operator=(const
+   OPOBJ&)` doesn't stop the compiler from *also* implicitly generating
+   `OPERATOR::operator=(const OPERATOR&)` — which hides the explicit
+   override from ordinary lookup, confirmed by the standing warning.
+   Fixed the same way: added `using OPOBJ::operator=;`. See `BUGFIX #2`
+   in source. Confirmed fixed by recompiling the same standalone
+   reproduction, which no longer triggers the warning.
+
+Checked but not a bug (unlike several other classes this cleanup has
+found the same shape of issue in): **`OPERATOR` has no copy
+constructor either, but it's safe** — its only member beyond `OPOBJ`
+is a plain `INT OperatorType`, and `OPOBJ::~OPOBJ()` is empty (doesn't
+delete the inherited `Next` pointer OPSTACK's friend access uses for
+its own linked-list bookkeeping), so the compiler-generated copy
+constructor here has nothing to double-free. Different from `DF`/
+`FCT`/`ATTRLIST`/`RESULT`'s *unconfirmed* latent risk — this one was
+checked and ruled out.
