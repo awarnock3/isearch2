@@ -46,6 +46,11 @@ static bool WantsProblemOnly(const CHR *accept_header)
 
 static STRING BuildSearchLink(const ApiRequest& req, INT start)
 {
+  CHR start_buf[32];
+  CHR max_hits_buf[32];
+  snprintf(start_buf, sizeof(start_buf), "%d", (int)start);
+  snprintf(max_hits_buf, sizeof(max_hits_buf), "%d", (int)req.max_hits);
+
   STRING link = "/v1/api/search?database=";
   link.Cat(req.database);
   if (req.q.GetLength() > 0) {
@@ -61,9 +66,9 @@ static STRING BuildSearchLink(const ApiRequest& req, INT start)
     link.Cat(req.record_syntax);
   }
   link.Cat("&start=");
-  link.Cat((INT)start);
+  link.Cat(start_buf);
   link.Cat("&max_hits=");
-  link.Cat((INT)req.max_hits);
+  link.Cat(max_hits_buf);
   return link;
 }
 
@@ -126,6 +131,28 @@ int main(int argc, char **argv)
   }
   if (path == "/databases") {
     HandleDatabases(cfg);
+    return 0;
+  }
+  if (path == "/fetch") {
+    if (StrCaseCmp(method, "POST") == 0) {
+      const CHR *content_type = getenv("CONTENT_TYPE");
+      if (content_type == NULL || content_type[0] == '\0') {
+        content_type = getenv("HTTP_CONTENT_TYPE");
+      }
+      if (!ContainsNoCase(content_type, "application/json")) {
+        WriteHttpHeader(415, true);
+        WriteProblem(415, "https://isearch.invalid/problems/unsupported-media-type",
+                     "Unsupported media type",
+                     "Content-Type must be application/json.");
+        return 0;
+      }
+    } else if (StrCaseCmp(method, "GET") != 0) {
+      WriteHttpHeader(400, true);
+      WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
+                   "Invalid request", "Only GET and POST are supported.");
+      return 0;
+    }
+    HandleFetch(cfg, method, NULL);
     return 0;
   }
   if (!(path == "/search")) {

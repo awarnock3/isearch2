@@ -5,7 +5,9 @@
 
 #include <vector>
 
+#include "api_fetch.hxx"
 #include "api_response.hxx"
+#include "cgi-util.hxx"
 
 static bool HasSuffix(const CHR *value, const CHR *suffix)
 {
@@ -42,7 +44,7 @@ void HandleCapabilities(const ApiConfig& cfg)
   cout << "\"search_type\":\"simple\",";
   cout << "\"operator\":\"or\",";
   cout << "\"element_set\":\"B\",";
-  cout << "\"record_syntax\":\"HTML\",";
+  cout << "\"record_syntax\":\"SUTRS\",";
   cout << "\"start\":1,";
   cout << "\"max_hits\":" << API_DEFAULT_MAX_HITS << ",";
   cout << "\"score_scale\":100";
@@ -101,5 +103,49 @@ void HandleDatabases(const ApiConfig& cfg)
     WriteJsonEscaped(names[i]);
   }
   cout << "]";
+  cout << "}" << endl;
+}
+
+void HandleFetch(const ApiConfig& cfg, const CHR* method, const CHR* body)
+{
+  CGIAPP *cgi = NULL;
+  if (method != NULL && StrCaseCmp(method, "GET") == 0) {
+    cgi = new CGIAPP();
+  }
+
+  ApiFetchRequest req;
+  STRING parse_error;
+  if (!ParseFetchRequest(cgi, method, body, req, parse_error)) {
+    if (cgi != NULL) delete cgi;
+    WriteHttpHeader(400, true);
+    WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
+                 "Invalid request parameters", parse_error);
+    return;
+  }
+
+  ApiFetchResult result;
+  STRING error_detail;
+  const int status = ExecuteFetch(req, cfg, result, error_detail);
+  if (cgi != NULL) delete cgi;
+
+  if (status != 200) {
+    const CHR *problem_type = (status == 404)
+      ? "https://isearch.invalid/problems/record-not-found"
+      : "https://isearch.invalid/problems/fetch-failed";
+    WriteHttpHeader(status, true);
+    WriteProblem(status, problem_type, "Fetch failed", error_detail);
+    return;
+  }
+
+  WriteHttpHeader(200, false);
+  cout << "{";
+  cout << "\"record_key\":";
+  WriteJsonEscaped(result.record_key);
+  cout << ",\"database\":";
+  WriteJsonEscaped(result.database);
+  cout << ",\"filename\":";
+  WriteJsonEscaped(result.filename);
+  cout << ",\"content\":";
+  WriteJsonEscaped(result.content);
   cout << "}" << endl;
 }

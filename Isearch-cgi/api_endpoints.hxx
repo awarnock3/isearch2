@@ -6,5 +6,6 @@
 void HandleHealth();
 void HandleCapabilities(const ApiConfig& cfg);
 void HandleDatabases(const ApiConfig& cfg);
+void HandleFetch(const ApiConfig& cfg, const CHR* method, const CHR* body);
 
 #endif

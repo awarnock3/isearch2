@@ -191,7 +191,85 @@ paths:
           $ref: '#/components/responses/TooManyRequestsProblem'
         '500':
           $ref: '#/components/responses/InternalServerErrorProblem'
-components:
+  /fetch:
+    get:
+      tags: [search]
+      operationId: fetchRecordGet
+      summary: Fetch a single record (query parameters)
+      description: |
+        Retrieves the full content of a single indexed record identified by
+        its `record_key`, as returned in search results.
+      security: []
+      parameters:
+        - $ref: '#/components/parameters/database'
+        - $ref: '#/components/parameters/recordKey'
+        - $ref: '#/components/parameters/fetchElementSet'
+        - $ref: '#/components/parameters/recordSyntax'
+      responses:
+        '200':
+          description: Record retrieved successfully
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FetchResponse'
+              examples:
+                success:
+                  summary: Fetched record response
+                  externalValue: ./examples/fetch-response-200.json
+        '400':
+          $ref: '#/components/responses/BadRequestProblem'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '406':
+          $ref: '#/components/responses/NotAcceptableProblem'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorProblem'
+    post:
+      tags: [search]
+      operationId: fetchRecordPost
+      summary: Fetch a single record (JSON body)
+      description: |
+        Retrieves the full content of a single indexed record identified by
+        its `record_key`, as returned in search results.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/FetchRequest'
+            examples:
+              basic:
+                summary: Fetch by record key
+                externalValue: ./examples/fetch-post.json
+      responses:
+        '200':
+          description: Record retrieved successfully
+          headers:
+            X-Request-Id:
+              $ref: '#/components/headers/XRequestId'
+            Cache-Control:
+              $ref: '#/components/headers/CacheControl'
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FetchResponse'
+        '400':
+          $ref: '#/components/responses/BadRequestProblem'
+        '404':
+          $ref: '#/components/responses/NotFoundProblem'
+        '406':
+          $ref: '#/components/responses/NotAcceptableProblem'
+        '415':
+          $ref: '#/components/responses/UnsupportedMediaTypeProblem'
+        '500':
+          $ref: '#/components/responses/InternalServerErrorProblem'
+
   headers:
     XRequestId:
       description: Correlation identifier assigned to this request.
@@ -292,11 +370,11 @@ components:
       name: record_syntax
       in: query
       required: false
-      description: Record syntax used when presenting results.
+      description: Record syntax used when presenting the `content` field of each result.
       schema:
         type: string
         enum: [HTML, SUTRS]
-        default: HTML
+        default: SUTRS
     start:
       name: start
       in: query
@@ -349,6 +427,22 @@ components:
         type: integer
         minimum: 1
         default: 100
+    recordKey:
+      name: record_key
+      in: query
+      required: true
+      description: Record key from a prior search result (SearchHit.record_key).
+      schema:
+        type: string
+        minLength: 1
+    fetchElementSet:
+      name: element_set
+      in: query
+      required: false
+      description: Element set controlling which fields are returned.
+      schema:
+        type: string
+        default: F
   responses:
     BadRequestProblem:
       description: Invalid request or parameter values
@@ -460,7 +554,7 @@ components:
         record_syntax:
           type: string
           enum: [HTML, SUTRS]
-          default: HTML
+          default: SUTRS
         start:
           type: integer
           minimum: 1
@@ -677,3 +771,43 @@ components:
         instance:
           type: string
           format: uri
+    FetchRequest:
+      type: object
+      additionalProperties: false
+      required: [database, record_key]
+      properties:
+        database:
+          type: string
+          minLength: 1
+        record_key:
+          type: string
+          minLength: 1
+          description: Record key from a prior search result (SearchHit.record_key).
+        element_set:
+          type: string
+          default: F
+          description: Element set controlling which fields are returned.
+        record_syntax:
+          type: string
+          enum: [HTML, SUTRS]
+          default: SUTRS
+        request_id:
+          type: string
+          description: Optional caller-provided request identifier.
+    FetchResponse:
+      type: object
+      additionalProperties: false
+      required: [record_key, database, filename, content]
+      properties:
+        record_key:
+          type: string
+          description: The record key that was fetched.
+        database:
+          type: string
+          description: The database that was queried.
+        filename:
+          type: string
+          description: Source file name for the record.
+        content:
+          type: string
+          description: Full rendered content of the record in the requested record_syntax.

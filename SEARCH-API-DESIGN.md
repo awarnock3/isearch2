@@ -73,7 +73,7 @@ Optional but recommended for enforcement:
 ### Result controls (optional)
 
 - `element_set` (string, default `B`)
-- `record_syntax` (string, default `HTML`; supports `HTML` and `SUTRS`)
+- `record_syntax` (string, default `SUTRS`; supports `HTML` and `SUTRS`; currently applies to the `content` field)
 - `start` (integer, default `1`, minimum `1`)
 - `max_hits` (integer, default `50`, minimum `1`, maximum configurable, documented in capabilities)
 - `include_url` (boolean, default `true`)

@@ -17,7 +17,7 @@ ApiTerm::ApiTerm()
 
 ApiRequest::ApiRequest()
   : search_type(SEARCH_SIMPLE), op(OP_OR), element_set("B"),
-    record_syntax("HTML"), start(1), max_hits(API_DEFAULT_MAX_HITS), include_url(true),
+    record_syntax("SUTRS"), start(1), max_hits(API_DEFAULT_MAX_HITS), include_url(true),
     include_headline(true), include_record_key(true), score_scale(100)
 {
 }
@@ -35,6 +35,10 @@ static bool IsMethod(const CHR *method, const CHR *target)
 static bool ParseRecordSyntax(const CHR *raw, STRING *out)
 {
   if (raw == NULL || out == NULL) {
+    return true;
+  }
+  if (raw[0] == '\0') {
+    *out = "SUTRS";
     return true;
   }
   if (StrCaseCmp(raw, "HTML") == 0) {
@@ -538,7 +542,7 @@ static bool ParsePostJson(const CHR *body, ApiRequest& out, STRING& error_detail
         STRING value;
         if (!jr.ParseString(&value) ||
             !ParseRecordSyntax(value, &value)) {
-          SetError(error_detail, "record_syntax must be HTML or SUTRS.");
+          SetError(error_detail, "record_syntax must be SUTRS or HTML.");
           return false;
         }
         out.record_syntax = value;
@@ -646,6 +650,55 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
     return false;
   }
 
+  // Reject unknown parameter names so typos (e.g. max_hist) are caught.
+  static const CHR *const known_params[] = {
+    "database", "DATABASE",
+    "q", "ISEARCH_TERM",
+    "search_type", "SEARCH_TYPE",
+    "operator", "OPERATOR",
+    "term", "field", "weight", "phrase",
+    "element_set", "ELEMENT_SET",
+    "record_syntax", "RecordSyntax",
+    "start", "START",
+    "max_hits", "MAXHITS",
+    "include_url",
+    "include_headline",
+    "include_record_key",
+    "score_scale",
+    "request_id",
+    NULL
+  };
+
+  for (INT4 i = 0; ; i++) {
+    const CHR *name = cgi->GetName(i);
+    if (name == NULL) break;
+    if (name[0] == '\0') continue;
+
+    // Skip indexed term/field/weight/phrase (term_0, field_1, …)
+    if (strncasecmp(name, "term",   4) == 0 ||
+        strncasecmp(name, "field",  5) == 0 ||
+        strncasecmp(name, "weight", 6) == 0 ||
+        strncasecmp(name, "phrase", 6) == 0) {
+      continue;
+    }
+
+    bool found = false;
+    for (int k = 0; known_params[k] != NULL; k++) {
+      if (StrCaseCmp(name, known_params[k]) == 0) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      STRING msg = "Unknown parameter: ";
+      msg.Cat(name);
+      CHR *msg_cstr = msg.NewCString();
+      SetError(error_detail, msg_cstr);
+      delete [] msg_cstr;
+      return false;
+    }
+  }
+
   const CHR *value = NULL;
 
   value = GetValue(cgi, "database", "DATABASE");
@@ -674,7 +727,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
   value = GetValue(cgi, "record_syntax", "RecordSyntax");
   if (value != NULL && value[0] != '\0') {
     if (!ParseRecordSyntax(value, &out.record_syntax)) {
-      SetError(error_detail, "record_syntax must be HTML or SUTRS.");
+      SetError(error_detail, "record_syntax must be SUTRS or HTML.");
       return false;
     }
   }
