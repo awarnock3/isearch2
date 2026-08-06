@@ -993,3 +993,33 @@ build-time `VERS` macro.
    `make tests-asan` shows real `__asan_*`/`__ubsan_*` symbols, and the
    full suite (275 assertions, 126 cases) still passes under genuine
    instrumentation.
+
+## src/marcdefs.hxx
+
+Plain C structures (`extern "C"`) for MARC bibliographic records: two
+on-disk overlays (`MARC_LEADER_OVER`, `MARC_DIRENTRY_OVER`) and the
+in-memory linked-list parse tree MARCLIB builds from them
+(`MARC_SUBFIELD`/`MARC_FIELD`/`MARC_REC`). No member functions.
+
+1. **Header not self-contained** — same defect class as `src/fc.hxx`
+   `BUGFIX #1` and `Isearch-cgi/config.hxx` `BUGFIX #1`: `MARC_REC::length`
+   is declared `INT4` without including anything that defines it (`INT4`
+   comes from `src/gdt.h`). Confirmed real by compiling `marcdefs.hxx`
+   as the sole `#include` in a translation unit: it failed with `'INT4'
+   does not name a type`. Currently silent in the tree only because
+   both direct includers that supply `gdt.h` themselves
+   (`src/marc.cxx`, `src/marclib.cxx`) happen to include it first — and
+   the third, `src/marclib.hxx` (Order 19, not yet processed), doesn't
+   include `gdt.h` at all, relying entirely on *its own* includers
+   having done so already. Fixed by adding `#include "gdt.h"` directly
+   to `marcdefs.hxx`, which also removes `marclib.hxx`'s fragile
+   transitive dependency without needing to touch `marclib.hxx` itself.
+   See `BUGFIX #1` in source. Confirmed fixed by recompiling the same
+   standalone reproduction, which now succeeds with zero warnings under
+   `-Wall -Wextra`.
+
+Also checked, not a bug: the two overlay structs are laid out entirely
+in `char`/`char[]` fields (`alignof` 1), so no compiler padding can
+sneak between members. Verified `sizeof(MARC_LEADER_OVER) == 24` and
+`sizeof(MARC_DIRENTRY_OVER) == 12`, matching the real MARC leader and
+directory-entry widths — the raw-byte overlay is sound as written.

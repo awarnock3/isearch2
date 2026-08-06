@@ -34,13 +34,23 @@
  * OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
  * SUCH DAMAGE.
  */
+// ISEARCH2-CLEANUP: processed 2026-08-06
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef _MARCDEFS_HXX
 #define _MARCDEFS_HXX
 
+// BUGFIX #1: header used INT4 without including its definition; see
+// docs/BUG_CATALOG.md#srcmarcdefshxx.
+#include "gdt.h"
+
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+/// C structures mirroring the on-disk MARC record format (leader,
+/// directory entries) and the in-memory linked-list representation
+/// MARCLIB parses them into (MARC_SUBFIELD/MARC_FIELD/MARC_REC).
 
 /*********************************************************************/
 /* special char definitions  for MARC records                        */

@@ -17,7 +17,7 @@
 | 13 | src/operator.hxx | done | 2026-08-06 | [src/operator.hxx](BUG_CATALOG.md#srcoperatorhxx) |
 | 14 | src/sterm.hxx | done | 2026-08-06 | [src/sterm.hxx](BUG_CATALOG.md#srcstermhxx) |
 | 15 | Isearch-cgi/config.hxx | done | 2026-08-06 | [Isearch-cgi/config.hxx](BUG_CATALOG.md#isearch-cgiconfighxx) |
-| 16 | src/marcdefs.hxx | pending | | |
+| 16 | src/marcdefs.hxx | done | 2026-08-06 | [src/marcdefs.hxx](BUG_CATALOG.md#srcmarcdefshxx) |
 | 17 | src/hash.hxx | pending | | |
 | 18 | src/idbobj.hxx | pending | | |
 | 19 | src/marclib.hxx | pending | | |
