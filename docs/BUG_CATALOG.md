@@ -431,6 +431,11 @@ reached its own turn:
   verifying it would be safe to write an `OPERAND::operator=`
   self-assignment test (it isn't, for this reason -- so that test was
   deliberately not written; see `tests/src/test_operand.cxx`).
+  **Confirmed reachable in practice, not just theoretical**, during
+  `src/sterm.hxx`'s turn below: self-assigning a live `STERM` (through
+  its `OPOBJ&` interface, the same way real code would) silently wiped
+  its `Attributes` while correctly preserving its `Term` — see
+  `## src/sterm.hxx` below for the standalone repro.
 - **`src/irset.hxx`'s `IRSET` (Order 8, coming up next after
   `rset.hxx`) has its own, separate, *confirmed* version of the exact
   same missing-copy-constructor bug** — for its own `IRESULT* Table;`
@@ -912,3 +917,39 @@ its own linked-list bookkeeping), so the compiler-generated copy
 constructor here has nothing to double-free. Different from `DF`/
 `FCT`/`ATTRLIST`/`RESULT`'s *unconfirmed* latent risk — this one was
 checked and ruled out.
+
+## src/sterm.hxx
+
+`STERM` is `TERMOBJ`'s only real subclass: a concrete search term (a
+single word/phrase) operand, storing the query text in a `STRING Term`.
+
+1. **Header not self-contained** — same defect as `src/fc.hxx`
+   `BUGFIX #1`: commented-out includes for `defs.hxx`/`string.hxx`/
+   `termobj.hxx`. Confirmed real by compiling `sterm.hxx` as the sole
+   `#include` in a translation unit: it failed with 6 errors. Fixed by
+   restoring the three includes. See `BUGFIX #1` in source.
+
+2. **`STERM` hid `TERMOBJ`'s (and transitively `OPERAND`'s) virtual
+   `operator=`** — the same `-Woverloaded-virtual` pattern just fixed
+   for `TERMOBJ` and `OPERATOR`. `STERM` declares its own
+   `operator=(const OPOBJ&)` override, but per the standard's
+   definition that still isn't `STERM`'s "own" copy-assignment operator
+   (parameter type isn't `STERM`), so the compiler still generates an
+   implicit `operator=(const STERM&)` that hides it. Fixed the same
+   way: added `using TERMOBJ::operator=;`. See `BUGFIX #2` in source.
+   Confirmed fixed by recompiling the same standalone reproduction,
+   which no longer triggers the warning.
+
+Also confirmed (not fixed here — see the cross-reference under
+`src/operand.hxx` above): self-assigning an `STERM` through its
+`OPOBJ&` interface silently discards its `Attributes` while correctly
+preserving its `Term`. `STERM::operator=` calls `OPERAND::operator=`
+(already processed, `src/operand.cxx`, Order 6, before this was
+discovered), which copies `Attributes` via `OtherOp.GetAttributes
+(&Attributes)` — on self-assignment that's `ATTRLIST::operator=`
+self-assigning, and unlike `STRING::operator=` (which is why `Term`
+survives), it has no self-assignment guard. The actual fix belongs to
+`src/attrlist.hxx` (add a guard) or a `src/operand.cxx` reprocess (skip
+the call when `&OtherOp == this`) — not `sterm.hxx`, which merely
+inherits the behavior. `tests/src/test_sterm.cxx` deliberately has no
+self-assignment test for the same reason `test_operand.cxx` doesn't.

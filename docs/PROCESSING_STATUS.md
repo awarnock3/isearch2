@@ -15,7 +15,7 @@
 | 11 | src/termobj.hxx | done | 2026-08-05 | [src/termobj.hxx](BUG_CATALOG.md#srctermobjhxx) |
 | 12 | src/memcntl.hxx | done | 2026-08-06 | [src/memcntl.hxx](BUG_CATALOG.md#srcmemcntlhxx) |
 | 13 | src/operator.hxx | done | 2026-08-06 | [src/operator.hxx](BUG_CATALOG.md#srcoperatorhxx) |
-| 14 | src/sterm.hxx | pending | | |
+| 14 | src/sterm.hxx | done | 2026-08-06 | [src/sterm.hxx](BUG_CATALOG.md#srcstermhxx) |
 | 15 | Isearch-cgi/config.hxx | pending | | |
 | 16 | src/marcdefs.hxx | pending | | |
 | 17 | src/hash.hxx | pending | | |
