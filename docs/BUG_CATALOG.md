@@ -1023,3 +1023,83 @@ in `char`/`char[]` fields (`alignof` 1), so no compiler padding can
 sneak between members. Verified `sizeof(MARC_LEADER_OVER) == 24` and
 `sizeof(MARC_DIRENTRY_OVER) == 12`, matching the real MARC leader and
 directory-entry widths — the raw-byte overlay is sound as written.
+
+## src/hash.hxx
+
+`HASH` (open-addressed, quadratic-probing hash table) is **not**
+dormant like `RCACHE` was — `IDBOBJ::FieldTypes`/`FileNames`
+(`src/idbobj.hxx`, Order 18) are live `HASH` members that every
+doctype module populates from `name=value` config lines (`FieldTypes.
+AddEntry(...)` appears throughout `doctype/*.cxx`). Following the same
+precedent as `src/rcache.hxx` above (fixing confirmed bugs in a header's
+own not-yet-processed `.cxx` pair, already anticipated by
+`TEST_ENGINE_SRCS` already listing `src/hash.cxx`), all bugs below were
+fixed now rather than deferred to `src/hash.cxx`'s own turn, since they
+sit directly in the parsing path every doctype module's config
+loading already exercises. `src/hash.cxx` itself is left `pending` in
+`docs/PROCESSING_STATUS.md` and carries no processed marker — its own
+turn still owes it a dedicated pass (further modernization, its own
+doc comments, etc.).
+
+1. **Header not self-contained** — same defect class as `src/fc.hxx`
+   `BUGFIX #1`: `hash.hxx` used `INT`/`CHR` (from `src/gdt.h`) and
+   `STRING` (from `src/string.hxx`) without including either. Confirmed
+   real by compiling `hash.hxx` as the sole `#include` in a translation
+   unit: it failed with a cascade of `'INT'`/`'CHR'`/`'STRING'` "does
+   not name a type" errors. Fixed by adding both includes. See
+   `BUGFIX #1` in source. Confirmed fixed by recompiling the same
+   standalone reproduction, which now succeeds with zero warnings under
+   `-Wall -Wextra`.
+
+2. **`HASH::Setup` divides by zero for `Size<=0`** — `HASH(INT Size)`
+   passes `Size` straight through to `Setup`, which stores it as
+   `TableSize` with no validation; `HashFunction`'s `abs(s % TableSize)`
+   then divides by it on every `Insert`/`Find`/`Check`. No current
+   caller constructs a `HASH` with an explicit size (both live members
+   use the default-997 constructor), but the sized constructor is
+   public API. Confirmed real with a standalone repro: `HASH h(0);
+   h.Insert(item);` — crashed under ASan+UBSan with `runtime error:
+   division by zero` / `SEGV` (`FPE`) at `HashFunction`. Fixed by
+   falling back to the documented default (997) for `Size<=0` in
+   `Setup`. See `BUGFIX #2` in source. Verified fixed: the same repro
+   now exits cleanly.
+
+3. **`AddEntry` null-pointer write when the entry has no `=`** —
+   parses a `"name=value"` string via `strchr(d,'=')`, then
+   unconditionally wrote `*p='\0'` to split it, with no check that
+   `strchr` found anything. Any config line missing `=` (malformed
+   input, truncated file, etc.) made `p` null and crashed. Confirmed
+   real with a standalone repro: `HASH h; h.AddEntry(STRING(
+   "no_equals_sign_here"));` — ASan reported `SEGV` (`store to null
+   pointer`) at this line. Fixed by returning early when `strchr`
+   returns `nullptr`. See `BUGFIX #3` in source. Verified fixed: the
+   same repro now exits cleanly.
+
+4. **`AddEntry` stack-buffer-overflow via unbounded `strcpy`** —
+   `name`/`Value` are fixed `CHR[256]` buffers, but they're filled via
+   plain `strcpy` from `d`, a `CHR[513]` buffer that `STRING::
+   GetCString` can fill with up to 512 characters on either side of
+   `=`. Any config entry with a name or value longer than 255
+   characters overflowed the corresponding stack buffer. Confirmed real
+   with a standalone repro: a 300-character name followed by `=value`
+   — ASan reported a `stack-buffer-overflow` (`WRITE of size 301`) in
+   `strcpy` at this line, correctly identifying it smashed into the
+   adjacent `Value` buffer's frame slot. Fixed by switching both copies
+   to `strncpy` bounded to `sizeof(buffer)-1`, with explicit
+   null-termination. See `BUGFIX #4` in source. Verified fixed: the
+   same repro now exits cleanly.
+
+Also checked, not a bug requiring a fix: the class's own doc comment
+documents a `State==2` ("Deleted Slot — Continue Probe") tombstone case
+that `Insert`/`Find`/`Check`'s probing logic all correctly handle, but
+no public method ever sets `State` to 2 — there's no `Delete`/`Remove`.
+Currently dead logic, not a defect (nothing depends on it), so left
+alone; documented directly in the header's class comment so a future
+reader doesn't go looking for a way to trigger it. Also noted, not
+fixed (would require a header signature change, and doesn't cause
+incorrect behavior — see GENERAL step 4): `Insert`/`Find`/`Check`/
+`GetValue`/`AddEntry`/`HashFunction` are all declared `const` despite
+`Insert`/`AddEntry` mutating the table through the `Item_type *H`
+member — compiles fine since `const` only applies to the pointer
+itself, not what it points to, but the `const` is misleading about
+what these methods actually do.

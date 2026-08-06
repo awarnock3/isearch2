@@ -80,14 +80,20 @@ void HASH::Setup(INT Size)
 {
   INT i;
 
+  // BUGFIX #2: Size<=0 (e.g. HASH(0), or a negative caller-supplied
+  // size) left TableSize<=0; HashFunction's `s % TableSize` then
+  // divides by zero (SIGFPE). See docs/BUG_CATALOG.md#srchashhxx.
+  if (Size <= 0)
+    Size = 997;
+
   TableSize=Size;
   H=new Item_type[TableSize];
   for(i=0; i<TableSize; i++){
     H[i].Key=-1;
     H[i].State=0;		// empty
-    H[i].Block=(Data_type)NULL;
+    H[i].Block=(Data_type)nullptr;
   }
-  
+
 }
 
 void HASH::GetValue(const STRING& a, STRING *b) const
@@ -101,7 +107,7 @@ void HASH::GetValue(const STRING& a, STRING *b) const
 
   v=IndexStr2Num(name);
   r=Find(v);
-  if(r==NULL){
+  if(r==nullptr){
     *b="";
   }else{
     *b=(CHR *)r->Block;
@@ -113,19 +119,30 @@ void HASH::GetValue(const STRING& a, STRING *b) const
 void HASH::AddEntry(const STRING& a) const
 {
   // a is of type name=value
-  
+
   CHR name[256],Value[256],d[513];
   CHR *p;
-  Key_type v;
   Item_type r;
-   
+
   a.GetCString(d,512);
   p=strchr(d,'=');
+  if (p==nullptr) {
+    // BUGFIX #3: no '=' in the entry -- previously fell through and
+    // dereferenced this null pointer (*p='\0'), crashing. See
+    // docs/BUG_CATALOG.md#srchashhxx.
+    return;
+  }
   *p='\0';
-  strcpy(name,d);
+  // BUGFIX #4: name/Value are fixed 256-byte buffers but d (and thus
+  // either side of '=') can be up to 512 chars; the unbounded strcpy
+  // here smashed the stack for any longer name/value. See
+  // docs/BUG_CATALOG.md#srchashhxx.
+  strncpy(name,d,sizeof(name)-1);
+  name[sizeof(name)-1]='\0';
   ++p;
- 
-  strcpy(Value,p);
+
+  strncpy(Value,p,sizeof(Value)-1);
+  Value[sizeof(Value)-1]='\0';
   r.Key=IndexStr2Num(name);
   r.Block=strdup(Value);
   if (!Check(r.Key)) {
@@ -200,7 +217,7 @@ Item_type* HASH::Find(Key_type r) const
     result->Block=H[p].Block;
     return(result);
   } else
-    return NULL;
+    return nullptr;
 
 }
 
