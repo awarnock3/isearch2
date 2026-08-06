@@ -19,7 +19,7 @@
 | 15 | Isearch-cgi/config.hxx | done | 2026-08-06 | [Isearch-cgi/config.hxx](BUG_CATALOG.md#isearch-cgiconfighxx) |
 | 16 | src/marcdefs.hxx | done | 2026-08-06 | [src/marcdefs.hxx](BUG_CATALOG.md#srcmarcdefshxx) |
 | 17 | src/hash.hxx | done | 2026-08-06 | [src/hash.hxx](BUG_CATALOG.md#srchashhxx) |
-| 18 | src/idbobj.hxx | pending | | |
+| 18 | src/idbobj.hxx | done | 2026-08-06 | [src/idbobj.hxx](BUG_CATALOG.md#srcidbobjhxx) |
 | 19 | src/marclib.hxx | pending | | |
 | 20 | src/md5.hxx | pending | | |
 | 21 | src/reclist.hxx | pending | | |

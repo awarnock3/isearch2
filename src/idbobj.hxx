@@ -42,11 +42,16 @@ $Revision: 1.11 $
 Description:	Class IDBOBJ: Database object virtual class
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-06
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef IDBOBJ_HXX
 #define IDBOBJ_HXX
 
-/*
+// BUGFIX #1: these were all commented out, leaving every type below
+// undeclared unless an includer happened to pull them in first; see
+// docs/BUG_CATALOG.md#srcidbobjhxx. dtreg.hxx isn't restored: nothing
+// in this header actually names DTREG.
 #include "defs.hxx"
 #include "string.hxx"
 #include "mdt.hxx"
@@ -55,10 +60,16 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "result.hxx"
 #include "strlist.hxx"
 #include "record.hxx"
-#include "dtreg.hxx"
-*/
 #include "hash.hxx"
 
+// Abstract interface for a database object: the contract INDEX, IRSET,
+// NUMERICFLDMGR, MERGEUNIT, and FILEMAP all program against instead of
+// depending on the concrete IDB directly. Most methods default to
+// inert no-ops (empty body, GDT_FALSE, or a null/0 return) so a
+// subclass only needs to override what it actually uses; DfdtAddEntry,
+// IsStopWord, and ParseWords are the exceptions, declared pure virtual
+// because every real subclass needs them. FieldTypes/FileNames (HASH
+// members) are shared, concrete state, not overridable behavior.
 class IDBOBJ {
   friend class INDEX;
   friend class IRSET;
@@ -101,15 +112,25 @@ public:
   virtual FILE       *ffopen(const STRING& FileName, const CHR *Type) 
     { return 0; };
   virtual INT         ffclose(FILE *FilePointer) { return 0; };
-  virtual SIZE_T      GpFwrite(GPTYPE* Ptr, SIZE_T Size, SIZE_T NumElements, 
+  // BUGFIX #2: these "must-override" stubs used to fclose(stdout) and
+  // fclose(stderr) and then return normally, silently breaking every
+  // later write to either stream for the rest of the process instead
+  // of actually stopping it. Confirmed real with a standalone repro: a
+  // minimal IDBOBJ subclass that doesn't override GpFwrite, calling
+  // it, then a plain fprintf(stdout,...) -- the follow-up write
+  // failed (and its own output vanished, since stdout was already
+  // closed). Fixed to abort(), matching this tree's existing
+  // must-not-happen convention (see panic() in src/common.cxx). See
+  // docs/BUG_CATALOG.md#srcidbobjhxx.
+  virtual SIZE_T      GpFwrite(GPTYPE* Ptr, SIZE_T Size, SIZE_T NumElements,
 			       FILE* Stream) const {
     fprintf(stderr, "Bad call to IDBOBJ::GpFwrite()\n");
-    fclose(stdout); fclose(stderr); return 0;
+    abort();
   };
-  virtual SIZE_T      GpFread(GPTYPE* Ptr, SIZE_T Size, SIZE_T NumElements, 
+  virtual SIZE_T      GpFread(GPTYPE* Ptr, SIZE_T Size, SIZE_T NumElements,
 			      FILE* Stream) const {
     fprintf(stderr, "Bad call to IDBOBJ::GpFread()\n");
-    fclose(stdout); fclose(stderr); return 0;
+    abort();
   };
   //	void GetDbFileStem(PSTRING StringBuffer) const { };
   virtual void        GetDbFileStem(STRING *StringBuffer) const { };

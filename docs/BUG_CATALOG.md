@@ -1103,3 +1103,54 @@ incorrect behavior — see GENERAL step 4): `Insert`/`Find`/`Check`/
 member — compiles fine since `const` only applies to the pointer
 itself, not what it points to, but the `const` is misleading about
 what these methods actually do.
+
+## src/idbobj.hxx
+
+`IDBOBJ` is the abstract interface INDEX/IRSET/NUMERICFLDMGR/
+MERGEUNIT/FILEMAP all program against; `IDB` (`src/idb.hxx`/`.cxx`,
+both still pending) is the only current subclass.
+
+1. **Header not self-contained** — same defect class as `src/fc.hxx`
+   `BUGFIX #1`: all nine of `defs.hxx`/`string.hxx`/`mdt.hxx`/
+   `dfdt.hxx`/`dfd.hxx`/`result.hxx`/`strlist.hxx`/`record.hxx`/
+   `dtreg.hxx` were commented out, leaving `DFD`/`RESULT`/`STRLIST`/
+   `STRING`/`GDT_BOOLEAN`/`DOUBLE`/`RECORD`/`MDT`/`DFDT` all
+   undeclared. Confirmed real by compiling `idbobj.hxx` as the sole
+   `#include` in a translation unit: it failed with a long cascade of
+   "does not name a type" / "has not been declared" errors. Fixed by
+   restoring eight of the nine includes — `dtreg.hxx` stays out, since
+   nothing in this header actually names `DTREG` (a stale leftover).
+   All eight restored headers are themselves still `pending` in
+   `docs/PROCESSING_STATUS.md` (their own turns haven't come up), the
+   same situation `src/rcache.hxx`'s `BUGFIX #1` hit with `irset.hxx` —
+   `idbobj.hxx` now compiles standalone regardless, since the tree's
+   real, working include order (e.g. `src/opobj.hxx`, which reaches
+   `idbobj.hxx` after all eight) already proves these headers resolve
+   correctly in that order today. See `BUGFIX #1` in source. Confirmed
+   fixed by recompiling the same standalone reproduction, which now
+   succeeds with zero errors (only pre-existing `-Wunused-parameter`
+   warnings from the class's many default no-op overrides).
+
+2. **`GpFwrite`/`GpFread`'s "must-override" stubs closed `stdout` and
+   `stderr` for the rest of the process, then returned normally** —
+   both are meant as a loud signal that a subclass forgot to override
+   them (compare `IDB::GpFwrite`/`GpFread` in `src/idb.cxx`, the only
+   current subclass, which both do override), but instead of stopping
+   the program, the default body printed a "Bad call" message to
+   `stderr` and then called `fclose(stdout); fclose(stderr);` before
+   returning `0` — as if `0` elements were read/written, not signaling
+   any error to the caller beyond that. Confirmed real with a
+   standalone repro: a minimal `IDBOBJ` subclass overriding only the
+   pure-virtual methods, calling the inherited `GpFwrite`, then a plain
+   `fprintf(stdout, ...)` — the follow-up write failed outright (return
+   value < 0), and even the repro's own diagnostic `printf` reporting
+   that failure never appeared, since `stdout` was already closed.
+   Fixed by replacing both `fclose` pairs with `abort()`, matching this
+   tree's existing must-not-happen convention (`panic()` in
+   `src/common.cxx`, which logs then calls `abort()`). See `BUGFIX #2`
+   in source. Verified fixed: the same repro now aborts immediately
+   (`SIGABRT`) right after printing the diagnostic, instead of
+   corrupting global I/O and returning as if nothing were wrong.
+
+Also applied: a class-level doc comment explaining `IDBOBJ`'s role and
+its all-but-three-methods-optional override contract.
