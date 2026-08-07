@@ -42,6 +42,16 @@ $Revision: 1.26 $
 Description:	General definitions
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+//
+// Tree-wide grab bag of `extern` declarations (defined in defs.cxx),
+// GDT-derived typedefs, Z39.50/GILS attribute and structure-type
+// numbers, on-disk file-extension/size constants, and a handful of
+// convenience macros (COUT/EXIT_ERROR/RETURN_ERROR/RETURN_ZERO).
+// Included from nearly everywhere in the tree, so nothing here should
+// change in a way that isn't purely additive -- see BUGFIX #1 and the
+// deferred macro-hygiene note below for the two things actually found.
 
 #ifndef DEFS_HXX
 #define DEFS_HXX
@@ -53,6 +63,7 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #endif
 
 #include "gdt.h"
+#include <iostream> // BUGFIX #1 (see docs/BUG_CATALOG.md#srcdefshxx): needed for std::cout, below.
 
 extern const CHR* IsearchDefaultDbName;
 extern const CHR* IsearchVersion;
@@ -228,7 +239,23 @@ const INT IndexingStatusKeySet          = 5;
 #define strncasecmp strnicmp
 #endif
 
-#define COUT cout
+// BUGFIX #1 (see docs/BUG_CATALOG.md#srcdefshxx): was `#define COUT
+// cout` -- an unqualified name with nothing in this header to declare
+// it. It only ever compiled because every real caller happened to
+// separately pull in `using namespace std;` (via string.hxx) ahead of
+// this header -- true today, not guaranteed. Qualifying it here and
+// including <iostream> above makes COUT work regardless of what else
+// a caller has included.
+#define COUT std::cout
+
+// Found but deliberately NOT changed here (see docs/BUG_CATALOG.md#srcdefshxx,
+// "found but out of scope"): none of these three wrap their body in
+// `do { ... } while(0)`, the standard hygiene fix for multi-statement
+// macros, so a use like `if (x) EXIT_ERROR; else ...` can silently
+// misparse. Left alone because src/result.cxx:229 -- already compiled
+// by `make tests` -- invokes EXIT_ERROR with no trailing semicolon,
+// relying on today's bare-`{}` expansion; wrapping in do/while(0)
+// would break that call site, which is out of scope for this turn.
 #define EXIT_ERROR {fflush(stdout); fflush(stderr); exit(1);}
 #define RETURN_ERROR {fflush(stdout); fflush(stderr); return(1);}
 #define RETURN_ZERO {fflush(stdout); fflush(stderr); return(0);}

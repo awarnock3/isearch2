@@ -1355,3 +1355,58 @@ build, redeclaring `LONG` as `long` a second time is legal C++ (same
 underlying type), not a compile error. Not enough to confirm as a live
 defect, so left as-is with a comment explaining the ambiguity for
 whoever looks next.
+
+## src/defs.hxx
+
+Tree-wide grab bag of `extern` declarations (defined in `defs.cxx`,
+Order 122, still pending), GDT-derived typedefs, Z39.50/GILS
+attribute/structure-type numbers, on-disk file-extension/size
+constants, and a handful of convenience macros. No functions, so
+nothing to modernize there (no `NULL`/`sprintf`); the two findings
+below are both macro-related.
+
+1. **`COUT` macro relied on an unqualified `cout` — not self-contained**
+   — `#define COUT cout` expands to a bare, unqualified name that this
+   header does nothing to declare; it only ever compiled because every
+   real caller (confirmed for `src/registry.cxx`, transitively via
+   `registry.hxx` → `common.hxx`/`string.hxx`, and `doctype/uspat.cxx`,
+   directly via its own `#include <iostream>`) happened to already have
+   `using namespace std;` in effect first — the same "fragile, not
+   guaranteed" shape as every `BUGFIX #1` header-self-containment entry
+   elsewhere in this catalog, just via a macro instead of an undeclared
+   type. Fixed by adding `#include <iostream>` and qualifying the
+   expansion as `std::cout`. See `BUGFIX #1` in source. Verified with
+   `tests/src/test_defs.cxx`'s dedicated test, which redirects
+   `std::cout`'s streambuf and confirms `COUT << ...` actually writes
+   through it, without the test file itself ever doing
+   `using namespace std;`. One small, non-blocking ripple noted, not
+   fixed here: `doctype/uspat.cxx:102` independently does its own
+   `#define COUT cout` after already inheriting this header's
+   definition (via `common.hxx` → `defs.hxx`, included earlier in that
+   file) — harmless today only because both definitions were textually
+   identical; after this fix they differ, so compiling `uspat.cxx` will
+   start emitting a (non-fatal, no `-Werror` anywhere in the real build)
+   "COUT redefined" warning until `uspat.cxx` reaches its own turn
+   (Order 231) and its now-fully-redundant local `#define` is removed.
+   `doctype/` isn't part of `TEST_ENGINE_SRCS`, so `make tests`/
+   `make tests-asan` don't see this either way.
+
+### Found but out of scope for this file (deferred, not fixed)
+
+- **`EXIT_ERROR`/`RETURN_ERROR`/`RETURN_ZERO` aren't wrapped in
+  `do { ... } while(0)`** — the standard hygiene fix for multi-statement
+  macros; without it, a use like `if (x) EXIT_ERROR; else ...` can
+  silently misparse (the macro's own closing `}` ends the `if`, leaving
+  a stray `;` and then an orphaned `else`). Confirmed this isn't merely
+  theoretical for this exact codebase: `grep` across `src/`/`doctype/`/
+  `Isearch-cgi/` for these three names finds ~50 call sites, all but one
+  followed by a normal trailing `;`; the one exception,
+  `src/result.cxx:229`, invokes `EXIT_ERROR` with **no** trailing
+  semicolon at all, relying on today's bare-`{}` expansion being a
+  self-contained compound statement. `result.cxx` is already compiled
+  by `make tests` (it's in `TEST_ENGINE_SRCS`), so wrapping these macros
+  in `do/while(0)` here — which requires a terminating `;` at every call
+  site — would break that build today. Left unfixed pending
+  `result.cxx` reaching its own turn (Order 167), at which point both
+  should change together: add the missing semicolon there, wrap the
+  three macros here.
