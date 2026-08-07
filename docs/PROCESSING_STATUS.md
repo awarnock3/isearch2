@@ -37,7 +37,7 @@
 | 33 | src/dfd.hxx | done | 2026-08-07 | [src/dfd.cxx](BUG_CATALOG.md#srcdfdcxx) |
 | 34 | src/dfdt.hxx | blocked | 2026-08-07 | [src/dfdt.hxx](AUTOPILOT_LOG.md#srcdfdthxx) |
 | 35 | src/mdtrec.hxx | done | 2026-08-07 | [src/mdtrec.cxx](BUG_CATALOG.md#srcmdtreccxx) |
-| 36 | src/mdt.hxx | pending | | |
+| 36 | src/mdt.hxx | blocked | 2026-08-07 | [src/mdt.hxx](AUTOPILOT_LOG.md#srcmdthxx) |
 | 37 | src/registry.hxx | pending | | |
 | 38 | src/result.hxx | pending | | |
 | 39 | src/fprec.hxx | pending | | |

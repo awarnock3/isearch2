@@ -185,3 +185,63 @@ doesn't; worth a closer look alongside the copy-constructor fix.
 
 Row set to `blocked`; needs a signature-change decision (deep-copy vs.
 non-copyable) before reprocessing via `/process src/dfdt.hxx`.
+
+## src/mdt.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `MDT` owns two
+heap-allocated arrays (`KEYREC* KeyIndex`, `GPREC* GpIndex`, both
+`new`'d in the constructor/`Resize()`, `delete []`'d in the destructor/
+`Resize()`) *and* a raw `FILE* MdtFp` (opened in the constructor,
+`fclose()`'d in the destructor) — but, unlike every other class blocked
+this batch, declares **no** copy constructor and **no** `operator=` at
+all, not even a (buggy) hand-written one. `MDT` has a user-declared
+destructor but no user-declared copy operations or move operations, so
+under C++11 rules the compiler still implicitly generates both a copy
+constructor and a copy-assignment operator (merely deprecated, not
+suppressed) — both doing a member-wise shallow copy of `KeyIndex`,
+`GpIndex`, *and* `MdtFp` together.
+
+Confirmed real with a standalone repro, same shape as `ATTRLIST`'s/
+`DFDT`'s: construct an `MDT` against a real temp file stem (mirroring
+`tests/src/test_filemap.cxx`'s `TempMdt` fixture), add one entry,
+copy-initialize a second (`MDT b = *a;` — copy constructor), let `b` go
+out of scope, then destroy `a`. AddressSanitizer reported a
+`heap-use-after-free` — not even in `MDT::~MDT()` itself this time, but
+one level further in: `a`'s destructor calls `FlushMDTIndexes()` →
+`SortGpIndex()` → `qsort()` on `GpIndex`, which `b`'s destructor had
+already `delete []`'d. The `MdtFp` sharing is real too by the same
+mechanism (both copies' destructors call `fclose()` on the same
+`FILE*`) but wasn't reached in this repro — the array free hit first.
+No confirmed copy-construction call site was found in the live tree
+(every site found uses `MDT*`/`new MDT(...)`, never a bare `MDT` value
+or an assignment between two `MDT`s), so this is latent rather than
+actively crashing today, the same status the other three raw-resource
+classes had when they were blocked.
+
+Fixing it requires adding `MDT(const MDT&);` and
+`MDT& operator=(const MDT&);` to `mdt.hxx` — deep-copying `KeyIndex`/
+`GpIndex` and, for the `FILE*`, either re-opening `MdtFp` against the
+same `FileStem` or deciding copies shouldn't share live file state at
+all — or `= delete`-ing both to make the class explicitly non-copyable,
+which seems like the more natural fit here specifically: unlike
+`ATTRLIST`/`DFDT`, nothing in the live tree ever copies an `MDT` by
+value already (see above), and a "copy" of an open file handle plus
+in-memory indexes is a much less obviously well-defined operation than
+copying a `Table` array. Still a call for a human, not an autopilot
+guess, per GENERAL step 4.
+
+Also found while reading, not fixed here since step 4 gates the rest of
+this file's pipeline for this turn: `GetUniqueKey()`
+(`mdt.cxx:439`) still uses `sprintf` (ordinary modernization to
+`snprintf`, not a correctness bug — `y`/`x` are `INT`, so the worst
+case comfortably fits `CHR s[30]`); `MdtCompareKeysByIndex`/
+`MdtCompareGpByIndex`/`MdtCompareGpStarts` (`mdt.cxx:182-188,360-362`)
+compute `qsort` comparator results as a plain subtraction
+(`ThisA->Index - ThisB->Index`, etc.) of `GPTYPE`/`SIZE_T`-typed
+(unsigned) fields narrowed to `int` — the classic unsigned-subtraction-
+in-a-comparator bug, wrong for any pair far enough apart to wrap when
+narrowed, though not exercised by the repro above; worth a closer look
+alongside the copy-semantics fix.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable) before reprocessing via `/process src/mdt.hxx`.
