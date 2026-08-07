@@ -2386,3 +2386,71 @@ from `src/index.cxx` (still pending). No `NULL`/`sprintf` usages.
 Also applied: a doc comment on `SoundexEncode()`'s declaration. Added
 `soundex.cxx` to `TEST_ENGINE_SRCS` in the Makefile (it wasn't linked
 into the test binary before this turn).
+
+## doctype/doctype.cxx
+
+`DOCTYPE`: base class for every document-type parser (see the
+file-level comment added to `doctype.hxx`). Not abstract — every
+virtual has a default body — so it's directly testable without a
+subclass. No `NULL`/`sprintf` usages (the one `'\0'` is a character
+literal, not the macro).
+
+1. **`ParseWords()` called `exit(1)` on GP-buffer overflow, aborting
+   the entire `Iindex` process** — instead of returning to its caller.
+   Confirmed this was live, reachable, and defeating an existing
+   recovery path: `INDEX::BuildGpList()` (`src/index.cxx`, Order 54,
+   still pending) calls this function and already checks
+   `if (GpListSize == -1) { Break = GDT_TRUE; break; }` on the result —
+   `GPTYPE` is unsigned, so that comparison means the caller was always
+   prepared to receive a `(GPTYPE)-1` sentinel and flush/stop cleanly
+   whenever a single document has more matched terms than fit in the
+   currently allocated GP buffer, but the `exit(1)` here made that path
+   unreachable, killing the whole indexing run (losing all progress)
+   instead. Fixed by returning `(GPTYPE)-1` in place of the `exit(1)`.
+   See `BUGFIX #1` in source; regression test in
+   `tests/doctype/test_doctype.cxx` triggers the overflow with a
+   1-entry `GpBuffer` against 4 matching words and confirms the
+   sentinel comes back (and the test process doesn't exit).
+2. **`Present()` had a dead `FieldName` local and an assigned-but-
+   never-checked `Status`** — leftovers from the commented-out older
+   implementation directly below it, which *did* check `Status` and
+   explicitly cleared the buffer on failure
+   (`if (Status) ... else *StringBufferPtr = "";`). The current
+   function already resets `*StringBufferPtr = "";` unconditionally at
+   the top, so the not-found behavior is unchanged; only the dead
+   variables (and the resulting `-Wunused-but-set-variable` warning)
+   were removed. See `BUGFIX #2` in source; regression test in
+   `tests/doctype/test_doctype.cxx` confirms the not-found path still
+   returns an empty string.
+
+Also applied: file-level and per-method doc comments on `doctype.hxx`,
+including making `ReplaceWithSpace()`'s `data[length] = '\0'`
+buffer-capacity contract explicit (it writes one byte past `length`,
+by design — confirmed safe for its one real caller,
+`src/index.cxx:581`, which always reserves that byte, but wasn't
+documented anywhere before this). Left the many named-but-unused
+parameters on `doctype.hxx`'s no-op virtual default bodies alone,
+matching the same pattern already accepted on `idbobj.hxx`/`opobj.hxx`
+(both already `done`) — removing the names would hurt
+self-documentation of the interface each override implements, and
+wrapping ~20 trivial one-line stubs in `(void)` casts is exactly the
+kind of restyling GENERAL step 6 says not to do to code that isn't
+otherwise being touched. `GetMetadata()`'s unused `mdType` parameter
+was left for the same reason: the base implementation is a generic
+default meant to be overridden per format (`doctype/html.cxx` already
+does), not a bug.
+
+Also added this turn: `doctype/` support in the test build.
+`TEST_ENGINE_DOCTYPE_SRCS` (mirroring the existing `TEST_ENGINE_CGI_SRCS`
+pattern for `Isearch-cgi/`) and matching `tests/obj/doctype-%.o`/
+`tests/obj-asan/doctype-%.o` pattern rules were added to the Makefile —
+`doctype/doctype.hxx` is the first file in that directory to reach its
+own turn, so no prior turn had needed this. Every later `doctype/*.cxx`
+turn should add itself to `TEST_ENGINE_DOCTYPE_SRCS` rather than
+inventing a new mechanism. The test file also reuses (as its own local
+copy, matching how `tests/src/test_filemap.cxx` already does this) a
+minimal `TESTIDBOBJ` implementing `IDBOBJ`'s 3 pure virtuals
+(`DfdtAddEntry`/`IsStopWord`/`ParseWords`), extended with a
+configurable stop-word list and a configurable `GetFieldData()` so
+`ParseWords()`/`Present()`/`GetMetadata()` could be tested against
+controlled data rather than just linked.

@@ -54,7 +54,7 @@
 | 50 | src/thesaurus.hxx | blocked | 2026-08-07 | [src/thesaurus.hxx](AUTOPILOT_LOG.md#srcthesaurushxx) |
 | 51 | src/tokengen.hxx | blocked | 2026-08-07 | [src/tokengen.hxx](AUTOPILOT_LOG.md#srctokengenhxx) |
 | 52 | src/squery.hxx | blocked | 2026-08-07 | [src/squery.hxx](AUTOPILOT_LOG.md#srcsqueryhxx) |
-| 53 | doctype/doctype.hxx | pending | | |
+| 53 | doctype/doctype.hxx | done | 2026-08-07 | [doctype/doctype.cxx](BUG_CATALOG.md#doctypedoctypecxx) |
 | 54 | src/index.hxx | pending | | |
 | 55 | doctype/sgmlnorm.hxx | pending | | |
 | 56 | doctype/sgmltag.hxx | pending | | |
@@ -194,7 +194,7 @@
 | 190 | doctype/cipp.cxx | pending | | |
 | 191 | doctype/colondoc.cxx | pending | | |
 | 192 | doctype/dif.cxx | pending | | |
-| 193 | doctype/doctype.cxx | pending | | |
+| 193 | doctype/doctype.cxx | done | 2026-08-07 | [doctype/doctype.cxx](BUG_CATALOG.md#doctypedoctypecxx) |
 | 194 | doctype/dtconf.cxx | pending | | |
 | 195 | doctype/emacsinfo.cxx | pending | | |
 | 196 | doctype/eos_guide.cxx | pending | | |

@@ -42,6 +42,8 @@ Description:	Class DOCTYPE - Document Type
 Author:		Nassib Nassar, nrn@cnidr.org
 Modifications:  Archie Warnock (warnock@clark.net)
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <string.h>
 #include <ctype.h>
@@ -102,8 +104,20 @@ DOCTYPE::ParseWords(
 	(!(Db->IsStopWord(DataBuffer + Position,
 			  DataLength - Position))) ) {
       if (GpListSize >= GpLength) {
-         cout << "GpListSize >= GpLength" << endl;
-         exit(1);
+	// BUGFIX #1: exit()ing here aborted the entire Iindex process,
+	// losing all indexing progress, the moment a single document
+	// had more matched terms than fit in the current GP buffer.
+	// The caller already expects to recover from exactly this:
+	// INDEX::BuildGpList() (src/index.cxx) returns whatever this
+	// function returns, and its own caller checks
+	// `if (GpListSize == -1) { Break = GDT_TRUE; break; }` --
+	// GPTYPE is unsigned, so that comparison means the caller is
+	// already prepared to receive (GPTYPE)-1 as an overflow
+	// sentinel and flush/stop cleanly, a path this exit() made
+	// unreachable. Returning the sentinel instead lets that
+	// existing recovery logic actually run.
+	cout << "GpListSize >= GpLength" << endl;
+	return (GPTYPE)-1;
       }
       GpBuffer[GpListSize++] = DataOffset + Position;
     }
@@ -128,11 +142,17 @@ DOCTYPE::ParseNumeric(const CHR *Buffer){
 }
 
 
-void 
+void
 DOCTYPE::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 		 STRING* StringBufferPtr) {
-  STRING FieldName;
-  GDT_BOOLEAN Status;
+  // BUGFIX #2: FieldName was declared but never used (dead leftover
+  // from the commented-out older implementation below), and Status
+  // was assigned but never checked. *StringBufferPtr is already reset
+  // to "" just below, matching what the old code's `if (Status) ...
+  // else *StringBufferPtr = "";` did on failure, so discarding
+  // GetFieldData()'s return here doesn't change behavior -- just
+  // removes the dead variables and the resulting
+  // -Wunused-but-set-variable warning.
   *StringBufferPtr = "";
   if (ElementSet.Equals("F")) {
     ResultRecord.GetRecordData(StringBufferPtr);
@@ -140,7 +160,7 @@ DOCTYPE::Present(const RESULT& ResultRecord, const STRING& ElementSet,
   } else if (ElementSet.Equals("B")) {
     ResultRecord.GetFileName(StringBufferPtr);
   } else {
-    Status = Db->GetFieldData(ResultRecord, ElementSet, StringBufferPtr);
+    Db->GetFieldData(ResultRecord, ElementSet, StringBufferPtr);
   }
 /*
   *StringBufferPtr = "";

@@ -274,6 +274,14 @@ TEST_ENGINE_CGI_SRCS := Isearch-cgi/config.cxx
 TEST_ENGINE_CGI_OBJS      := $(patsubst Isearch-cgi/%.cxx,tests/obj/cgi-%.o,$(TEST_ENGINE_CGI_SRCS))
 TEST_ENGINE_CGI_OBJS_ASAN := $(patsubst Isearch-cgi/%.cxx,tests/obj-asan/cgi-%.o,$(TEST_ENGINE_CGI_SRCS))
 
+# Same idea again, for doctype/ (doctype/doctype.hxx's own turn, Order
+# 53, is the first file in that directory to reach TEST_ENGINE_SRCS --
+# every later doctype/*.cxx turn should add itself to
+# TEST_ENGINE_DOCTYPE_SRCS below rather than inventing a new list).
+TEST_ENGINE_DOCTYPE_SRCS := doctype/doctype.cxx
+TEST_ENGINE_DOCTYPE_OBJS      := $(patsubst doctype/%.cxx,tests/obj/doctype-%.o,$(TEST_ENGINE_DOCTYPE_SRCS))
+TEST_ENGINE_DOCTYPE_OBJS_ASAN := $(patsubst doctype/%.cxx,tests/obj-asan/doctype-%.o,$(TEST_ENGINE_DOCTYPE_SRCS))
+
 # BUGFIX (Isearch2 cleanup automation turn, see docs/BUG_CATALOG.md): the
 # plain and ASan builds used to compile into the SAME object paths, with
 # `tests-asan: TEST_CXXFLAGS += -fsanitize...` relying on a
@@ -291,8 +299,8 @@ TEST_ENGINE_CGI_OBJS_ASAN := $(patsubst Isearch-cgi/%.cxx,tests/obj-asan/cgi-%.o
 # mistaken for a plain-build target -- for in-place test-file objects.
 # The two builds can now never collide, so Make's ordinary incremental
 # rebuild just works, and neither one needs to force-clean anything.
-TEST_OBJS      := $(TEST_SRCS:.cxx=.o) $(TEST_ENGINE_OBJS) $(TEST_ENGINE_CGI_OBJS) $(CATCH2_DIR)/catch_amalgamated.o
-TEST_OBJS_ASAN := $(TEST_SRCS:.cxx=.o.asan) $(TEST_ENGINE_OBJS_ASAN) $(TEST_ENGINE_CGI_OBJS_ASAN) $(CATCH2_DIR)/catch_amalgamated-asan.o
+TEST_OBJS      := $(TEST_SRCS:.cxx=.o) $(TEST_ENGINE_OBJS) $(TEST_ENGINE_CGI_OBJS) $(TEST_ENGINE_DOCTYPE_OBJS) $(CATCH2_DIR)/catch_amalgamated.o
+TEST_OBJS_ASAN := $(TEST_SRCS:.cxx=.o.asan) $(TEST_ENGINE_OBJS_ASAN) $(TEST_ENGINE_CGI_OBJS_ASAN) $(TEST_ENGINE_DOCTYPE_OBJS_ASAN) $(CATCH2_DIR)/catch_amalgamated-asan.o
 
 $(CATCH2_DIR)/catch_amalgamated.o: $(CATCH2_DIR)/catch_amalgamated.cpp
 	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
@@ -313,6 +321,14 @@ tests/obj/cgi-%.o: Isearch-cgi/%.cxx
 	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
 
 tests/obj-asan/cgi-%.o: Isearch-cgi/%.cxx
+	@mkdir -p tests/obj-asan
+	$(CXX) $(TEST_CXXFLAGS_ASAN) -c $< -o $@
+
+tests/obj/doctype-%.o: doctype/%.cxx
+	@mkdir -p tests/obj
+	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
+
+tests/obj-asan/doctype-%.o: doctype/%.cxx
 	@mkdir -p tests/obj-asan
 	$(CXX) $(TEST_CXXFLAGS_ASAN) -c $< -o $@
 

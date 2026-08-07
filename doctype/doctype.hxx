@@ -40,6 +40,9 @@ Description:	Class DOCTYPE - Document Type
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef DOCTYPE_HXX
 #define DOCTYPE_HXX
 
@@ -50,6 +53,13 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "rset.hxx"
 #include "registry.hxx"
 
+// Base class for every document-type parser (see doctype/*.cxx for the
+// ~60 concrete formats: HTML, MARC, GILS, etc.). Db is a non-owning
+// back-pointer to the parent IDBOBJ, set once at construction. Most
+// methods here are deliberately no-op defaults (bodies inlined as
+// `{}`), meant to be overridden per format; parameter names are kept
+// on those even though unused, for self-documentation of the interface
+// each override implements.
 class DOCTYPE {
 public:
   DOCTYPE(IDBOBJ* DbParent);
@@ -58,10 +68,18 @@ public:
   virtual void   AddFieldDefs() {};
   virtual void   ParseRecords(const RECORD& FileRecord);
   //@ManMemo: This method called during indexing to build GP list for document.
-  virtual GPTYPE ParseWords(CHR* DataBuffer, INT DataLength, 
-			    INT DataOffset, GPTYPE* GpBuffer, 
+  // Returns the number of GPs written to GpBuffer, or (GPTYPE)-1 if
+  // GpBuffer (GpLength entries) filled up before the document did --
+  // callers (see INDEX::BuildGpList, src/index.cxx) check for that
+  // sentinel and flush/stop rather than treating it as a valid count.
+  virtual GPTYPE ParseWords(CHR* DataBuffer, INT DataLength,
+			    INT DataOffset, GPTYPE* GpBuffer,
 			    INT GpLength);
   //	virtual void SelectRegions(const RECORD& Document, FCT* FctPtr);
+  // Lowercases DataBuffer in place, turning non-alphanumeric bytes
+  // into spaces. Writes a '\0' at data[length] to terminate the
+  // result as a C string -- callers must size data with at least
+  // length+1 bytes of capacity.
   virtual void   ReplaceWithSpace(PCHR data, INT length);
   virtual void   ParseFields(RECORD* NewRecordPtr) {};
   virtual void   ParseDate(const CHR *Buffer, DOUBLE* fStart, 
