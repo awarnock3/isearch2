@@ -40,7 +40,7 @@
 | 36 | src/mdt.hxx | blocked | 2026-08-07 | [src/mdt.hxx](AUTOPILOT_LOG.md#srcmdthxx) |
 | 37 | src/registry.hxx | done | 2026-08-07 | [src/registry.cxx](BUG_CATALOG.md#srcregistrycxx) |
 | 38 | src/result.hxx | done | 2026-08-07 | [src/result.cxx](BUG_CATALOG.md#srcresultcxx) |
-| 39 | src/fprec.hxx | pending | | |
+| 39 | src/fprec.hxx | done | 2026-08-07 | [src/fprec.cxx](BUG_CATALOG.md#srcfpreccxx) |
 | 40 | src/iresult.hxx | pending | | |
 | 41 | src/opobj.hxx | pending | | |
 | 42 | src/fpt.hxx | pending | | |
@@ -131,7 +131,7 @@
 | 127 | src/fc.cxx | pending | | |
 | 128 | src/fct.cxx | pending | | |
 | 129 | src/filemap.cxx | pending | | |
-| 130 | src/fprec.cxx | pending | | |
+| 130 | src/fprec.cxx | done | 2026-08-07 | [src/fprec.cxx](BUG_CATALOG.md#srcfpreccxx) |
 | 131 | src/fpt.cxx | pending | | |
 | 132 | src/geosearch.cxx | pending | | |
 | 133 | src/glist.cxx | pending | | |

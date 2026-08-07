@@ -1820,3 +1820,27 @@ file-level comment added to `result.hxx`. Already used `snprintf` in
   `mdt.hxx` this batch — no standalone repro under this tree's actual
   build flags reproduces a real defect to justify blocking the whole
   file over it.
+
+## src/fprec.cxx
+
+`FPREC`: one entry in `FPT`'s (`src/fpt.hxx`, Order 42, still pending)
+open-file table — a file name, its `FILE*`, open mode, and an
+LRU-style `Priority`/`Closed` pair `FPT` uses to pick which file to
+close when the table is full. See the file-level comment added to
+`fprec.hxx`. Constructor already initializes every member (`FilePointer
+= 0; Priority = 0; Closed = GDT_FALSE;`); no `NULL`/`sprintf` usages.
+
+1. **`operator=` never copied `Priority` or `Closed`** — only
+   `FileName`/`FilePointer`/`OpenMode` were assigned. Confirmed live,
+   not just latent: `src/fpt.cxx:158` does `Fprec = Table[z-1];` into a
+   freshly default-constructed local (`Closed == GDT_FALSE` from
+   `FPREC`'s own constructor), then reads `Fprec.GetClosed()` two lines
+   later expecting `Table[z-1]`'s actual value — it silently got the
+   default instead every time. Fixed by adding the two missing
+   assignments. See `BUGFIX #1` in source; regression test in
+   `tests/src/test_fprec.cxx` confirms a copy's `Priority`/`Closed`
+   match the source's.
+
+Also applied: file-level and per-method doc comments in `fprec.hxx`.
+Added `fprec.cxx` to `TEST_ENGINE_SRCS` (it wasn't linked into the test
+binary before this turn).
