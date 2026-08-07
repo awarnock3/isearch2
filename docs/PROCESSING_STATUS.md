@@ -47,7 +47,7 @@
 | 43 | src/nfield.hxx | done | 2026-08-07 | [src/nfield.cxx](BUG_CATALOG.md#srcnfieldcxx) |
 | 44 | src/nlist.hxx | blocked | 2026-08-07 | [src/nlist.hxx](AUTOPILOT_LOG.md#srcnlisthxx) |
 | 45 | src/date.hxx | done | 2026-08-07 | [src/date.cxx](BUG_CATALOG.md#srcdatecxx) |
-| 46 | src/intfield.hxx | pending | | |
+| 46 | src/intfield.hxx | done | 2026-08-07 | [src/intfield.cxx](BUG_CATALOG.md#srcintfieldcxx) |
 | 47 | src/intlist.hxx | pending | | |
 | 48 | src/soundex.hxx | pending | | |
 | 49 | src/mergeunit.hxx | pending | | |
@@ -140,7 +140,7 @@
 | 136 | src/idb.cxx | pending | | |
 | 137 | src/index.cxx | pending | | |
 | 138 | src/infix2rpn.cxx | pending | | |
-| 139 | src/intfield.cxx | pending | | |
+| 139 | src/intfield.cxx | done | 2026-08-07 | [src/intfield.cxx](BUG_CATALOG.md#srcintfieldcxx) |
 | 140 | src/intlist.cxx | pending | | |
 | 141 | src/iresult.cxx | done | 2026-08-07 | [src/iresult.cxx](BUG_CATALOG.md#srciresultcxx) |
 | 142 | src/irset.cxx | pending | | |

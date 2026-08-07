@@ -2296,3 +2296,50 @@ modernized to `nullptr` (`time((time_t *)NULL)` → `time(nullptr)`).
 Also applied: file-level and per-method doc comments in `date.hxx`.
 Added `date.cxx` to `TEST_ENGINE_SRCS` in the Makefile (it wasn't
 linked into the test binary before this turn).
+
+## src/intfield.cxx
+
+`INTERVALFLD`: one numeric-interval entry, a byte offset paired with a
+`[StartValue, EndValue]` range, derived from `NUMERICFLD`. See the
+file-level comment added to `intfield.hxx`. No bugs fixable without a
+header change were found in the `.cxx` body itself — the default
+constructor already initializes every one of `INTERVALFLD`'s own
+members, and the copy constructor/`operator=` bodies correctly copy
+them. No `NULL`/`sprintf` usages.
+
+### Found but out of scope for this file (deferred, not fixed)
+
+Both require a header change (GENERAL step 4), and neither is confirmed
+reachable in the live tree, the same bar used for `result.hxx`'s
+deferred missing-copy-constructor finding this batch:
+
+- **`GlobalStart`/`GetGlobalStart()`/`SetGlobalStart()` shadow
+  `NUMERICFLD`'s own same-named member and methods** instead of reusing
+  the inherited ones — `INTERVALFLD` ends up carrying two separate
+  `GlobalStart` fields (its own, actually used, and `NUMERICFLD`'s,
+  always left at whatever `NUMERICFLD`'s own default/setters leave it).
+  Only observable if something calls `Get`/`SetGlobalStart` through a
+  `NUMERICFLD&`/`NUMERICFLD*` referring to an `INTERVALFLD` (non-virtual
+  dispatch would then resolve to the base's own hidden copy) — no such
+  call site was found anywhere in the tree. The natural fix (drop the
+  redundant member/methods here, rely on the inherited ones) shrinks the
+  object layout and is a real header change, so left for a human
+  decision rather than guessed at.
+- **`operator=` has a non-standard signature** —
+  `INTERVALFLD operator=(INTERVALFLD& OtherField);` returns by value
+  (a full copy of `*this`, not the usual reference) and takes a
+  non-const reference, unlike every other `operator=` in this tree. Its
+  body is a correct field-by-field copy, but the signature means it
+  can't be chained (`a = b = c;`) or assigned from a temporary/rvalue —
+  both would fail to compile, since a prvalue can't bind to a non-const
+  lvalue reference parameter. Not called anywhere in the tree today
+  (confirmed by search), so this is a latent API footgun, not an active
+  bug; the standard-idiom fix
+  (`INTERVALFLD& operator=(const INTERVALFLD&)`) is a header change, so
+  left for a human decision.
+
+Also applied: a file-level doc comment on `INTERVALFLD` documenting
+both findings above inline, so a future reader (or whoever resolves
+them) doesn't have to rediscover them. Added `intfield.cxx` to
+`TEST_ENGINE_SRCS` in the Makefile (it wasn't linked into the test
+binary before this turn).
