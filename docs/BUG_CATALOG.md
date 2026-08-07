@@ -1549,3 +1549,18 @@ the normalized `YYYY-MM-DD` digits) is now `snprintf`, bounded by the
   pending a human header-signature decision; duplicating that block on
   this row would just be the same open question asked twice. Documented
   in `strlist.hxx`'s new file-level comment instead.
+
+## src/attr.cxx
+
+No bugs found. `ATTR` is a small value type (a Z39.50/GILS search
+attribute: set id, type, value) wrapping two `STRING`s and an `INT`,
+with no raw pointers or manual memory management of its own. Its
+`operator=` copies all three fields by value — safe under
+self-assignment, unlike `STRLIST`'s `Clear()`-then-read pattern (see
+`docs/BUG_CATALOG.md#srcstrlistcxx`, `BUGFIX #1`) — and, unlike the
+`VLIST`-derived classes, `ATTR` has no explicit copy constructor but
+doesn't need one: its members are `STRING` (has its own correct copy
+constructor) and `INT` (trivially copyable), so the compiler-generated
+one is already correct. No `NULL`/`sprintf` usages. Added file-level
+and per-function doc comments plus `tests/src/test_attr.cxx`, including
+a self-assignment regression test.

@@ -31,7 +31,7 @@
 | 27 | src/vlist.hxx | blocked | 2026-08-07 | [src/vlist.hxx](AUTOPILOT_LOG.md#srcvlisthxx) |
 | 28 | src/common.hxx | done | 2026-08-07 | [src/common.cxx](BUG_CATALOG.md#srccommoncxx) |
 | 29 | src/strlist.hxx | done | 2026-08-07 | [src/strlist.cxx](BUG_CATALOG.md#srcstrlistcxx) |
-| 30 | src/attr.hxx | pending | | |
+| 30 | src/attr.hxx | done | 2026-08-07 | [src/attr.cxx](BUG_CATALOG.md#srcattrcxx) |
 | 31 | src/df.hxx | pending | | |
 | 32 | src/attrlist.hxx | pending | | |
 | 33 | src/dfd.hxx | pending | | |
@@ -118,7 +118,7 @@
 | 114 | src/Iindex.cxx | pending | | |
 | 115 | src/Isearch.cxx | pending | | |
 | 116 | src/Iutil.cxx | pending | | |
-| 117 | src/attr.cxx | pending | | |
+| 117 | src/attr.cxx | done | 2026-08-07 | [src/attr.cxx](BUG_CATALOG.md#srcattrcxx) |
 | 118 | src/attrlist.cxx | pending | | |
 | 119 | src/common.cxx | done | 2026-08-07 | [src/common.cxx](BUG_CATALOG.md#srccommoncxx) |
 | 120 | src/date.cxx | pending | | |
