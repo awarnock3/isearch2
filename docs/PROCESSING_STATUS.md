@@ -42,7 +42,7 @@
 | 38 | src/result.hxx | done | 2026-08-07 | [src/result.cxx](BUG_CATALOG.md#srcresultcxx) |
 | 39 | src/fprec.hxx | done | 2026-08-07 | [src/fprec.cxx](BUG_CATALOG.md#srcfpreccxx) |
 | 40 | src/iresult.hxx | done | 2026-08-07 | [src/iresult.cxx](BUG_CATALOG.md#srciresultcxx) |
-| 41 | src/opobj.hxx | pending | | |
+| 41 | src/opobj.hxx | done | 2026-08-07 | [src/opobj.cxx](BUG_CATALOG.md#srcopobjcxx) |
 | 42 | src/fpt.hxx | pending | | |
 | 43 | src/nfield.hxx | pending | | |
 | 44 | src/nlist.hxx | pending | | |
@@ -162,7 +162,7 @@
 | 158 | src/numsearch.cxx | pending | | |
 | 159 | src/operand.cxx | pending | | |
 | 160 | src/operator.cxx | pending | | |
-| 161 | src/opobj.cxx | pending | | |
+| 161 | src/opobj.cxx | done | 2026-08-07 | [src/opobj.cxx](BUG_CATALOG.md#srcopobjcxx) |
 | 162 | src/opstack.cxx | pending | | |
 | 163 | src/rcache.cxx | pending | | |
 | 164 | src/reclist.cxx | pending | | |

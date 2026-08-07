@@ -1856,3 +1856,37 @@ constructor this same batch (`docs/BUG_CATALOG.md#srcresultcxx`,
 `BUGFIX #2`). One `NULL` usage modernized: `Mdt = (MDT*)NULL;` →
 `Mdt = nullptr;`. No `sprintf` usages. Added file-level and per-method
 doc comments plus `tests/src/test_iresult.cxx`.
+
+## src/opobj.cxx
+
+`OPOBJ`: the base class every `OPSTACK` node (leaf operand or operator)
+derives from — see the file-level comment added to `opobj.hxx`. No
+`NULL`/`sprintf` usages.
+
+1. **Constructor left `Next` indeterminate** — no in-class initializer,
+   not set in the constructor body. `Next` is private with
+   `friend class OPSTACK;` the only accessor, and every current
+   `OPSTACK::Push()` call path already calls `SetNext()` immediately
+   after constructing/duplicating a node, before `Next` is ever read
+   back — so this wasn't reachable as a live bug through `OPSTACK`'s
+   existing push/pop/`Reverse()` logic (confirmed by reading
+   `src/opstack.cxx`'s `Push`/`Pop`/`Reverse`, not by a repro, since
+   there's no way to trigger the gap from outside). Fixed anyway, the
+   same way as the identical finding in `RESULT`'s constructor this
+   batch (`docs/BUG_CATALOG.md#srcresultcxx`, `BUGFIX #1`): leaving a
+   raw pointer indeterminate rather than null is a trap for whatever
+   future caller doesn't happen to follow `OPSTACK`'s exact
+   set-before-read discipline. See `BUGFIX #1` in source.
+
+Also applied: a file-level doc comment on `OPOBJ` explaining its role
+and that most methods defaulting to a no-op/zero return is deliberate,
+not an oversight. Left the `-Wunused-parameter` warnings on those
+default virtual bodies (`SetAttributes`, `GetAttributes`, `SetTerm`,
+etc.) as-is, consistent with how the identical pattern was already
+left in place across `idbobj.hxx` (Order 18, already `done`, ~90 such
+warnings) rather than inconsistently cleaning up only this file's ~10;
+none of them are newly introduced by this turn. Added
+`tests/src/test_opobj.cxx` via a minimal concrete subclass (`OPOBJ` is
+abstract) covering the default virtuals' documented no-op behavior;
+`Next`'s initialization isn't unit-testable from outside `OPSTACK` for
+the same friend-access reason it wasn't reachable as a bug.
