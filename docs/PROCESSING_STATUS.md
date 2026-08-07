@@ -28,7 +28,7 @@
 | 24 | src/gdt.h | done | 2026-08-07 | [src/gdt.h](BUG_CATALOG.md#srcgdth) |
 | 25 | src/defs.hxx | done | 2026-08-07 | [src/defs.hxx](BUG_CATALOG.md#srcdefshxx) |
 | 26 | src/string.hxx | done | 2026-08-05 | [src/string.hxx](BUG_CATALOG.md#srcstringhxx) |
-| 27 | src/vlist.hxx | blocked | 2026-08-07 | [src/vlist.hxx](AUTOPILOT_LOG.md#srcvlisthxx) |
+| 27 | src/vlist.hxx | done | 2026-08-07 | [src/vlist.hxx](BUG_CATALOG.md#srcvlisthxx) |
 | 28 | src/common.hxx | done | 2026-08-07 | [src/common.cxx](BUG_CATALOG.md#srccommoncxx) |
 | 29 | src/strlist.hxx | done | 2026-08-07 | [src/strlist.cxx](BUG_CATALOG.md#srcstrlistcxx) |
 | 30 | src/attr.hxx | done | 2026-08-07 | [src/attr.cxx](BUG_CATALOG.md#srcattrcxx) |

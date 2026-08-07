@@ -1940,3 +1940,71 @@ is still `pending` — only that minimal, scoped addition was made there;
 nothing else in that file was touched, and it was not marked
 `processed`. `src/reclist.cxx` was added to `TEST_ENGINE_SRCS` in the
 Makefile so `tests/src/test_reclist.cxx` can link against it.
+
+## src/vlist.hxx
+
+Reprocessed via `/reprocess-blocked` after being blocked at GENERAL step
+4 (see `docs/AUTOPILOT_LOG.md#srcvlisthxx`); the user chose splice-as-
+a-new-circle semantics over making `VLIST` non-copyable.
+
+1. **No copy constructor and no working `operator=`** — `VLIST` (the
+   doubly linked circular list base class) declared neither; the only
+   trace of one was a commented-out, pure-virtual sketch
+   (`virtual VLIST& operator=(const VLIST&) = 0;`) that never compiled.
+   The compiler-generated copy operations shallow-copied the raw
+   `Next`/`Prev` pointers instead of properly relinking the copy into
+   (or out of) a circle. Confirmed with a standalone repro:
+   copy-constructing a node from a one-node circle and destroying both
+   triggered a heap-use-after-free/double-free cascade in `~VLIST()`
+   under AddressSanitizer. Unlike `reclist.hxx`, this was **not
+   dormant**: `FCT` (Order 2, already `done`) and `STRLIST` (Order 29,
+   still `pending`) both derive from `VLIST` without declaring their
+   own copy constructor, so copy-*constructing* either subclass hit
+   this transitively today (their hand-written `operator=`'s, e.g.
+   `FCT::operator=`, already avoid the bug independently by rebuilding
+   via `AddNode()` rather than copying pointers — only construction was
+   exposed). Fixed by adding `VLIST(const VLIST&)` and
+   `operator=(const VLIST&)` where a copied/assigned node becomes the
+   sole member of its own new one-node circle — the source's own
+   `Next`/`Prev` are deliberately never read, since a literal deep copy
+   doesn't have a coherent meaning for a node embedded in a specific
+   circle. `operator=` additionally detaches `this` from whatever
+   circle it currently belongs to before going solo, so its old
+   neighbors are left correctly linked rather than dangling; this makes
+   self-assignment automatically safe too, since neither function ever
+   reads the source's members. Not made virtual, unlike the abandoned
+   sketch — nothing in the tree assigns/copy-constructs through a
+   `VLIST&`/`VLIST*` today. Verified fixed by turning the original
+   standalone repro into a permanent regression test, plus targeted
+   tests for the detach-on-assign and self-assignment behavior; all
+   pass clean under `make tests-asan`. See `BUGFIX #1` in source;
+   regression tests in `tests/src/test_vlist.cxx`.
+
+Found but out of scope — a general destructor hazard, not new in this
+turn and not reachable through the tree's current usage: `~VLIST()`
+unconditionally cascades `delete Next` through the rest of the circle
+on the assumption that every attached node is heap-allocated and that
+exactly one entry point into a circle is ever deliberately destroyed.
+That assumption holds for every live call site found (`FCT`/`STRLIST`
+anchors are stack- or member-allocated, e.g. `FCT fct;` in
+`src/index.cxx`, but every node they attach via `AddEntry`/`AddNode` is
+heap-allocated via `new`, exactly the pattern the cascade handles
+correctly). It breaks only if *multiple* stack-allocated nodes
+belonging to the same circle are each destroyed independently — no
+code in this tree does that, but nothing stops future code from doing
+so, and the resulting failure (an invalid `delete` on a stack address)
+is a hard crash, not a subtle one. Confirmed via the test-writing
+process for this turn: an earlier draft of `tests/src/test_vlist.cxx`
+built multi-node circles entirely out of stack-allocated `TestNode`
+locals and crashed with "double free or corruption" on scope exit —
+unrelated to the `BUGFIX #1` fix above, reproducible on `vlist.cxx` as
+it stood before this turn's changes too. Worth a closer look, and worth
+keeping in mind, when `vlist.cxx`'s own turn (Order 180) comes up —
+possibly hardening `~VLIST()` to tolerate this, or just documenting the
+heap-only-attachment contract explicitly on the class.
+
+Also documented: a file-level doc comment on `VLIST` explaining its
+role (a payload-free circular-list base class) per GENERAL step 7. No
+`NULL`/`sprintf` usages to modernize; `vlist.hxx`'s own `#include`s were
+already complete (verified by compiling it standalone), unlike
+`reclist.hxx`'s analogous defect above.

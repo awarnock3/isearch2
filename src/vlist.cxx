@@ -48,6 +48,36 @@ VLIST::VLIST() {
 }
 
 
+// BUGFIX #1: see docs/BUG_CATALOG.md. A copied node becomes the sole
+// member of its own new one-node circle -- VLIST carries no other
+// state, so this is identical to default-construction. The source's
+// own Next/Prev links are deliberately never read: splicing this node
+// into someone else's circle needs AddNode()'s bookkeeping, not a
+// blind pointer copy.
+VLIST::VLIST(const VLIST&) {
+  Next = this;
+  Prev = this;
+}
+
+
+// BUGFIX #1 (continued): same new-circle-of-one semantics as the copy
+// constructor above. Detaches this node from whatever circle it
+// currently belongs to first -- otherwise its old neighbors would be
+// left pointing at a node that's no longer really part of their
+// circle. Self-assignment is safe throughout since the source's
+// members are never read.
+VLIST&
+VLIST::operator=(const VLIST&) {
+  if (Next != this) {
+    Prev->Next = Next;
+    Next->Prev = Prev;
+  }
+  Next = this;
+  Prev = this;
+  return *this;
+}
+
+
 //SIZE_T VLIST::GetTotalEntries() const {
 INT
 VLIST::GetTotalEntries() const {
