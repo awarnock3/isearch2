@@ -33,7 +33,7 @@
 | 29 | src/strlist.hxx | done | 2026-08-07 | [src/strlist.cxx](BUG_CATALOG.md#srcstrlistcxx) |
 | 30 | src/attr.hxx | done | 2026-08-07 | [src/attr.cxx](BUG_CATALOG.md#srcattrcxx) |
 | 31 | src/df.hxx | done | 2026-08-07 | [src/df.cxx](BUG_CATALOG.md#srcdfcxx) |
-| 32 | src/attrlist.hxx | pending | | |
+| 32 | src/attrlist.hxx | blocked | 2026-08-07 | [src/attrlist.hxx](AUTOPILOT_LOG.md#srcattrlisthxx) |
 | 33 | src/dfd.hxx | pending | | |
 | 34 | src/dfdt.hxx | pending | | |
 | 35 | src/mdtrec.hxx | pending | | |

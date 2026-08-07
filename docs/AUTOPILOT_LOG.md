@@ -71,3 +71,60 @@ literally duplicating the chain — a design call, not just a mechanical
 fix, which is itself an argument for a human decision here. Row set to
 `blocked`; needs a signature-change decision before reprocessing via
 `/process src/vlist.hxx`.
+
+## src/attrlist.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `ATTRLIST` owns a
+heap-allocated `PATTR Table` array (`new ATTR[...]` in `Init()`/
+`Resize()`, `delete [] Table` in the destructor/`Resize()`/`operator=`)
+but declares no copy constructor — only `operator=` — so the
+compiler-generated copy constructor does a shallow pointer copy of
+`Table`. Exactly the same pattern already blocked at
+`docs/AUTOPILOT_LOG.md#srcreclisthxx` (`RECLIST`), and extensively
+forward-flagged across three earlier turns before reaching its own:
+first noted as a latent risk during `operand.hxx`'s turn
+(`docs/BUG_CATALOG.md#srcoperandhxx`, "Found but out of scope" —
+`OPERAND::Attributes` is an `ATTRLIST`), then hit and worked around
+during `irset.hxx`'s turn (`IRSET::IRSET(const IRSET&)` deliberately
+base-constructs `OPERAND` rather than copy-constructing it, specifically
+to avoid triggering this bug transitively — see the `BUGFIX #2` comment
+at `src/irset.cxx:117`), then confirmed reachable in practice (not just
+theoretical) during `sterm.hxx`'s turn, where self-assigning a live
+`STERM` through its `OPOBJ&` interface silently wiped its `Attributes`.
+
+Confirmed real again here with a standalone repro specific to the
+copy-constructor path (as opposed to the self-assignment path already
+confirmed at `sterm.hxx`'s turn): build an `ATTRLIST`, add one entry,
+copy-initialize a second (`ATTRLIST b = a;` — copy constructor, not
+`operator=`, since `b` doesn't exist yet), let `b` go out of scope,
+then let `a` be destroyed at end of scope. AddressSanitizer reported a
+`heap-use-after-free` in `ATTRLIST::~ATTRLIST()` (`attrlist.cxx:356`):
+`b`'s implicit shallow copy shared `a`'s `Table` pointer, `b`'s
+destructor freed it first, and `a`'s destructor then read/freed the
+same already-freed block.
+
+Fixing it requires adding `ATTRLIST(const ATTRLIST&);` to
+`attrlist.hxx` — no declaration exists today — deep-copying `Table`,
+`TotalEntries`, `MaxEntries` (mirroring `operator=`'s already-correct
+logic), or alternatively `= delete`-ing it to make the class explicitly
+non-copyable, the same deep-copy-vs-non-copyable choice already pending
+on `reclist.hxx` and `vlist.hxx`. Unlike those two, non-copyable is a
+harder sell here: `ATTRLIST` is a live member of `OPERAND`
+(`src/operand.hxx:65`) and `DFD` (`src/dfd.hxx:72`), both of which are
+copy-constructed/assigned in the tree today, so `= delete` would need
+each of those call sites re-audited too — exactly the kind of ripple
+GENERAL step 4 reserves for a human, not an autopilot guess.
+
+Also found, not fixed here since step 4 gates the rest of this file's
+pipeline for this turn: `ATTRLIST::operator=` (`attrlist.cxx:61`) has
+no self-assignment guard (`delete [] Table; Init();` runs before
+`OtherAttrlist.GetTotalEntries()` is read, so `x = x;` silently empties
+the list) — already documented at
+`docs/BUG_CATALOG.md#srcoperandhxx` and confirmed reachable at
+`sterm.hxx`'s turn. This one doesn't need a header change (`operator=`'s
+signature is unchanged, only its body) and can be fixed the next time
+this file is reprocessed, alongside the copy-constructor decision.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable, and if non-copyable, an audit of `OPERAND`'s and `DFD`'s
+copy sites) before reprocessing via `/process src/attrlist.hxx`.
