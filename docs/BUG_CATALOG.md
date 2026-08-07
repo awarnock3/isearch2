@@ -1564,3 +1564,43 @@ constructor) and `INT` (trivially copyable), so the compiler-generated
 one is already correct. No `NULL`/`sprintf` usages. Added file-level
 and per-function doc comments plus `tests/src/test_attr.cxx`, including
 a self-assignment regression test.
+
+## src/df.cxx
+
+`DF`: a field name paired with an `FCT` of byte-offset occurrences (see
+the file-level comment added to `df.hxx`). No `NULL`/`sprintf` usages.
+
+1. **`operator=` had no self-assignment guard** — `df = df;` would
+   reach `Fct = OtherDf.Fct;` with `OtherDf.Fct` being the very same
+   `FCT` as `Fct`. Fixed with a `this == &OtherDf` guard, the same
+   pattern as `STRLIST::operator=`'s fix this batch (see
+   `docs/BUG_CATALOG.md#srcstrlistcxx`, `BUGFIX #1`). See `BUGFIX #1`
+   in source; regression test in `tests/src/test_df.cxx`.
+
+### Found but out of scope for this file (deferred, not fixed)
+
+- **`FCT::operator=` itself has the identical missing-self-assignment-
+  guard bug** (`src/fct.cxx`) — `Clear()` runs first, then
+  `OtherFct.GetTotalEntries()` is read, so `fct = fct;` (directly, or
+  transitively via `DF::operator=` before this turn's fix above) Clears
+  itself before "copying" its own now-empty contents back, silently
+  losing every entry. Confirmed by inspection while reading `FCT` as a
+  dependency of `DF`; not reproduced standalone here since `FCT` isn't
+  the file on this turn. Unlike every other "found but out of scope"
+  note elsewhere in this catalog, `src/fct.cxx` (Order 2) is already
+  marked `done` (2026-08-05) rather than still-`pending` — this predates
+  the self-assignment class of bug being on anyone's radar (`STRLIST`'s
+  copy of the same bug, above, is what surfaced the pattern). Left
+  unfixed here rather than reopening an already-`done` file's row
+  mid-turn on a different file; recommend `/process src/fct.cxx` to
+  pick it up deliberately. `DF`'s own guard (`BUGFIX #1` above) closes
+  the hole for `DF` callers in the meantime, but any other direct
+  `FCT`-copying caller remains exposed until `fct.cxx` is revisited.
+- **Missing copy constructor, inherited from `VLIST` (via `FCT`)** —
+  same shape as `STRLIST`'s deferred finding
+  (`docs/BUG_CATALOG.md#srcstrlistcxx`): `DF` has no explicit copy
+  constructor, so copy-constructing a `DF` falls through to `FCT`'s
+  (also absent, therefore `VLIST`'s compiler-generated shallow) copy
+  constructor for the `Fct` member. Tracked at
+  `docs/AUTOPILOT_LOG.md#srcvlisthxx`; not duplicated as a second
+  blocked row here for the same reason given in `strlist.hxx`'s turn.

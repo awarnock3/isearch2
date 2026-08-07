@@ -43,6 +43,9 @@ Description:	Class DF - Data Field
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef DF_HXX
 #define DF_HXX
 
@@ -52,16 +55,24 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "fc.hxx"
 #include "fct.hxx"
 
-
+// A Data Field definition: a field name (stored uppercased -- see
+// SetFieldName) paired with the FCT (Field Coordinate Table) of
+// [start,end) byte-offset occurrences within a document that belong to
+// that field.
 class DF {
 public:
   DF();
+  // Deep-copies OtherDf's FieldName and Fct; safe under self-assignment.
   DF& operator=(const DF& OtherDf);
+  // Stores NewFieldName uppercased.
   void SetFieldName(const STRING& NewFieldName);
   void GetFieldName(STRING *StringBuffer) const;
   void SetFct(const FCT& NewFct);
   void GetFct(FCT *FctBuffer) const;
+  // Serializes as text: field name, a newline, then FCT::Write's own
+  // format.
   void Write(FILE *fp) const;
+  // Reads the pair back from text previously written by Write().
   void Read(FILE *fp);
   ~DF();
 

@@ -32,7 +32,7 @@
 | 28 | src/common.hxx | done | 2026-08-07 | [src/common.cxx](BUG_CATALOG.md#srccommoncxx) |
 | 29 | src/strlist.hxx | done | 2026-08-07 | [src/strlist.cxx](BUG_CATALOG.md#srcstrlistcxx) |
 | 30 | src/attr.hxx | done | 2026-08-07 | [src/attr.cxx](BUG_CATALOG.md#srcattrcxx) |
-| 31 | src/df.hxx | pending | | |
+| 31 | src/df.hxx | done | 2026-08-07 | [src/df.cxx](BUG_CATALOG.md#srcdfcxx) |
 | 32 | src/attrlist.hxx | pending | | |
 | 33 | src/dfd.hxx | pending | | |
 | 34 | src/dfdt.hxx | pending | | |
@@ -124,7 +124,7 @@
 | 120 | src/date.cxx | pending | | |
 | 121 | src/datesearch.cxx | pending | | |
 | 122 | src/defs.cxx | pending | | |
-| 123 | src/df.cxx | pending | | |
+| 123 | src/df.cxx | done | 2026-08-07 | [src/df.cxx](BUG_CATALOG.md#srcdfcxx) |
 | 124 | src/dfd.cxx | pending | | |
 | 125 | src/dfdt.cxx | pending | | |
 | 126 | src/dft.cxx | pending | | |
