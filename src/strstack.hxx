@@ -34,20 +34,34 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
 
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef STRSTACK_HXX
 #define STRSTACK_HXX
 
 #include "gdt.h"
-/*
+// BUGFIX #1: these were commented out, even though STRING/STRLIST are
+// used below (STRSTACK::Push's parameter, StackList's type) -- this
+// header only compiled standalone because every real includer happens
+// to pull in string.hxx/strlist.hxx first. See docs/BUG_CATALOG.md#srcstrstackhxx.
 #include "strlist.hxx"
 #include "string.hxx"
-*/
+
+// A LIFO stack of STRING values, backed by STRLIST (a 1-based, array-
+// like list): Push()/Pop() grow/shrink via a CurrIndex cursor rather
+// than actually adding/removing STRLIST nodes, so popped slots are
+// reused (overwritten) by later pushes instead of being freed.
 class STRSTACK {
 public:
 	STRSTACK();
 	void Push(const STRING &Value);
+	// Copies the top entry into *Value and pops it. Returns GDT_FALSE
+	// (leaving *Value untouched) if the stack is empty.
 	GDT_BOOLEAN Pop(STRING  *Value);
 	INT GetTotalEntries(void);
+	// Copies the top entry into *Value without popping it. Returns
+	// GDT_FALSE (leaving *Value untouched) if the stack is empty.
 	GDT_BOOLEAN Examine(STRING *Value);
 	GDT_BOOLEAN IsEmpty(void);
 private:

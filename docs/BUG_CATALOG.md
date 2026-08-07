@@ -2683,3 +2683,31 @@ Tests (`tests/doctype/test_sgmltag.cxx`) cover `sgml_parse_tags()`
 and SGMLTAG's stricter no-match case for attribute-bearing tags), a
 `ParseFields()` integration test against a real temp file, and the
 leak regression test described above.
+
+## src/strstack.hxx
+
+`class STRSTACK` is a small LIFO stack of `STRING`s backed by `STRLIST`
+(used by `src/infix2rpn.cxx` and `doctype/dif.cxx`). No functional
+`BUGFIX` this turn -- `Push()`/`Pop()`/`Examine()`'s "cursor into an
+array-like list" implementation was checked against `STRLIST::SetEntry`/
+`GetEntry`'s 1-based/grow-on-set semantics and is correct, including the
+non-obvious part: `Pop()` only moves `CurrIndex` back, it doesn't erase
+the `STRLIST` node, so a later `Push()` must (and does, via `SetEntry`)
+overwrite that stale slot rather than leaving or skipping it --
+confirmed with a dedicated test (`STRSTACK reuses popped slots
+correctly on a later push`).
+
+1. **Header not self-contained** — `strstack.hxx` used `STRING` (in
+   `Push()`'s parameter) and `STRLIST` (`StackList`'s type) without
+   including either; both `#include`s were commented out, leaving only
+   `gdt.h`. Same class of issue as `src/fc.hxx` (see that entry, first
+   in this catalog): silently fine only because every real includer
+   happens to pull in `string.hxx`/`strlist.hxx` first. Restored both
+   includes. `BUGFIX #1` in source. Not a signature change (no
+   declaration's type changed) so didn't need GENERAL step 4's header
+   freeze.
+
+No `NULL`/`sprintf` usages present. Added class/method doc comments.
+Tests (`tests/src/test_strstack.cxx`) cover empty-stack behavior,
+LIFO Push/Pop ordering, `Examine()` (peek without popping, and on an
+empty stack), and the popped-slot-reuse case above.

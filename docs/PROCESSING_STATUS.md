@@ -58,7 +58,7 @@
 | 54 | src/index.hxx | done | 2026-08-07 | [src/index.cxx](BUG_CATALOG.md#srcindexcxx) |
 | 55 | doctype/sgmlnorm.hxx | done | 2026-08-07 | [doctype/sgmlnorm.cxx](BUG_CATALOG.md#doctypesgmlnormcxx) |
 | 56 | doctype/sgmltag.hxx | done | 2026-08-07 | [doctype/sgmltag.cxx](BUG_CATALOG.md#doctypesgmltagcxx) |
-| 57 | src/strstack.hxx | pending | | |
+| 57 | src/strstack.hxx | done | 2026-08-07 | [src/strstack.hxx](BUG_CATALOG.md#srcstrstackhxx) |
 | 58 | src/infix2rpn.hxx | pending | | |
 | 59 | src/glist.hxx | pending | | |
 | 60 | doctype/colondoc.hxx | pending | | |
@@ -176,7 +176,7 @@
 | 172 | src/stopword.cxx | pending | | |
 | 173 | src/string.cxx | done | 2026-08-05 | [src/string.cxx](BUG_CATALOG.md#srcstringcxx) |
 | 174 | src/strlist.cxx | done | 2026-08-07 | [src/strlist.cxx](BUG_CATALOG.md#srcstrlistcxx) |
-| 175 | src/strstack.cxx | pending | | |
+| 175 | src/strstack.cxx | done | 2026-08-07 | [src/strstack.hxx](BUG_CATALOG.md#srcstrstackhxx) |
 | 176 | src/termobj.cxx | pending | | |
 | 177 | src/thesaurus.cxx | pending | | |
 | 178 | src/tokengen.cxx | pending | | |
