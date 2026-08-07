@@ -2221,3 +2221,27 @@ handle is actually physically closed (the context that made `BUGFIX
 were already complete (verified by compiling it standalone).
 `src/fpt.cxx` was added to `TEST_ENGINE_SRCS` in the Makefile so
 `tests/src/test_fpt.cxx` can link against it.
+
+## src/nfield.cxx
+
+`NUMERICFLD`: one numeric-field entry, a byte offset paired with a
+numeric value (see the file-level comment added to `nfield.hxx`). No
+`operator=` declared — the compiler-generated one is already correct,
+since both members are plain primitives with no owned resources. No
+`NULL`/`sprintf` usages.
+
+1. **Constructor left `GlobalStart`/`NumericValue` indeterminate** —
+   `NUMERICFLD::NUMERICFLD() {}` had an empty body, no in-class
+   initializers on either member. Confirmed live, not just latent:
+   `src/nlist.cxx:62/74` does `table = new NUMERICFLD[50*Ncoords];`,
+   array-default-constructing every slot, and code elsewhere in that
+   same file reads `table[x].GetGlobalStart()`/`GetNumericValue()` (via
+   `qsort` comparators and direct indexing) before every slot is
+   necessarily filled. Fixed by initializing both to `0`/`0.0`. See
+   `BUGFIX #1` in source; regression test in
+   `tests/src/test_nfield.cxx` checks both a single default-constructed
+   instance and every slot of a default-constructed array.
+
+Also applied: a file-level doc comment on `nfield.hxx`. Added
+`nfield.cxx` to `TEST_ENGINE_SRCS` in the Makefile (it wasn't linked
+into the test binary before this turn).

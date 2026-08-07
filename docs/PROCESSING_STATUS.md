@@ -44,7 +44,7 @@
 | 40 | src/iresult.hxx | done | 2026-08-07 | [src/iresult.cxx](BUG_CATALOG.md#srciresultcxx) |
 | 41 | src/opobj.hxx | done | 2026-08-07 | [src/opobj.cxx](BUG_CATALOG.md#srcopobjcxx) |
 | 42 | src/fpt.hxx | done | 2026-08-07 | [src/fpt.hxx](BUG_CATALOG.md#srcfpthxx) |
-| 43 | src/nfield.hxx | pending | | |
+| 43 | src/nfield.hxx | done | 2026-08-07 | [src/nfield.cxx](BUG_CATALOG.md#srcnfieldcxx) |
 | 44 | src/nlist.hxx | pending | | |
 | 45 | src/date.hxx | pending | | |
 | 46 | src/intfield.hxx | pending | | |
@@ -155,7 +155,7 @@
 | 151 | src/merge.hxx | pending | | |
 | 152 | src/mergeunit.cxx | pending | | |
 | 153 | src/multiterm.cxx | pending | | |
-| 154 | src/nfield.cxx | pending | | |
+| 154 | src/nfield.cxx | done | 2026-08-07 | [src/nfield.cxx](BUG_CATALOG.md#srcnfieldcxx) |
 | 155 | src/nfldmgr.cxx | pending | | |
 | 156 | src/nlatlon.cxx | pending | | |
 | 157 | src/nlist.cxx | pending | | |

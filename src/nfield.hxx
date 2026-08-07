@@ -44,12 +44,19 @@ Description:	Class NUMERICFLD - Data structures for numeric data
 Author:		Jim Fullton, Jim.Fullton@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef NUMERICFLD_HXX
 #define NUMERICFLD_HXX
 
 #include "gdt.h"
 #include "defs.hxx"
 
+// One numeric-field entry: a document's byte offset (GlobalStart)
+// paired with the numeric value found there, indexed for range/
+// comparison search (see NLIST, src/nlist.hxx, which sorts and
+// range-queries arrays of these).
 class NUMERICFLD {
 public:
   NUMERICFLD();

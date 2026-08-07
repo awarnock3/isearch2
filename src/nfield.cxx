@@ -43,11 +43,20 @@ $Revision: 1.3 $
 Description:	Class NUMERICFLD - Data structures for numeric data
 Author:		Jim Fullton, Jim.Fullton@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include "nfield.hxx"
 
 
 NUMERICFLD::NUMERICFLD() {
+  // BUGFIX #1: GlobalStart/NumericValue had no in-class initializer and
+  // were never set here, so a default-constructed NUMERICFLD (e.g. any
+  // unfilled slot of `table = new NUMERICFLD[50*Ncoords];` in
+  // src/nlist.cxx) started with indeterminate values until a caller
+  // happened to Set both explicitly.
+  GlobalStart = 0;
+  NumericValue = 0.0;
 }
 
 
