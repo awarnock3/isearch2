@@ -59,7 +59,7 @@
 | 55 | doctype/sgmlnorm.hxx | done | 2026-08-07 | [doctype/sgmlnorm.cxx](BUG_CATALOG.md#doctypesgmlnormcxx) |
 | 56 | doctype/sgmltag.hxx | done | 2026-08-07 | [doctype/sgmltag.cxx](BUG_CATALOG.md#doctypesgmltagcxx) |
 | 57 | src/strstack.hxx | done | 2026-08-07 | [src/strstack.hxx](BUG_CATALOG.md#srcstrstackhxx) |
-| 58 | src/infix2rpn.hxx | pending | | |
+| 58 | src/infix2rpn.hxx | done | 2026-08-07 | [src/infix2rpn.cxx](BUG_CATALOG.md#srcinfix2rpncxx) |
 | 59 | src/glist.hxx | pending | | |
 | 60 | doctype/colondoc.hxx | pending | | |
 | 61 | doctype/mailfolder.hxx | pending | | |
@@ -139,7 +139,7 @@
 | 135 | src/hash.cxx | pending | | |
 | 136 | src/idb.cxx | pending | | |
 | 137 | src/index.cxx | done | 2026-08-07 | [src/index.cxx](BUG_CATALOG.md#srcindexcxx) |
-| 138 | src/infix2rpn.cxx | pending | | |
+| 138 | src/infix2rpn.cxx | done | 2026-08-07 | [src/infix2rpn.cxx](BUG_CATALOG.md#srcinfix2rpncxx) |
 | 139 | src/intfield.cxx | done | 2026-08-07 | [src/intfield.cxx](BUG_CATALOG.md#srcintfieldcxx) |
 | 140 | src/intlist.cxx | pending | | |
 | 141 | src/iresult.cxx | done | 2026-08-07 | [src/iresult.cxx](BUG_CATALOG.md#srciresultcxx) |

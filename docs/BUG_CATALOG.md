@@ -2711,3 +2711,61 @@ No `NULL`/`sprintf` usages present. Added class/method doc comments.
 Tests (`tests/src/test_strstack.cxx`) cover empty-stack behavior,
 LIFO Push/Pop ordering, `Examine()` (peek without popping, and on an
 empty stack), and the popped-slot-reuse case above.
+
+## src/infix2rpn.cxx
+
+`class INFIX2RPN` translates an infix boolean query (terms, AND/OR/
+ANDNOT/NEAR, parens) to RPN via shunting-yard, using a fixed-size
+`CHR DefaultOp[MAX_OP_LEN]` (8 bytes) member for the implicit operator
+inserted between two adjacent terms with no explicit operator.
+
+1. **3-arg constructor: unchecked `strcpy` overflowed `DefaultOp`** —
+   `INFIX2RPN(const STRING&, STRING*, const CHR *Op)` did
+   `strcpy(DefaultOp, Op);` directly, with no length check, even though
+   `SetDefaultOp()` (same class) already has the correct check
+   (`if (strlen(Op) < MAX_OP_LEN) strcpy(...); else strcpy(DefaultOp,
+   "AND");`) for exactly this same buffer. Confirmed real with a
+   standalone repro (`INFIX2RPN p(in, &out, "<49 chars>")`) compiled
+   under ASan before fixing — `AddressSanitizer: stack-buffer-overflow
+   ... WRITE of size 47 ... in INFIX2RPN::INFIX2RPN`. No in-tree caller
+   currently uses this constructor with a long `Op` (only the 2-arg
+   constructor is used, in `src/Isearch.cxx`/`src/zsearch.cxx`), but
+   it's a `public` constructor, so any future caller (or the same
+   pattern reintroduced later) would corrupt memory. Fixed by
+   delegating to the already-correct `SetDefaultOp(Op)` instead of
+   duplicating (and this time getting wrong) its bounds check.
+   `BUGFIX #2` in source; re-ran the same repro after the fix to
+   confirm it's clean. Covered by `INFIX2RPN 3-arg constructor does not
+   overflow on an oversized Op`.
+2. **Default constructor left `TermsWithNoOps` uninitialized** — the
+   other two constructors indirectly zero it via `Parse()`'s own
+   `TermsWithNoOps = 0;`, but the no-arg constructor never calls
+   `Parse()`, so `InputParsedOK()` (which reads `TermsWithNoOps`)
+   returned garbage if called before any `Parse()`. Same recurring
+   pattern as prior turns' uninitialized-primitive-member fixes (RESULT,
+   NUMERICFLD, SRCH_DATE, `INDEX`). Fixed via a member-initializer list.
+   `BUGFIX #1` in source. Covered by `INFIX2RPN default constructor
+   starts with a deterministic parse state` (a plain assertion, not an
+   ASan-catchable case — reading an uninitialized `INT` isn't something
+   `-fsanitize=address,undefined` flags without MemorySanitizer, which
+   this tree doesn't build with).
+
+Not otherwise pursued: `Parse()`'s `")"`/`ProcessOp()`'s "pop until
+left-paren" loops don't distinguish "found `(`" from "stack ran empty
+first" before their final unconditional `Pop()` (mismatched/unbalanced
+parens) — `STRSTACK::Pop()` already handles an empty stack safely
+(returns `GDT_FALSE`, leaves `*Value` untouched, confirmed in
+`src/strstack.cxx`'s own turn this batch), so this is silently-lenient
+behavior on malformed queries, not a memory-safety bug; the class
+already has unused `RegisterError()`/`GetErrorMessage()` infrastructure
+and even a commented-out "two operands in a row" error path, suggesting
+incomplete-but-intentional error handling rather than a regression, so
+left alone rather than guessed at.
+
+No `NULL`/`sprintf` usages in code (one `NULL` reference is inside a
+commented-out dead line). Added class/method doc comments. Tests
+(`tests/src/test_infix2rpn.cxx`) cover basic AND/OR/ANDNOT/NEAR
+translation and their symbolic aliases, paren precedence, implicit-
+default-operator insertion between adjacent terms, the 3-arg
+constructor (valid and oversized `Op`), `SetDefaultOp()`'s own
+too-long fallback, and both `BUGFIX`es above.
