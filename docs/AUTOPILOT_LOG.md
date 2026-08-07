@@ -288,3 +288,59 @@ not an autopilot guess, per GENERAL step 4.
 Row set to `blocked`; needs a signature-change decision (deep-copy vs.
 non-copyable, and if deep-copy, a decision on open-`FILE*` semantics)
 before reprocessing via `/process src/fpt.hxx`.
+
+## src/nlist.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `NUMERICLIST` owns a
+heap-allocated `PNUMERICFLD table` array (`new NUMERICFLD[50*Ncoords]`
+in both constructors, `delete [] table` in the destructor) but declares
+no copy constructor and no `operator=` at all — the same "no custom
+copy semantics whatsoever" shape as `mdt.hxx`/`fpt.hxx` earlier this
+batch. The compiler-generated copy constructor and copy-assignment
+operator both do a member-wise shallow copy of `table`.
+
+Confirmed real with a standalone repro, same shape as the others this
+batch: default-construct a `NUMERICLIST`, copy-initialize a second
+(`NUMERICLIST b = a;` — copy constructor, not `operator=`, since one
+isn't declared either way), let `b` go out of scope, then let `a` be
+destroyed at end of scope. AddressSanitizer reported a
+`heap-use-after-free` in `NUMERICLIST::~NUMERICLIST()` (`nlist.cxx:879`):
+`b`'s implicit shallow copy shared `a`'s `table` pointer, `b`'s
+destructor `delete []`'d it first, and `a`'s destructor then read the
+same already-freed block. No confirmed copy-construction call site was
+found in the live tree (every site found — `src/index.cxx`,
+`src/numsearch.cxx`, `src/idb.cxx`, `src/intlist.cxx` — either
+default-constructs a plain `NUMERICLIST` or `new`'s an array of them in
+`src/nfldmgr.cxx:136`, never copy-constructs one), so this is latent
+rather than actively crashing today. One live subclass, though:
+`INTLIST` (`src/intlist.hxx:68`, Order 47, still pending) derives from
+`NUMERICLIST` without declaring its own copy constructor either, so
+copy-constructing an `INTLIST` would hit this transitively — worth
+flagging concretely when `intlist.hxx` reaches its own turn, the same
+way `STRLIST`/`FCT` deriving from `VLIST` was flagged before `vlist.hxx`
+was resolved.
+
+Fixing it requires adding `NUMERICLIST(const NUMERICLIST&);` and
+`NUMERICLIST& operator=(const NUMERICLIST&);` to `nlist.hxx` — deep-
+copying `table` (sized to the source's `MaxEntries`), `Count`,
+`Attribute`, `Pointer`, `MaxEntries`, `StartIndex`, `EndIndex`,
+`Relation`, `FileName`, `Ncoords` — or `= delete`-ing both to make the
+class explicitly non-copyable, mirroring the deep-copy-vs-non-copyable
+choice already resolved (case by case) for `reclist.hxx`/`attrlist.hxx`/
+`dfdt.hxx`/`mdt.hxx`/`fpt.hxx`. A call for a human, not an autopilot
+guess, per GENERAL step 4.
+
+Also found while reading, not fixed here since step 4 gates the rest of
+this file's pipeline for this turn: **both constructors leave
+`Attribute` and `Relation` (plain `INT` members) uninitialized** —
+`Ncoords`/`table`/`Count`/`MaxEntries`/`FileName`/`Pointer`/
+`StartIndex`/`EndIndex` are all set, but `Attribute`/`Relation` are
+not, matching the same "indeterminate primitive member" category
+already found (and fixed) in `RESULT`'s constructor
+(`docs/BUG_CATALOG.md#srcresultcxx`, `BUGFIX #1`) and `NUMERICFLD`'s
+(`docs/BUG_CATALOG.md#srcnfieldcxx`, `BUGFIX #1`) earlier this batch.
+Doesn't need a header change and can be fixed the next time this file
+is reprocessed, alongside the copy-semantics decision.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable) before reprocessing via `/process src/nlist.hxx`.
