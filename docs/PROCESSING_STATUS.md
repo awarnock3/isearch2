@@ -22,7 +22,7 @@
 | 18 | src/idbobj.hxx | done | 2026-08-06 | [src/idbobj.hxx](BUG_CATALOG.md#srcidbobjhxx) |
 | 19 | src/marclib.hxx | done | 2026-08-07 | [src/marclib.hxx](BUG_CATALOG.md#srcmarclibhxx) |
 | 20 | src/md5.hxx | done | 2026-08-07 | [src/md5.hxx](BUG_CATALOG.md#srcmd5hxx) |
-| 21 | src/reclist.hxx | pending | | |
+| 21 | src/reclist.hxx | blocked | 2026-08-07 | [src/reclist.hxx](AUTOPILOT_LOG.md#srcreclisthxx) |
 | 22 | src/conf.h | pending | | |
 | 23 | src/confwin.h | pending | | |
 | 24 | src/gdt.h | pending | | |
