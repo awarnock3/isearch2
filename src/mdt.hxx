@@ -46,6 +46,8 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "defs.hxx"
 #include "string.hxx"
 #include "mdtrec.hxx"
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 class GPREC {
 public:
@@ -60,9 +62,25 @@ public:
 	GPTYPE Index;
 };
 
+// The Multiple Document Table: one entry per indexed document, backed
+// by an on-disk .mdt record file plus two in-memory sort indexes
+// (KeyIndex, GpIndex) mirrored to .mdk/.mdg on FlushMDTIndexes().
 class MDT {
 public:
 	MDT(const STRING& DbFileStem, const GDT_BOOLEAN WrongEndian);
+	// BUGFIX #1: MDT owns two heap-allocated arrays (KeyIndex, GpIndex)
+	// and a raw FILE* (MdtFp), but declared no copy constructor and no
+	// operator= at all -- not even a hand-written one -- so the
+	// compiler-generated ones did a member-wise shallow copy of all
+	// three. Confirmed to double-free GpIndex under ASan (one level
+	// inside FlushMDTIndexes() -> SortGpIndex() -> qsort()); the shared
+	// MdtFp would double-fclose() by the same mechanism. Made
+	// explicitly non-copyable rather than deep-copied: nothing in the
+	// tree copies an MDT by value today, and there's no well-defined
+	// answer for what a copy of an open file handle should mean. See
+	// docs/BUG_CATALOG.md.
+	MDT(const MDT&) = delete;
+	MDT& operator=(const MDT&) = delete;
 //	void LoadTable(const STRING& FileName);	// This is now done automatically
 //	void SaveTable(const STRING& FileName);	// in the constructor and destructor.
 	void AddEntry(const MDTREC& MdtRecord);

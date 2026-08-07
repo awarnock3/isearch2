@@ -2102,3 +2102,72 @@ modernized to `strtok(nullptr,"\n")`, per this file's own
 reprocessing. A file-level doc comment on `DFDT` per GENERAL step 7.
 `dfdt.hxx`'s own `#include`s were already complete (verified by
 compiling it standalone).
+
+## src/mdt.hxx
+
+Reprocessed via `/reprocess-blocked` after being blocked at GENERAL step
+4 (see `docs/AUTOPILOT_LOG.md#srcmdthxx`); the user chose non-copyable
+over deep-copy, since nothing in the tree copies an `MDT` by value
+today and there's no well-defined answer for what a copy of an open
+`FILE*` should mean.
+
+1. **No copy constructor and no `operator=` at all** — unlike every
+   other class blocked this batch, `MDT` declared neither, not even a
+   hand-written (if buggy) one. It owns two heap-allocated arrays
+   (`KeyIndex`, `GpIndex`) *and* a raw `FILE* MdtFp`, so the
+   compiler-generated copy operations did a member-wise shallow copy of
+   all three. Confirmed with a standalone repro (construct against a
+   real temp file stem, add one entry, copy-construct a second,
+   destroy both): AddressSanitizer reported a heap-use-after-free one
+   level inside `~MDT()`'s call to `FlushMDTIndexes()` →
+   `SortGpIndex()` → `qsort()` on the already-freed `GpIndex`; the
+   shared `MdtFp` double-`fclose()` is real by the same mechanism but
+   wasn't hit by this specific repro. No confirmed live
+   copy-construction call site exists today, so this was latent. Fixed
+   by declaring `MDT(const MDT&) = delete;` and
+   `MDT& operator=(const MDT&) = delete;` — no body to write, so no
+   `BUGFIX #1` comment in `.cxx`, just the declarations in `mdt.hxx`.
+   Compile-time regression test (`std::is_copy_constructible`/
+   `is_copy_assignable`) in `tests/src/test_mdt.cxx`.
+2. **Three `qsort`/`bsearch` comparators used unsigned subtraction** —
+   `MdtCompareKeysByIndex`, `MdtCompareGpByIndex`, and
+   `MdtCompareGpStarts` computed their result as a plain subtraction of
+   `GPTYPE` (`UINT4`, unsigned) fields narrowed to `int` — the classic
+   unsigned-subtraction-in-a-comparator bug: for a pair far enough
+   apart, the unsigned wraparound produces the wrong sign once
+   narrowed, misordering the sort/search. Not exercised by this
+   batch's test data (small `Index` values), but `GpStart`/`GpEnd` are
+   byte offsets that can realistically span the affected range in a
+   large database. Fixed with explicit `<`/`>` comparisons instead of
+   subtraction. See `BUGFIX #2` in source.
+3. **`GetUniqueKey` still used `sprintf`** — modernized to
+   `snprintf(s, sizeof(s), ...)`, per this file's own
+   `docs/AUTOPILOT_LOG.md` entry flagging it as ready for the next
+   reprocessing (`y`/`x` are `INT`, so the worst case comfortably fits
+   the existing `CHR s[30]` buffer — not a live overflow, just
+   modernization). See `BUGFIX #3` in source.
+4. **`GetEntry`'s not-found path used `memset` on a non-trivial
+   class** — `memset(MdtrecPtr, 0, sizeof(MDTREC))` is safe in practice
+   (`MDTREC` holds only fixed-size `CHR` arrays and `GPTYPE`/`CHR`
+   scalars, no owned pointers), but `MDTREC`'s user-declared
+   `operator=` makes it non-trivial from the type system's point of
+   view, so GCC flags the `memset` under `-Wclass-memaccess` — a
+   pre-existing warning, not introduced this turn, that GENERAL step 9
+   requires resolving before the file compiles clean. Fixed by using
+   the class's own default constructor (`*MdtrecPtr = MDTREC();`),
+   which already zero-initializes the same fields (confirmed by reading
+   `MDTREC::MDTREC()`) — equivalent result, warning-free. See
+   `BUGFIX #4` in source.
+5. **`Dump()`'s loop variable was signed, compared against unsigned
+   `TotalEntries`** — another pre-existing `-Wall`/`-Wextra` warning
+   (`-Wsign-compare`), not introduced this turn. Changed `INT x;` to
+   `SIZE_T x;`, matching `TotalEntries`'s type (and `GetEntry`'s own
+   parameter type, removing an implicit conversion at the call site
+   too). See `BUGFIX #5` in source.
+
+Also applied: a file-level doc comment on `MDT` per GENERAL step 7.
+`mdt.hxx`'s own `#include`s were already complete (verified by
+compiling it standalone). `MDT` has no default constructor — it always
+opens/creates real on-disk `.mdt`/`.mdg`/`.mdk` files via a file stem —
+so `tests/src/test_mdt.cxx` uses a `TempMdt` fixture, the same pattern
+already established in `tests/src/test_filemap.cxx`.
