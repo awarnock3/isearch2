@@ -75,6 +75,11 @@ tests/run_tests-asan
 tests/reports/
 *.o.asan
 
+# Isearch2 cleanup: generated PDF reports (see /blocked-report) --
+# disposable, timestamped artifacts, not tracked project state, same
+# treatment as tests/reports/ above.
+docs/reports/
+
 # Isearch2 cleanup: local Claude Code permission config — machine-specific,
 # never share bypassPermissions (or any permission override) via the branch
 .claude/settings.json

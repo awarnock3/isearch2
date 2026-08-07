@@ -319,8 +319,9 @@ to interpret a failure.
 Documented here conceptually; the actual invokable slash commands live
 in `.claude/commands/` (see the files provided alongside this one) so
 you can type `/analyze`, `/process-next`, `/process <filename>`,
-`/process-5`, `/sync-upstream`, and `/smoke-test` directly in the
-Claude Code tab.
+`/process-5`, `/process-10`, `/sync-upstream`, `/smoke-test`,
+`/blocked-report`, and `/reprocess-blocked` directly in the Claude Code
+tab.
 
 - **ANALYZE** — ensures branch + baseline (see GIT), scans `src/`,
   `doctype/`, `Isearch-cgi/`; builds a `#include` dependency graph;
@@ -349,6 +350,8 @@ Claude Code tab.
   per-file pipeline up to 5 times in one invocation, skipping (not
   halting on) `blocked` files so one problem file doesn't stall the rest
   of the batch. See AUTONOMY for how blocking works unattended.
+- **PROCESS-10** — same as PROCESS-5, batched up to 10 files instead of
+  5.
 - **SYNC-UPSTREAM** — fetches and merges `upstream/main` into
   `cleanup/isearch2`, tags the sync point, and reruns ANALYZE so newly
   merged files get queued immediately rather than sitting untracked (as
@@ -359,6 +362,21 @@ Claude Code tab.
   sample corpus. Read-only with respect to the cleanup tree itself (no
   commits, no status updates) — it's a check, not a pipeline step. Not
   run automatically by anything else — invoke it deliberately.
+- **BLOCKED-REPORT** — reads the `blocked` rows in
+  `docs/PROCESSING_STATUS.md` and their corresponding
+  `docs/AUTOPILOT_LOG.md` entries, and renders a standalone PDF (one
+  summary table plus a per-file detail section) listing each blocked
+  file's reason and the exact action needed to clear it. Read-only with
+  respect to the cleanup tree — no commits, no status updates; output
+  goes to `docs/reports/` (gitignored, disposable). Not run
+  automatically by anything else — invoke it deliberately.
+- **REPROCESS-BLOCKED** — walks every currently `blocked` file in order,
+  asking the user the specific GENERAL step 4 signature decision each
+  one is waiting on (never guessing at it, unattended or not), applying
+  whatever they choose, then running the rest of the GENERAL pipeline on
+  that file. Continues until every file blocked at the start of the run
+  is either processed or explicitly deferred. Not run automatically by
+  anything else — invoke it deliberately.
 
 When you're ready to hand the cleaned-up branch to your colleague for
 review, open a cross-fork pull request against the upstream repository:
