@@ -2581,4 +2581,49 @@ would be inconsistent; and a stray `"found", "",` empty-string entry in
 `src/sw.hxx`'s `stoplist[]` that breaks its strict sort order (relevant
 now that `BUGFIX #7` re-enables the binary search over it) — that's a
 different file, out of scope for this turn.
-controlled data rather than just linked.
+
+## doctype/sgmlnorm.cxx
+
+`class SGMLNORM` (base for the tag-parsing `DOCTYPE`s, e.g. `SGMLTAG`/
+`HTML`) hand-rolls its own SGML tag scanner (`parse_tags()`) and
+attribute parser (`store_attributes()`). No `BUGFIX`-worthy defect was
+found this turn: the two functions' bounds checks were traced by hand
+against several edge cases --- a `<!--...-->` comment or `<!DECL...>`
+ending exactly at the buffer's last byte, a tag with no closing `>`,
+and a tag whose content is entirely trailing whitespace --- and each
+stays within the buffer (`RecBuffer` in `ParseFields()` is always
+allocated with one extra byte and null-terminated at the actual read
+length, which the scanner's `while (i < len)`/short-circuited
+`&&` checks rely on). `store_attributes()`'s hand-rolled state machine
+for `<tag attr="val" ...>` was read closely too; its handling of a
+bare (no `=`) leading attribute is unusual (the "value" it stores is
+the rest of the tag string, not just up to the next space) but that
+reads as an original design choice for this legacy parser, not an
+introduced regression, so it was left alone rather than "fixed" on a
+guess.
+
+Modernization: all 17 `NULL` uses in code converted to `nullptr`
+(4 more, in doc-comment prose describing the nullptr-terminated tag
+list convention, correctly left as English "NULL"). No `sprintf` calls
+present.
+
+Added doc comments to `SGMLNORM` (class-level), `UnifiedName()`,
+`ParseFields()`, and expanded the existing `parse_tags()`/
+`find_end_tag()`/`store_attributes()` header comments in
+`sgmlnorm.hxx` with ownership/lifetime notes (e.g. `parse_tags()`'s
+caller owns the returned array but not what it points into).
+
+Tests (`tests/doctype/test_sgmlnorm.cxx`) cover `UnifiedName()`
+(identity passthrough), `parse_tags()` (a simple tag pair, and the
+unterminated-tag error path), `find_end_tag()` (match and no-match),
+and one `ParseFields()` integration test against a real temp file
+verifying both the extracted field names and that leading/trailing
+whitespace inside a tag's content is trimmed from the stored field
+coordinates. That last test initially failed for two build-your-own-
+fixture reasons worth noting for future turns, neither an `SGMLNORM`
+bug: `RECORD::SetFileName()` runs `RemovePath()` on whatever it's
+given, so a temp file's full path has to go through `SetPathName()`
+(directory) and `SetFileName()` (basename) separately, not
+`SetFileName()` alone; and `DF::SetFieldName()` (`src/df.cxx`)
+uppercases internally regardless of what the caller passes in, so
+`<title>` legitimately becomes field name `TITLE`, not `title`.

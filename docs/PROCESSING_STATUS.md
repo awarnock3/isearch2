@@ -56,7 +56,7 @@
 | 52 | src/squery.hxx | blocked | 2026-08-07 | [src/squery.hxx](AUTOPILOT_LOG.md#srcsqueryhxx) |
 | 53 | doctype/doctype.hxx | done | 2026-08-07 | [doctype/doctype.cxx](BUG_CATALOG.md#doctypedoctypecxx) |
 | 54 | src/index.hxx | done | 2026-08-07 | [src/index.cxx](BUG_CATALOG.md#srcindexcxx) |
-| 55 | doctype/sgmlnorm.hxx | pending | | |
+| 55 | doctype/sgmlnorm.hxx | done | 2026-08-07 | [doctype/sgmlnorm.cxx](BUG_CATALOG.md#doctypesgmlnormcxx) |
 | 56 | doctype/sgmltag.hxx | pending | | |
 | 57 | src/strstack.hxx | pending | | |
 | 58 | src/infix2rpn.hxx | pending | | |
@@ -224,7 +224,7 @@
 | 220 | doctype/oneline.cxx | pending | | |
 | 221 | doctype/para.cxx | pending | | |
 | 222 | doctype/referbib.cxx | pending | | |
-| 223 | doctype/sgmlnorm.cxx | pending | | |
+| 223 | doctype/sgmlnorm.cxx | done | 2026-08-07 | [doctype/sgmlnorm.cxx](BUG_CATALOG.md#doctypesgmlnormcxx) |
 | 224 | doctype/sgmltag.cxx | pending | | |
 | 225 | doctype/simple.cxx | pending | | |
 | 226 | doctype/soif.cxx | pending | | |

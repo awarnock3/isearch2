@@ -156,6 +156,9 @@ Authors:   	Kevin Gamiel, Kevin.Gamiel@cnidr.org
 Copyright:	BSn/CNIDR
 @@@-*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
@@ -178,18 +181,28 @@ void SGMLNORM::ParseRecords (const RECORD& FileRecord)
 
 
 
+// Maps a raw SGML tag name to the field name it should be indexed
+// under. SGMLNORM itself does no mapping (every tag is its own field
+// name); subclasses with a normalized tag set (e.g. tag aliases,
+// ignored tags returning nullptr) override this.
 const CHR *SGMLNORM::UnifiedName (const CHR *tag) const
 {
   return tag;
 }
 
 
+// Reads NewRecord's bytes off disk, splits them into tags via
+// parse_tags(), and for each start/end tag pair (or bare attribute --
+// see store_attributes()) adds one DF field entry spanning the tag's
+// (whitespace-trimmed) content to NewRecord's DFT. A tag with no
+// matching end tag is skipped with a warning, not treated as an error
+// for the rest of the record.
 void SGMLNORM::ParseFields (PRECORD NewRecord)
 {
   PFILE fp;
   STRING fn;
 
-  if (NewRecord == NULL) return; // Error
+  if (NewRecord == nullptr) return; // Error
 
   // Open the file
   NewRecord->GetFullFileName (&fn);
@@ -223,7 +236,7 @@ void SGMLNORM::ParseFields (PRECORD NewRecord)
   NewRecord->GetDocumentType(&doctype);
 
   PCHR *tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL)
+  if (tags == nullptr)
     {
       cout << "Unable to parse `" << doctype << "' tags in file " << fn << "\n";
       // Clean up
@@ -240,9 +253,9 @@ void SGMLNORM::ParseFields (PRECORD NewRecord)
 
       const CHR *p = find_end_tag (tags_ptr, *tags_ptr);
       size_t tag_len = strlen (*tags_ptr);
-      int have_attribute_val = (NULL != strchr (*tags_ptr, '='));
+      int have_attribute_val = (nullptr != strchr (*tags_ptr, '='));
 
-      if (p != NULL)
+      if (p != nullptr)
 	{
 	  // We have a tag pair
 	  size_t val_start = (*tags_ptr + tag_len + 1) - RecBuffer;
@@ -286,7 +299,7 @@ void SGMLNORM::ParseFields (PRECORD NewRecord)
 #endif
 		  const CHR *unified_name = UnifiedName(*tags_ptr);
 		  // Ignore "unclassified" fields
-		  if (unified_name == NULL) continue; // ignore these
+		  if (unified_name == nullptr) continue; // ignore these
 		  FieldName = unified_name;
 //		  FieldName.UpperCase(); // Store SGML tags uppercase (not needed yet)
 #if ACCEPT_EMPTY_TAGS
@@ -311,7 +324,7 @@ void SGMLNORM::ParseFields (PRECORD NewRecord)
 	{
 	  store_attributes (pdft, RecBuffer, *tags_ptr);
 	}
-      else if (p == NULL)
+      else if (p == nullptr)
 	{
 #if 1
 	  // Give some information
@@ -368,7 +381,7 @@ void SGMLNORM::store_attributes (PDFT pdft, PCHR base_ptr, PCHR tag_ptr) const
   State = INIT, OldState = INIT;
   size_t val_start, val_end;
 
-  if (tag_ptr == NULL)
+  if (tag_ptr == nullptr)
     return;
 
   // Skip Leading Space
@@ -378,7 +391,7 @@ void SGMLNORM::store_attributes (PDFT pdft, PCHR base_ptr, PCHR tag_ptr) const
   if (!isalpha (*name))
     return;			// Not NAMEFIRST character
 
-  val = attribute = (PCHR)NULL;
+  val = attribute = nullptr;
 
   DFD dfd;
   DF df;
@@ -565,10 +578,10 @@ PCHR *SGMLNORM::parse_tags (PCHR b, GPTYPE len) const
 		  // allocate more space
 		  max_num_tags += grow_size;
 		  PCHR *New = new PCHR [max_num_tags];
-		  if (New == NULL)
+		  if (New == nullptr)
 		    {
 		      delete[]t;
-		      return NULL;	// NO MORE CORE!
+		      return nullptr;	// NO MORE CORE!
 		    }
 		  memcpy (New, t, tc * sizeof (PCHR));
 		  delete[]t;
@@ -627,10 +640,10 @@ PCHR *SGMLNORM::parse_tags (PCHR b, GPTYPE len) const
   if (State != OK)
     {
       delete[]t;
-      return NULL;		// Parse ERROR
+      return nullptr;		// Parse ERROR
     }
 
-  t[tc] = (PCHR) NULL; // Mark end of list
+  t[tc] = nullptr; // Mark end of list
   return t;
 }
 
@@ -647,11 +660,11 @@ PCHR *SGMLNORM::parse_tags (PCHR b, GPTYPE len) const
 const CHR* SGMLNORM::find_end_tag (char *const *t, const char *tag) const
 {
   size_t len;
-  if (t == NULL || *t == NULL)
-    return NULL;		// Error
+  if (t == nullptr || *t == nullptr)
+    return nullptr;		// Error
 
   if (*t[0] == '/')
-    return NULL;		// I'am confused!
+    return nullptr;		// I'am confused!
 
   // Look for "real" tag name
   for (len = 0; tag[len]; len++)
@@ -680,7 +693,7 @@ const CHR* SGMLNORM::find_end_tag (char *const *t, const char *tag) const
 
 	}
     }
-  while ((tt = t[++i]) != NULL);
+  while ((tt = t[++i]) != nullptr);
 
 #if 0
   // No end tag, assume that the document was valid
@@ -688,6 +701,6 @@ const CHR* SGMLNORM::find_end_tag (char *const *t, const char *tag) const
   // next tag
   return t[1];
 #else
-  return NULL;			// No end tag found
+  return nullptr;			// No end tag found
 #endif
 }
