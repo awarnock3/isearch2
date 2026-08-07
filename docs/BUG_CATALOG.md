@@ -1291,3 +1291,33 @@ types). Added a doc comment and the processed marker to both `conf.h`
 and `conf.h.in` — mirrored into the `.in` template too so a future
 `./configure` re-run doesn't silently drop them from the regenerated
 output and cause ANALYZE to re-queue an already-audited file.
+
+## src/confwin.h
+
+No bugs found — though this took a second look to be sure. First
+impression: the `SIZEOF_INT`/`SIZEOF_LONG_INT` values looked swapped
+between the `#ifndef _WIN32` and `#else` branches (2/4 vs. 4/4), since
+"non-Windows" claiming `sizeof(int) == 2` is wrong for any modern
+Unix. But `gdt.h` only `#include`s this file at all inside
+`#if defined(_MSDOS) || defined(_WIN32)` (falling back to `conf.h`
+otherwise) — so within `confwin.h`, `#ifndef _WIN32` doesn't mean
+"Unix"; it means "`_MSDOS` defined without `_WIN32`", i.e. classic
+16-bit real-mode MS-DOS, where `int` genuinely was 2 bytes. The `#else`
+branch (`_WIN32` defined) is Win32/Win64's LLP64 data model, where
+`int`/`long` both stay 32 bits even on 64-bit Windows (unlike Unix's
+LP64, where `long` is 64-bit — see `src/md5.hxx` `BUGFIX #1` above for
+exactly that distinction mattering). Both branches are correct for
+their respective targets. Verified by compiling this header standalone
+under both `-D_WIN32` and without it — clean either way (pure macros,
+no other includes to fail). Not confirmable end-to-end against a real
+Windows/DOS toolchain from this Linux environment, but the LLP64/16-bit
+values themselves are well-established platform ABI facts, not
+something specific to this codebase.
+
+Also added: an explanatory comment (this file had none, which is
+exactly what made the false-positive above easy to reach), and an
+`#ifndef`/`#define` include guard for consistency with every other
+header in this tree — harmless in practice today since `gdt.h`'s own
+guard already prevents `confwin.h` from being pulled in twice in one
+translation unit, but not guaranteed if something ever includes it
+directly.

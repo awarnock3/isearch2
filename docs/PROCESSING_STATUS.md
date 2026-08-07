@@ -24,7 +24,7 @@
 | 20 | src/md5.hxx | done | 2026-08-07 | [src/md5.hxx](BUG_CATALOG.md#srcmd5hxx) |
 | 21 | src/reclist.hxx | blocked | 2026-08-07 | [src/reclist.hxx](AUTOPILOT_LOG.md#srcreclisthxx) |
 | 22 | src/conf.h | done | 2026-08-07 | [src/conf.h](BUG_CATALOG.md#srcconfh) |
-| 23 | src/confwin.h | pending | | |
+| 23 | src/confwin.h | done | 2026-08-07 | [src/confwin.h](BUG_CATALOG.md#srcconfwinh) |
 | 24 | src/gdt.h | pending | | |
 | 25 | src/defs.hxx | pending | | |
 | 26 | src/string.hxx | done | 2026-08-05 | [src/string.hxx](BUG_CATALOG.md#srcstringhxx) |
