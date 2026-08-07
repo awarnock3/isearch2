@@ -71,7 +71,9 @@ db/
 
 # Isearch2 cleanup: Catch2 test build output (see CLAUDE.md TESTING)
 tests/run_tests
+tests/run_tests-asan
 tests/reports/
+*.o.asan
 
 # Isearch2 cleanup: local Claude Code permission config — machine-specific,
 # never share bypassPermissions (or any permission override) via the branch

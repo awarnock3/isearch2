@@ -273,34 +273,25 @@ Test files live under `tests/`, mirroring `src/`, `doctype/`, and
 
 ## BUILD — the original Makefile, adapted (no CMake)
 
-Add a `tests` target to the existing top-level Makefile:
+`make tests` and `make tests-asan` build and run the Catch2 suite; see
+the `tests`/`tests-asan` section near the bottom of the top-level
+`Makefile` for the actual rules — treat that file as the source of
+truth rather than this doc, since it evolves as each turn's tests add
+engine sources to `TEST_ENGINE_SRCS`. Everything else in the Makefile —
+building the actual engine, CGI binaries, etc. — is untouched by any of
+this; only the `tests`/`tests-asan` section was added/changed.
 
-```makefile
-CATCH2_DIR := tests/vendor/catch2
-TEST_SRCS  := $(shell find tests -name '*.cxx')
-TEST_OBJS  := $(TEST_SRCS:.cxx=.o) $(CATCH2_DIR)/catch_amalgamated.o
-TEST_CXXFLAGS := -std=c++17 -Wall -Wextra -Isrc -Idoctype -IIsearch-cgi -I$(CATCH2_DIR)
-
-$(CATCH2_DIR)/catch_amalgamated.o: $(CATCH2_DIR)/catch_amalgamated.cpp
-	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
-
-tests/%.o: tests/%.cxx
-	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
-
-tests: $(TEST_OBJS)
-	@mkdir -p tests/reports
-	$(CXX) $(TEST_OBJS) -o tests/run_tests
-	@REPORT=tests/reports/report-$$(date +%Y%m%d-%H%M%S).txt; \
-	tests/run_tests | tee $$REPORT; \
-	echo "Report saved to $$REPORT"
-
-tests-asan: TEST_CXXFLAGS += -fsanitize=address,undefined -g
-tests-asan: tests
-```
-
-Everything else in the Makefile — building the actual engine, CGI
-binaries, etc. — is unchanged; this only adds the `tests`/`tests-asan`
-targets.
+The two builds compile into **entirely separate object trees**
+(`tests/obj/` for plain, `tests/obj-asan/` + `.o.asan` for ASan) so they
+never fight over the same `.o` file and each rebuilds incrementally on
+its own — don't reintroduce a shared object path between them (that's
+the bug a `clean-test-objs` force-clean target used to paper over; see
+the `BUGFIX` comment above the `TEST_OBJS`/`TEST_OBJS_ASAN` definitions
+in the Makefile for the full story). Concretely: `make tests` writes
+`tests/run_tests`; `make tests-asan` writes `tests/run_tests-asan` — a
+separate binary, not a re-instrumented overwrite of the first — and
+either target only recompiles what actually changed since its own last
+run of that same target.
 
 ## COMMANDS
 
