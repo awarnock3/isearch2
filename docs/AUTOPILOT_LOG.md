@@ -699,3 +699,81 @@ non-copyable) before reprocessing via `/process src/tokengen.hxx` —
 recommend fixing the header self-containment and the two `nexttoken()`
 parsing bugs in that same pass given their severity (the parsing bugs
 affect real user search queries) and how trivial the header fix is.
+
+## src/squery.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `SQUERY` owns a
+heap-allocated `THESAURUS *Thesaurus` (`new THESAURUS(...)` in
+`OpenThesaurus()`, `delete Thesaurus;` in `CloseThesaurus()`) but
+declares no copy constructor — only `operator=`, and even that copies
+the pointer shallowly (see below) — so the compiler-generated copy
+constructor shallow-copies `Thesaurus` too, the same "owns a raw
+resource, no correct copy semantics" shape as `mdt.hxx`/`fpt.hxx`/
+`tokengen.hxx`/others earlier this batch.
+
+Confirmed real with a standalone repro: open a thesaurus on a `SQUERY`
+(`OpenThesaurus()`), copy-initialize a second (`SQUERY b = a;`), call
+`b.CloseThesaurus()` (frees `b`'s — really the shared — `THESAURUS`),
+then call `a.CloseThesaurus()`. AddressSanitizer reported a
+`heap-use-after-free` inside `THESAURUS::~THESAURUS()`
+(`squery.cxx:323`, via `~STRING()` destructing an already-freed
+`THESAURUS`'s member): `b`'s implicit shallow copy shared `a`'s
+`Thesaurus` pointer, so the second `CloseThesaurus()` operated on
+already-freed memory. No confirmed copy-construction call site was
+found in the live tree (every site — `src/Isearch.cxx`, `src/index.cxx`,
+`src/idb.cxx`, `src/vidb.cxx`, `Isearch-cgi/api_search.cxx`, others —
+default-constructs a plain `SQUERY` or takes one by `const&`), so this
+specific defect is latent.
+
+**Also found while reading, not fixed here since step 4 gates the rest
+of this file's pipeline for this turn — both are the *same root cause*
+as the copy-constructor gap above, just reached through different
+paths, so worth fixing together:**
+
+- **`operator=` copies `Thesaurus` shallowly too** —
+  `Thesaurus = OtherSquery.Thesaurus;` aliases the source's pointer
+  instead of doing anything resembling a copy, with no thought given to
+  what should happen to `this`'s *previous* `Thesaurus` (leaked, since
+  it's overwritten without being freed first) or to the fact that two
+  `SQUERY`s now share one `THESAURUS*` that only one `CloseThesaurus()`
+  call can safely free. Unlike the copy-constructor gap, fixing this
+  doesn't strictly need a header change (`operator=`'s signature is
+  unchanged) — but there's no obvious "correct" deep-copy semantics
+  for an open thesaurus's file handles (same open question already
+  facing `mdt.hxx`'s `FILE*`/`fpt.hxx`'s cached `FILE*`s), so the
+  cleanest fix is probably to simply not copy `Thesaurus` on assignment
+  at all — deferred here so it can be decided alongside the
+  copy-constructor question rather than piecemeal.
+- **`~SQUERY()` never frees `Thesaurus`** — the destructor body is
+  empty; only `CloseThesaurus()` (a separate, caller-must-remember-to-
+  call method) frees it. Any `SQUERY` that calls `OpenThesaurus()` and
+  is then destroyed without an explicit matching `CloseThesaurus()`
+  leaks the `THESAURUS` (and, transitively, its open file handles). No
+  confirmed leak site found (every live `OpenThesaurus()` caller
+  appears to pair it with `CloseThesaurus()`), so latent rather than
+  confirmed, but a straightforward RAII fix (`delete Thesaurus;` in the
+  destructor, safe even when null) once the ownership question above
+  is settled.
+
+Also noted, cosmetic and harmless (the include guard makes it a no-op,
+confirmed by the fact this file already compiles today): `squery.hxx`
+`#include`s itself (`squery.hxx:71`, among its many other real
+`#include`s) — almost certainly a stray copy-paste, worth deleting
+whenever this file is next touched, but not a functional bug.
+
+Fixing the copy-semantics question requires adding
+`SQUERY(const SQUERY&);` to `squery.hxx` and deciding, together with
+the `operator=` fix above, what a copied `SQUERY` should do with an
+open `Thesaurus` — most likely "nothing" (a copy starts with no
+thesaurus of its own, since there's no defined meaning for sharing or
+duplicating open synonym-file state) — or `= delete`-ing copy
+construction entirely to make the class explicitly non-copyable (no
+confirmed copy-construction call site exists today, so this may be the
+simpler choice). A call for a human, not an autopilot guess, per
+GENERAL step 4.
+
+Row set to `blocked`; needs a signature-change decision (add a correct
+copy constructor vs. `= delete` it, and fix `operator=`'s `Thesaurus`
+handling to match) before reprocessing via `/process src/squery.hxx` —
+recommend fixing the destructor leak and removing the self-include in
+that same pass.
