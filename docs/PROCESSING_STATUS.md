@@ -49,7 +49,7 @@
 | 45 | src/date.hxx | done | 2026-08-07 | [src/date.cxx](BUG_CATALOG.md#srcdatecxx) |
 | 46 | src/intfield.hxx | done | 2026-08-07 | [src/intfield.cxx](BUG_CATALOG.md#srcintfieldcxx) |
 | 47 | src/intlist.hxx | blocked | 2026-08-07 | [src/intlist.hxx](AUTOPILOT_LOG.md#srcintlisthxx) |
-| 48 | src/soundex.hxx | pending | | |
+| 48 | src/soundex.hxx | done | 2026-08-07 | [src/soundex.cxx](BUG_CATALOG.md#srcsoundexcxx) |
 | 49 | src/mergeunit.hxx | pending | | |
 | 50 | src/thesaurus.hxx | pending | | |
 | 51 | src/tokengen.hxx | pending | | |
@@ -170,7 +170,7 @@
 | 166 | src/registry.cxx | done | 2026-08-07 | [src/registry.cxx](BUG_CATALOG.md#srcregistrycxx) |
 | 167 | src/result.cxx | done | 2026-08-07 | [src/result.cxx](BUG_CATALOG.md#srcresultcxx) |
 | 168 | src/rset.cxx | pending | | |
-| 169 | src/soundex.cxx | pending | | |
+| 169 | src/soundex.cxx | done | 2026-08-07 | [src/soundex.cxx](BUG_CATALOG.md#srcsoundexcxx) |
 | 170 | src/squery.cxx | pending | | |
 | 171 | src/sterm.cxx | pending | | |
 | 172 | src/stopword.cxx | pending | | |

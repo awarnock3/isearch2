@@ -2343,3 +2343,46 @@ both findings above inline, so a future reader (or whoever resolves
 them) doesn't have to rediscover them. Added `intfield.cxx` to
 `TEST_ENGINE_SRCS` in the Makefile (it wasn't linked into the test
 binary before this turn).
+
+## src/soundex.cxx
+
+`SoundexEncode`: the classic Soundex name-matching algorithm, called
+from `src/index.cxx` (still pending). No `NULL`/`sprintf` usages.
+
+1. **Wrong Soundex code for two classic edge cases** — the original
+   two-pass approach (strip every `'0'` first, then collapse adjacent
+   duplicate digits) gets both wrong: (1) it never compares the kept
+   first letter's own digit against the next letter's, so a name like
+   "Pfister" (P and F share digit 1) kept both instead of collapsing
+   them (`"P123"` instead of the correct `"P236"`); (2) stripping zeros
+   *before* deduplicating merges same-digit letters that were
+   originally separated by a vowel into a false adjacency, undercounting
+   them (`"Honeyman"` → `"H500"` instead of `"H555"`; `"Tymczak"` →
+   `"T520"` instead of `"T522"`). Confirmed against standard reference
+   Soundex test vectors via a standalone repro before the fix — these
+   aren't edge cases invented for this catalog entry, they're the
+   textbook examples used to test Soundex implementations precisely
+   because of this failure mode. `"Robert"`/`"Rupert"` (no first-letter
+   collision) already matched and still do. Fixed by replacing the
+   two-pass strip-then-collapse with a single pass that tracks the
+   *previous letter's own digit* (seeded from the first letter's digit,
+   even though the first letter itself is kept literally) and only
+   appends a new digit when it's non-zero and differs from that running
+   previous digit — the textbook algorithm, applied uniformly. The
+   letter-to-digit `switch` itself was unchanged, just factored into a
+   small `SoundexDigit()` helper so it could be reused for the first
+   letter's own digit too. See `BUGFIX #1` in source; regression tests
+   in `tests/src/test_soundex.cxx` cover all five vectors above plus a
+   truncation case (`"Washington"` → `"W252"`).
+2. **Empty input produced a null-byte-containing result instead of an
+   empty string** — `s2 += s1.GetChr(1);` on an empty `EnglishWord`
+   read `GetChr(1)`'s documented out-of-range return value (`0`, a null
+   byte — not the character `'0'`), which then survived the old
+   zero-stripping pass (a null byte `!= '0'`) and got padded out to 4
+   characters. Fixed with an explicit empty-input check returning `""`.
+   See `BUGFIX #2` in source; regression test in
+   `tests/src/test_soundex.cxx`.
+
+Also applied: a doc comment on `SoundexEncode()`'s declaration. Added
+`soundex.cxx` to `TEST_ENGINE_SRCS` in the Makefile (it wasn't linked
+into the test binary before this turn).
