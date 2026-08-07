@@ -80,3 +80,19 @@ tests/reports/
 .claude/settings.json
 .claude/settings.local.json
 
+# Isearch2 cleanup: compiled CLI/CGI binaries -- build output, not source.
+# bin/zpresent and bin/zsearch were previously checked in as binary blobs
+# (inconsistently -- the other four bin/ binaries never were); untracked
+# below, along with the Isearch-cgi/ binaries, for consistency.
+bin/Iget
+bin/Iindex
+bin/Isearch
+bin/Iutil
+bin/zpresent
+bin/zsearch
+Isearch-cgi/isrch_api
+Isearch-cgi/isrch_fetch
+Isearch-cgi/isrch_html
+Isearch-cgi/isrch_srch
+Isearch-cgi/search_form
+
