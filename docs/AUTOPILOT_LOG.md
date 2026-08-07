@@ -416,3 +416,92 @@ Row set to `blocked`; needs a signature-change decision (deep-copy vs.
 non-copyable, and ideally revisited alongside `nlist.hxx`'s own
 decision given the shadowing above) before reprocessing via
 `/process src/intlist.hxx`.
+
+## src/mergeunit.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `MERGEUNIT` owns four
+separate heap-allocated arrays (`GPTYPE *list`, `INT *Start`,
+`STRING *sistrings`, `CHR *Tag`, all `new`'d in the constructor and
+resized in `SetLoadLimit()`) but declares no copy constructor and no
+`operator=` at all — the same "no custom copy semantics whatsoever"
+shape as `mdt.hxx`/`fpt.hxx`/`nlist.hxx`/`intlist.hxx` earlier this
+batch.
+
+Confirmed real with a standalone repro — though it surfaced an even
+more severe, unconditional bug first (see below) before it could even
+reach the copy-construction scenario: default-construct a `MERGEUNIT`,
+copy-initialize a second (`MERGEUNIT b = a;`), let `b` go out of scope,
+then let `a` be destroyed at end of scope. AddressSanitizer aborted
+immediately on `a`'s own destruction (`~MERGEUNIT()`, `mergeunit.cxx:
+369`) with an `alloc-dealloc-mismatch`, before ever reaching a point
+where the copy-construction double-free could be observed directly —
+see below.
+
+**Also found while reading, not fixed here since step 4 gates the rest
+of this file's pipeline for this turn — and notably more severe than
+the copy-constructor question above, since it doesn't depend on
+copying at all:**
+
+- **Four `delete`/`delete[]` mismatches, all real, undefined behavior**
+  — `list`, `Tag`, and `Start` are each allocated with array `new`
+  (`new GPTYPE[...]`/`new CHR[...]`/`new INT[...]`) but freed with
+  scalar `delete` in `~MERGEUNIT()` (`mergeunit.cxx:369,371,372`; only
+  `sistrings` there correctly uses `delete []`) — `SetLoadLimit()`
+  (`mergeunit.cxx:308-311`) already frees all four correctly with
+  `delete []`, so the destructor is the outlier, not the norm. A fifth
+  local, `p = new CHR[size+1]` in `CacheLoad()`
+  (`mergeunit.cxx:192,220`), is freed the same wrong way. Confirmed
+  real twice over: first with a minimal isolated repro (`int* p = new
+  int[5]; delete p;`) proving this toolchain's ASan
+  `alloc-dealloc-mismatch` detector is active and catches exactly this
+  pattern (`alloc_dealloc_mismatch=1` is the default), then again by
+  the `MERGEUNIT` repro above, which crashed on this before the
+  copy-constructor question was even reached. This is **not**
+  copy-construction-dependent — it fires on the most basic
+  construct-then-destroy usage of the class, e.g. the live
+  `MERGEUNIT A[2];` at `src/index.cxx:2438` (Order 54, still pending).
+  It happens not to be an observed *production* crash today only
+  because `make smoke-test` passed cleanly with the non-sanitized
+  build — for POD-typed arrays like these, `operator delete` and
+  `operator delete[]` are often functionally interchangeable under a
+  given allocator even though the standard makes the mismatch
+  undefined — but it's real UB, confirmed under a sanitizer, on code
+  the production binary actually runs. Doesn't need a header change
+  (bodies only) and should be the very first thing fixed the next time
+  this file is reprocessed, independent of whatever the copy-semantics
+  decision turns out to be.
+- **Constructor leaves `Parent`/`fp`/`Map`/`ID`/`Gp` uninitialized** —
+  `Initialize()` is a mandatory second-phase constructor that sets all
+  but `Gp`, but `~MERGEUNIT()` already dereferences `Parent` (via
+  `Parent->ffclose(fp)`, guarded only by `if(fp)`) if a `MERGEUNIT` is
+  ever destroyed without `Initialize()` having been called first, which
+  would read `fp`/`Parent` as indeterminate values. No confirmed call
+  site was found that skips `Initialize()`, so this is latent, but
+  matches the same "indeterminate primitive/pointer member" category
+  fixed multiple times already this batch (`RESULT`, `NUMERICFLD`,
+  `SRCH_DATE`). Doesn't need a header change either.
+
+**Found in a different file while reading `MERGEUNIT`'s real callers,
+out of scope for this turn:** `src/index.cxx:773` does
+`A = new MERGEUNIT[sizeof(MERGEUNIT)*IndexNum];` — `new T[n]` allocates
+`n` *objects* of type `T`, not `n` bytes, so this allocates
+`sizeof(MERGEUNIT)` times more `MERGEUNIT` objects than intended (a
+classic "confused array-new with a byte count" bug). Belongs to
+`index.cxx`'s own turn (Order 54, still pending); noted here since it's
+directly relevant to how `MERGEUNIT` is used in practice.
+
+Fixing the copy-semantics question requires adding
+`MERGEUNIT(const MERGEUNIT&);` and
+`MERGEUNIT& operator=(const MERGEUNIT&);` to `mergeunit.hxx` — deep-
+copying all four arrays (sized to the source's current load limit) plus
+every scalar member — or `= delete`-ing both to make the class
+explicitly non-copyable (no confirmed copy-construction call site was
+found in the live tree, only default-construction via `MERGEUNIT
+A[2];`/`new MERGEUNIT[...]`, so non-copyable may be the simpler choice
+here, similar to `mdt.hxx`'s reasoning). A call for a human, not an
+autopilot guess, per GENERAL step 4.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable) before reprocessing via `/process src/mergeunit.hxx` —
+recommend fixing the delete/delete[] mismatches in that same pass given
+their severity.
