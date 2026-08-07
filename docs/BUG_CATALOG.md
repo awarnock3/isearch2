@@ -2245,3 +2245,54 @@ since both members are plain primitives with no owned resources. No
 Also applied: a file-level doc comment on `nfield.hxx`. Added
 `nfield.cxx` to `TEST_ENGINE_SRCS` in the Makefile (it wasn't linked
 into the test binary before this turn).
+
+## src/date.cxx
+
+`SRCH_DATE`/`DATERANGE`: a date stored as YYYY/YYYYMM/YYYYMMDD in a
+single `DOUBLE`, plus a precision tag, and a `[start,end]` pair of
+them. See the file-level comment added to `date.hxx`. One `NULL`
+modernized to `nullptr` (`time((time_t *)NULL)` → `time(nullptr)`).
+
+1. **`SRCH_DATE`'s default constructor left `d_date`/`d_prec`
+   indeterminate** — empty body, no in-class initializers. Since
+   `DATERANGE`'s own default constructor is also empty and relies on
+   `SRCH_DATE`'s default state for `d_start`/`d_end`, this affected both
+   classes. Fixed by initializing to `DATE_ERROR`/`BAD_DATE`, mirroring
+   the sentinel this same file already uses elsewhere for "no date" (see
+   the not-a-range fallback in `DATERANGE`'s parsing constructors). See
+   `BUGFIX #1` in source; regression tests in `tests/src/test_date.cxx`
+   check both a default-constructed `SRCH_DATE` and a default-constructed
+   `DATERANGE` read as invalid.
+2. **`GetTodaysDate()`'s error branch fell through instead of
+   returning** — on a `strftime()` failure, it set `d_date = -1.0;
+   d_prec = BAD_DATE;` but then unconditionally continued into
+   `d_date = atof(Hold); SetPrecision();`, silently overwriting the
+   error state. Worse, a `strftime()` failure that returns 0 leaves
+   `Hold` (a local, uninitialized `CHR` buffer) untouched, so the
+   overwrite would have called `atof()` on uninitialized stack memory.
+   Not reachable with today's fixed `"%Y%m%d"` format and a buffer sized
+   for it (confirmed: a normal call succeeds and returns exactly 8,
+   matching `ConvertLen`), so this wasn't an active crash, but a real
+   defect that would surface the moment either changed. Fixed by adding
+   the missing `return;`. See `BUGFIX #2` in source.
+3. **`DATERANGE::Contains()` had its `BEFORE`/`AFTER` comparison
+   backwards** — `DateCompare(TestDate)` compares *this* to `TestDate`,
+   so `d_start.DateCompare(TestDate) == BEFORE` means `d_start` is
+   before `TestDate` — exactly the condition for `TestDate` validly
+   being past the range's start, not a reason to reject it. The old
+   condition (`d_start ... BEFORE || d_end ... AFTER`) was true for
+   `TestDate > d_start` OR `TestDate < d_end`, which for any normal
+   range (`d_start <= d_end`) covers nearly every possible `TestDate` —
+   confirmed by tracing a concrete example (range `[2020,2025]`,
+   `TestDate` `2022`, squarely inside): the old code returned
+   `GDT_FALSE`. Fixed by swapping to the correct rejection condition:
+   `d_start` is *after* `TestDate`, or `d_end` is *before* it. No caller
+   of `DATERANGE::Contains()` was found anywhere in this tree, so this
+   wasn't an active-search regression, but a real, confirmed-wrong
+   defect in a public method. See `BUGFIX #3` in source; regression
+   tests in `tests/src/test_date.cxx` cover inside/before/after/
+   boundary cases, verified against a standalone repro before the fix.
+
+Also applied: file-level and per-method doc comments in `date.hxx`.
+Added `date.cxx` to `TEST_ENGINE_SRCS` in the Makefile (it wasn't
+linked into the test binary before this turn).

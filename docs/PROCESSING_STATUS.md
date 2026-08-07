@@ -46,7 +46,7 @@
 | 42 | src/fpt.hxx | done | 2026-08-07 | [src/fpt.hxx](BUG_CATALOG.md#srcfpthxx) |
 | 43 | src/nfield.hxx | done | 2026-08-07 | [src/nfield.cxx](BUG_CATALOG.md#srcnfieldcxx) |
 | 44 | src/nlist.hxx | blocked | 2026-08-07 | [src/nlist.hxx](AUTOPILOT_LOG.md#srcnlisthxx) |
-| 45 | src/date.hxx | pending | | |
+| 45 | src/date.hxx | done | 2026-08-07 | [src/date.cxx](BUG_CATALOG.md#srcdatecxx) |
 | 46 | src/intfield.hxx | pending | | |
 | 47 | src/intlist.hxx | pending | | |
 | 48 | src/soundex.hxx | pending | | |
@@ -121,7 +121,7 @@
 | 117 | src/attr.cxx | done | 2026-08-07 | [src/attr.cxx](BUG_CATALOG.md#srcattrcxx) |
 | 118 | src/attrlist.cxx | pending | | |
 | 119 | src/common.cxx | done | 2026-08-07 | [src/common.cxx](BUG_CATALOG.md#srccommoncxx) |
-| 120 | src/date.cxx | pending | | |
+| 120 | src/date.cxx | done | 2026-08-07 | [src/date.cxx](BUG_CATALOG.md#srcdatecxx) |
 | 121 | src/datesearch.cxx | pending | | |
 | 122 | src/defs.cxx | pending | | |
 | 123 | src/df.cxx | done | 2026-08-07 | [src/df.cxx](BUG_CATALOG.md#srcdfcxx) |
