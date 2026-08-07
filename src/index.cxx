@@ -43,6 +43,9 @@ Description:	Class INDEX
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -102,10 +105,6 @@ const INT StopWordSize = (sizeof(stoplist)/sizeof(stoplist[0]));
 static PCHR MemoryData;
 static INT MemoryDataLength;
 
-FILE *flist[40];
-STRING Names[40];
-INT fcount=0;
-
 
 void 
 BufferClean(CHR *Buffer)
@@ -119,10 +118,21 @@ BufferClean(CHR *Buffer)
 }
 
 
-INDEX::INDEX(const PIDBOBJ DbParent, const STRING& NewFileName) 
+INDEX::INDEX(const PIDBOBJ DbParent, const STRING& NewFileName)
 {
   STRING CheckName;
   CHR Tmp[256];
+  // BUGFIX #3: SetCache/DocTypePtr/TheThesaurus (raw pointers) and
+  // MergeStatus/Accesses/InCache/OutCache (counters) were left
+  // uninitialized here, so any code path reading them before an
+  // explicit assignment (e.g. the destructor's commented-out
+  // `delete SetCache`, were it ever re-enabled) would act on
+  // indeterminate values. See docs/BUG_CATALOG.md#srcindexcxx.
+  SetCache = nullptr;
+  DocTypePtr = nullptr;
+  TheThesaurus = nullptr;
+  MergeStatus = GDT_FALSE;
+  Accesses = InCache = OutCache = 0;
   Parent = DbParent;
   IndexFileName = NewFileName;
   Parent->ComposeDbFn(&CheckName, ".num");
@@ -173,7 +183,7 @@ INDEX::CreateDictionary(void) {
 
 void 
 INDEX::CreateCentroid(void) {
-  FILE *out=(FILE*)NULL;
+  FILE *out=nullptr;
   STRING CentroidName;
   Parent->ComposeDbFn(&CentroidName, DbExtCentroid);
   out = Parent->ffopen(CentroidName, "w");
@@ -193,8 +203,13 @@ INDEX::CreateCentroid(void) {
 #endif
 
 
-void 
-INDEX::WriteFieldData(const RECORD& Record, const GPTYPE GpOffset) 
+// Writes one field-index entry per (field, occurrence) pair found in
+// Record's field-coordinate table (DFT/DF/FCT/FC), appending to that
+// field's on-disk index file. "text" fields store a GP start/end pair;
+// "num"/"date"/"date-range" fields additionally read the field's raw
+// text back via GetIndirectBuffer() and store the parsed value(s).
+void
+INDEX::WriteFieldData(const RECORD& Record, const GPTYPE GpOffset)
 {
   DFT dft;
   Record.GetDft(&dft);
@@ -204,7 +219,7 @@ INDEX::WriteFieldData(const RECORD& Record, const GPTYPE GpOffset)
   DF df;
   FCT fct;
   FC fc;
-  PFILE fp=(PFILE)NULL;
+  PFILE fp=nullptr;
   STRING FieldName, FileName;
   STRING FieldType;
   GPTYPE gp;
@@ -234,9 +249,9 @@ INDEX::WriteFieldData(const RECORD& Record, const GPTYPE GpOffset)
     // do a simple test cache here...
     
     doClose=GDT_FALSE;
-    fp=(FILE*)NULL;
+    fp=nullptr;
 
-    if (fp==NULL) {
+    if (fp==nullptr) {
       fp = Parent->ffopen(FileName, "ab");
       if (!fp) {
 	perror(FileName);    
@@ -438,8 +453,15 @@ INDEX::WriteFieldData(const RECORD& Record, const GPTYPE GpOffset)
   }
 */
 
-void 
-INDEX::AddRecordList(PFILE RecordListFp) 
+// Core indexing loop: reads the record list (one source-document
+// path/offset per line) from RecordListFp, loads each document's text
+// into the shared MemoryData buffer up to the configured indexing
+// memory budget, tokenizes it into GPs via BuildGpList(), and flushes
+// to disk (FlushIndexFiles()) whenever that budget is exceeded --
+// producing the numbered ".1", ".2", ... sub-index files that
+// MergeIndexFiles()/CollapseIndexFiles() later combine.
+void
+INDEX::AddRecordList(PFILE RecordListFp)
 {
   UINT4 DataMemorySize = (UINT4)(Parent->GetIndexingMemory() );
 
@@ -458,7 +480,7 @@ INDEX::AddRecordList(PFILE RecordListFp)
   INT FirstRecord = 1;
   INT CurrentRecord;
   INT MemoryIndexLength;
-  PFILE DataFp = (PFILE)NULL;
+  PFILE DataFp = nullptr;
   RECORD record;
   STRING s, DataFileName, OldDataFileName;
   MDTREC mdtrec;
@@ -614,8 +636,8 @@ INDEX::AddRecordList(PFILE RecordListFp)
 	  // If record already contains a user-defined key,
 	  // we need to make sure that it is unique!
 	  if (s == "") {
-	    sprintf(TempBuffer, "%d", 
-		    mdtrec.GetGlobalFileStart() 
+	    snprintf(TempBuffer, sizeof(TempBuffer), "%d",
+		    mdtrec.GetGlobalFileStart()
 		    + mdtrec.GetLocalRecordStart());
 	    s = TempBuffer;
 	    Parent->GetMainMdt()->GetUniqueKey(&s);
@@ -708,7 +730,7 @@ INDEX::AddRecordList(PFILE RecordListFp)
   // now, do our *experimental* merge
 
   {
-    FILE *fy=(FILE*)NULL;
+    FILE *fy=nullptr;
     STRING CheckName;
     Parent->ComposeDbFn(&CheckName, ".num");
   
@@ -747,7 +769,12 @@ INDEX::AddRecordList(PFILE RecordListFp)
 }
 
 
-void 
+// K-way merges all IndexNum numbered sub-index files (".1".."IndexNum")
+// produced by AddRecordList()/FlushIndexFiles() into the single final
+// IndexFileName, using one MERGEUNIT per sub-index to repeatedly pick
+// and write the smallest remaining entry, then deletes the now-merged
+// sub-index files.
+void
 INDEX::MergeIndexFiles(INT MemMB)
 {
 
@@ -770,7 +797,13 @@ INDEX::MergeIndexFiles(INT MemMB)
   //  MERGEUNIT A[IndexNum];
   //  MERGEUNIT A[MAXINDEXNUM];
   MERGEUNIT *A;
-  A = new MERGEUNIT[sizeof(MERGEUNIT)*IndexNum];
+  // BUGFIX #6: this allocated sizeof(MERGEUNIT)*IndexNum *elements*,
+  // i.e. sizeof(MERGEUNIT) times more than needed (only indices
+  // 0..IndexNum-1 are ever used, below). Not out-of-bounds -- the
+  // over-sized array still covers every access -- but it wasted
+  // memory proportional to MERGEUNIT's size for every merge. See
+  // docs/BUG_CATALOG.md#srcindexcxx.
+  A = new MERGEUNIT[IndexNum];
 
   Parent->ffclose(fa); 
 #ifdef VERBOSE
@@ -788,7 +821,7 @@ INDEX::MergeIndexFiles(INT MemMB)
 #endif
   
   for(i=1; i<=IndexNum; i++){
-    sprintf(Tmp,".%d",i);
+    snprintf(Tmp, sizeof(Tmp), ".%d",i);
     TmpIndexFileName=IndexFileName;
     TmpIndexFileName.Cat(Tmp);
     A[i-1].SetLoadLimit(MemMB);
@@ -833,7 +866,7 @@ INDEX::MergeIndexFiles(INT MemMB)
   }				// loop
   // clean up old files
   for(i=1; i<=IndexNum; i++){
-    sprintf(Tmp,".%d",i);
+    snprintf(Tmp, sizeof(Tmp), ".%d",i);
     TmpIndexFileName=IndexFileName;
     TmpIndexFileName.Cat(Tmp);
     CHR *p=TmpIndexFileName.NewCString();
@@ -861,11 +894,11 @@ INDEX::FlushIndexFiles(CHR *MemoryData, INT MemoryDataLength,
   STRING TmpIndexFileName=IndexFileName;
   CHR Tmp[256];
   IndexNum++;
-  sprintf(Tmp,".%d",IndexNum);
+  snprintf(Tmp, sizeof(Tmp), ".%d",IndexNum);
   TmpIndexFileName.Cat(Tmp); // get the section file name
   
   //  PFILE fp = Parent->ffopen(TmpIndexFileName, "rb");
-  PFILE fp=(PFILE)NULL;
+  PFILE fp=nullptr;
   
   INT i;
   fp = Parent->ffopen(TmpIndexFileName, "wb");
@@ -893,7 +926,7 @@ INDEX::GetFilePointer(const GPTYPE gp) const {
   INT x = Parent->GetMainMdt()->LookupByGp(gp);
   if (x) {
     STRING FileName;
-    PFILE fp=(PFILE)NULL;
+    PFILE fp=nullptr;
     MDTREC Mdtrec;
     Parent->GetMainMdt()->GetEntry(x, &Mdtrec);
     Mdtrec.GetFullFileName(&FileName);
@@ -916,9 +949,21 @@ INDEX::GetFilePointer(const GPTYPE gp) const {
 }
 
 
-INT 
+// Binary-searches the sorted stoplist[] (see sw.hxx, StopWordSize
+// entries) for the alphanumeric word starting at WordStart (at most
+// WordMaximum bytes), case-insensitively. Returns 1 if it's a stop
+// word, 0 otherwise. Called via IDB::IsStopWord() -> MainIndex-
+// >IsStopWord() from every DOCTYPE parser during real indexing.
+INT
 INDEX::IsStopWord(CHR *WordStart, INT WordMaximum) const {
-  return 0; // added for testing
+  // BUGFIX #7: this unconditionally `return 0`'d before the real
+  // lookup below ever ran ("added for testing" -- a debug shortcut
+  // that was never removed), so IDB::IsStopWord() -- and therefore
+  // every DOCTYPE parser that calls Db->IsStopWord() while indexing
+  // (doctype.cxx, usmarc.cxx, taglist.cxx) -- silently treated every
+  // word as NOT a stop word. Stop-word filtering was completely
+  // disabled for any real index built through IDB. See
+  // docs/BUG_CATALOG.md#srcindexcxx.
   INT x = 0;
   INT WordLength = 0;
   while ( (WordLength < WordMaximum) &&
@@ -977,8 +1022,12 @@ INDEX::BuildGpList(
 }
 
 
-GDT_BOOLEAN 
-INDEX::DiskValidateInField(const GPTYPE HitGp, 
+// Binary-searches Total (GpStart,GpEnd) pairs read directly from Fp to
+// test whether HitGp falls inside one of them, i.e. whether a term hit
+// at HitGp lies within this field's occurrences. Uncached counterpart
+// of ValidateInField(), used when Disk mode is forced.
+GDT_BOOLEAN
+INDEX::DiskValidateInField(const GPTYPE HitGp,
 			   FILE *Fp, INT Total)
 {
   
@@ -1018,8 +1067,14 @@ INDEX::DiskValidateInField(const GPTYPE HitGp,
 
 
 // JMF
-GDT_BOOLEAN 
-INDEX::ValidateInField(const GPTYPE HitGp, FILE *Fp, 
+// Same binary search as DiskValidateInField(), but backed by a sliding
+// in-memory window (Cache/CacheSize/CacheBase) of (GpStart,GpEnd) pairs
+// instead of always hitting Fp: a hit outside the current window falls
+// back to disk and, once this INDEX's Accesses member counter (see
+// BUGFIX #3) exceeds 10, re-centers the cache on the window containing
+// the hit. Disk forces the no-cache path outright.
+GDT_BOOLEAN
+INDEX::ValidateInField(const GPTYPE HitGp, FILE *Fp,
 		       INT Total, INT Disk, 
 		       GPTYPE *Cache, INT CacheSize, 
 		       INT CacheBase) 
@@ -1100,8 +1155,13 @@ INDEX::RsetOr(const OPOBJ& Set1, const OPOBJ& Set2) const
 }
 
 
-PIRSET 
-INDEX::Search(const SQUERY& SearchQuery) 
+// Evaluates a parsed SQUERY by walking its RPN OPSTACK: operand nodes
+// are dispatched to the appropriate *Search() method for their term
+// type (text/numeric/date/soundex) to produce an IRSET, and operator
+// nodes combine two IRSETs (AND/OR/etc.) via OPOBJ::Operate(), until a
+// single result IRSET remains.
+PIRSET
+INDEX::Search(const SQUERY& SearchQuery)
 {
   // Flip OPSTACK upside-down to convert so we can
   // pop from it in RPN order.
@@ -1329,14 +1389,19 @@ INDEX::AndSearch(const SQUERY& SearchQuery) {
 }
 
 
+// Looks up the MDT record containing Gp, opens its source file, and
+// reads up to BufferLen bytes starting Offset bytes past Gp into
+// Buffer, null-terminating at the actual byte count read (returned).
+// If Offset != 0, the read is bounds-checked against the record's
+// local start/end and returns 0 (no read) when out of range.
 //private
-INT 
-INDEX::GetIndirectBuffer(const GPTYPE Gp, CHR *Buffer, 
+INT
+INDEX::GetIndirectBuffer(const GPTYPE Gp, CHR *Buffer,
 			 const INT Offset,
 			 const INT BufferLen) {
   MDTREC Mdtrec;
   STRING FileName;
-  PFILE Fp=(PFILE)NULL;
+  PFILE Fp=nullptr;
   INT x;
   long FileOffset;
 
@@ -1395,8 +1460,13 @@ INDEX::GetIndirectBuffer(const GPTYPE Gp, CHR *Buffer) {
 }
 
 
-PIRSET 
-INDEX::SoundexSearch(const STRING& QueryTerm, const STRING& FieldName) { 
+// Phonetic (soundex-code) term search: scans the term index for GPs
+// whose stored term soundex-matches QueryTerm, validates hits against
+// FieldName's field-boundary index (ValidateInField()/
+// DiskValidateInField(), cached via a sliding GPTYPE window), and
+// builds an IRSET of the surviving MDT record hits.
+PIRSET
+INDEX::SoundexSearch(const STRING& QueryTerm, const STRING& FieldName) {
   // to do this efficiently, we need a soundex index
   // binary search
   PFILE fpi = fopen(IndexFileName, "rb");
@@ -1588,7 +1658,7 @@ INDEX::TermSearch(const STRING& QueryTerm, const STRING& FieldName,
   
   STRING FieldType, CheckName;
   INT w;
-  FILE *fx=(FILE*)NULL;
+  FILE *fx=nullptr;
   
   Parent->ComposeDbFn(&CheckName, ".num");
   
@@ -1832,8 +1902,8 @@ INDEX::TermSearch(const STRING& QueryTerm, const STRING& FieldName,
   INT Total=0;
   INT Disk=0;
   INT CacheSize=0;
-  GPTYPE *Cache=(GPTYPE*)NULL;
-  FILE *fpf=(FILE*)NULL;
+  GPTYPE *Cache=nullptr;
+  FILE *fpf=nullptr;
   
   if (FieldName.Equals("") || FieldName.GetLength()==0) {
     CheckField=0;
@@ -1915,7 +1985,7 @@ INDEX::TermSearch(const STRING& QueryTerm, const STRING& FieldName,
 	pirset->FastAddEntry(iresult, 1);
       }
     }
-    if(CheckField==1 && fpf!=NULL){
+    if(CheckField==1 && fpf!=nullptr){
       //  printf("%d Accesses, %d InCache, %d OutCache (%f Efficiency)\n",
       //   Accesses,InCache,OutCache,(InCache/Accesses)*100);
       fclose(fpf);
@@ -1923,7 +1993,11 @@ INDEX::TermSearch(const STRING& QueryTerm, const STRING& FieldName,
   }
   delete Pfct;
   if(CacheSize>0)
-    delete Cache;
+    // BUGFIX #5: Cache was allocated with `new GPTYPE[CacheSize*2]`
+    // (array new) but freed with scalar `delete`, an allocator
+    // mismatch that's undefined behavior. See
+    // docs/BUG_CATALOG.md#srcindexcxx.
+    delete [] Cache;
   delete [] gplist;
   pirset->SortByIndex();
   pirset->MergeEntries(1);
@@ -1934,10 +2008,10 @@ INDEX::TermSearch(const STRING& QueryTerm, const STRING& FieldName,
 void 
 INDEX::DumpIndex(INT DebugSkip) {
   STRING CheckName,TmpIndexFileName;
-  FILE *fx=(FILE*)NULL;
+  FILE *fx=nullptr;
   INT kk;
   CHR buf[256];
-  PFILE fpd=(PFILE)NULL;
+  PFILE fpd=nullptr;
   GPTYPE gp;
   MDTREC mdtrec;
   INT x, y, j;
@@ -1964,7 +2038,7 @@ INDEX::DumpIndex(INT DebugSkip) {
 
     TmpIndexFileName=IndexFileName;
     if (IndexNum > 1) {
-      sprintf(buf,".%d",kk);
+      snprintf(buf, sizeof(buf), ".%d",kk);
       TmpIndexFileName.Cat(buf);
     }
     PFILE fpi = Parent->ffopen(TmpIndexFileName, "rb");
@@ -2032,10 +2106,10 @@ INDEX::WriteCentroid(FILE* fp)
   fprintf(fp, "  <centroid>\n");
 	
   STRING CheckName,TmpIndexFileName;
-  FILE *fx=(FILE*)NULL;
+  FILE *fx=nullptr;
   INT kk;
   CHR buf[256];
-  PFILE fpd=(PFILE)NULL;
+  PFILE fpd=nullptr;
   GPTYPE gp;
   MDTREC mdtrec;
   INT x, y, j;
@@ -2064,7 +2138,7 @@ INDEX::WriteCentroid(FILE* fp)
 		
     TmpIndexFileName=IndexFileName;
     if (IndexNum > 1) {
-      sprintf(buf,".%d",kk);
+      snprintf(buf, sizeof(buf), ".%d",kk);
       TmpIndexFileName.Cat(buf);
     }
 
@@ -2186,7 +2260,7 @@ INDEX::WriteCentroid(FILE* fp)
 	DOUBLE MaxVal,MinVal;
 	NUMERICLIST NumList;
 
-	sprintf(buf,".%03d",FieldExt);
+	snprintf(buf, sizeof(buf), ".%03d",FieldExt);
 	Parent->ComposeDbFn(&CheckName, buf);
 	NumList.SetFileName(CheckName);
 	NumList.LoadTable(0,-1,VAL_BLOCK);
@@ -2231,7 +2305,7 @@ INDEX::WriteCentroid(FILE* fp)
 	for (i=0;i<HistLength;i++)
 	  YearHist[i] = 0;
 
-	sprintf(buf,".%03d",FieldExt);
+	snprintf(buf, sizeof(buf), ".%03d",FieldExt);
 	Parent->ComposeDbFn(&CheckName, buf);
 	IntList.SetFileName(CheckName);
 	IntList.LoadTable(0,-1,START_BLOCK);
@@ -2286,7 +2360,7 @@ INDEX::WriteCentroid(FILE* fp)
 	for (i=0;i<HistLength;i++)
 	  YearHist[i] = 0;
 
-	sprintf(buf,".%03d",FieldExt);
+	snprintf(buf, sizeof(buf), ".%03d",FieldExt);
 	Parent->ComposeDbFn(&CheckName, buf);
 	IntList.SetFileName(CheckName);
 	IntList.LoadTable(0,-1,START_BLOCK);
@@ -2321,7 +2395,7 @@ INDEX::WriteCentroid(FILE* fp)
 	DOUBLE MaxVal,MinVal;
 	INTERVALLIST IntList;
 
-	sprintf(buf,".%03d",FieldExt);
+	snprintf(buf, sizeof(buf), ".%03d",FieldExt);
 	Parent->ComposeDbFn(&CheckName, buf);
 	IntList.SetFileName(CheckName);
 	IntList.LoadTable(0,-1,START_BLOCK);
@@ -2341,7 +2415,7 @@ INDEX::WriteCentroid(FILE* fp)
 
       } else if (FieldType.Equals("GPOLY")) {
 	GPTYPE GpS;
-	sprintf(buf,".%03d",FieldExt);
+	snprintf(buf, sizeof(buf), ".%03d",FieldExt);
 	Parent->ComposeDbFn(&CheckName, buf);
 	PFILE Fp = Parent->ffopen(CheckName, "rb");
 
@@ -2411,7 +2485,13 @@ INDEX::WriteCentroid(FILE* fp)
 }
 
 
-void 
+// Final-pass merge: 2-way merges just the last two numbered sub-index
+// files (IndexNum-1 and IndexNum) into a ".tmp" file the same way
+// MergeIndexFiles() merges all of them, then renames the result back
+// over the earlier of the two and decrements IndexNum -- used to fold
+// one incremental update's new sub-index into the previous merged
+// state without redoing the full merge.
+void
 INDEX::CollapseIndexFiles(INT MemMB)
 {
   
@@ -2450,7 +2530,7 @@ INDEX::CollapseIndexFiles(INT MemMB)
   MemMB/=(sizeof(GPTYPE)+sizeof(INT)+StringCompLength+sizeof(CHR)); //size of a sistring record
   printf("%i Optimizer Entries\n", MemMB);
   for(i=First; i<=Second; i++){
-    sprintf(Tmp,".%d",i);
+    snprintf(Tmp, sizeof(Tmp), ".%d",i);
     TmpIndexFileName=IndexFileName;
     TmpIndexFileName.Cat(Tmp);
      A[i-First].SetLoadLimit(MemMB);
@@ -2477,13 +2557,20 @@ INDEX::CollapseIndexFiles(INT MemMB)
     // k is number of first active item
     A[k].GetSistring(&Current);
     CurrSmallest=k;
-    for(++k;k<IndexNum; k++){   // loop through other active items
+    // BUGFIX #4: this loop bound was `k<IndexNum` (the member tracking
+    // the *whole* index's sub-index count), copy-pasted from the
+    // analogous loop in MergeIndexFiles() where A is sized IndexNum.
+    // Here A is `MERGEUNIT A[2]` -- only 2 elements -- so whenever
+    // IndexNum > 2 this read A[k] past the end of the stack array and
+    // called member functions on whatever garbage followed it. See
+    // docs/BUG_CATALOG.md#srcindexcxx.
+    for(++k;k<2; k++){   // loop through other active items
       if(A[k].Empty()==GDT_FALSE){
         val=A[k].Smallest(&Current);    // if true, current was smaller
         if(val==GDT_FALSE)
           CurrSmallest=k;
       }
-      
+
     }
     // at this point, CurrSmallest is the one to write and reload
     
@@ -2492,7 +2579,7 @@ INDEX::CollapseIndexFiles(INT MemMB)
   }                             // loop
   // clean up old files
   for(i=First; i<=Second; i++){
-    sprintf(Tmp,".%d",i);
+    snprintf(Tmp, sizeof(Tmp), ".%d",i);
     TmpIndexFileName=IndexFileName;
     TmpIndexFileName.Cat(Tmp);
     CHR *p=TmpIndexFileName.NewCString();
@@ -2504,7 +2591,7 @@ INDEX::CollapseIndexFiles(INT MemMB)
   }
   fclose(fj);
   TmpIndexFileName=IndexFileName;
-  sprintf(Tmp,".%d",First);
+  snprintf(Tmp, sizeof(Tmp), ".%d",First);
   TmpIndexFileName.Cat(Tmp);
   printf("Creating ");
   TmpIndexFileName.Print();

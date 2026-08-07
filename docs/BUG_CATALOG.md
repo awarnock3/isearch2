@@ -2453,4 +2453,132 @@ minimal `TESTIDBOBJ` implementing `IDBOBJ`'s 3 pure virtuals
 (`DfdtAddEntry`/`IsStopWord`/`ParseWords`), extended with a
 configurable stop-word list and a configurable `GetFieldData()` so
 `ParseWords()`/`Present()`/`GetMetadata()` could be tested against
+controlled data instead of just linking.
+
+## src/index.cxx
+
+`class INDEX` (declared in `src/index.hxx`) owns and searches one
+on-disk inverted index. Its implementation is split across five
+translation units — `src/index.cxx` (this turn's target),
+`src/numsearch.cxx`, `src/datesearch.cxx`, `src/geosearch.cxx`, and
+`src/multiterm.cxx` — all still `pending` in `docs/PROCESSING_STATUS.md`
+except this one; only `index.cxx`/`index.hxx` were reviewed line-by-line
+this turn, though all five now had to be added to `TEST_ENGINE_SRCS`
+(along with `src/tokengen.cxx`, `src/thesaurus.cxx`, `src/nlist.cxx`,
+`src/squery.cxx`, `src/mergeunit.cxx`, `src/intlist.cxx`) just to link
+`INDEX` at all — see BUILD note below.
+
+1. **`INDEX::IsStopWord()` was permanently disabled** — the function
+   body opened with `return 0; // added for testing`, before the real
+   binary-search lookup against `stoplist[]` (`src/sw.hxx`) ever ran.
+   `IDB::IsStopWord()` (`src/idb.cxx:1050`) delegates directly to
+   `MainIndex->IsStopWord()`, and every `DOCTYPE` parser (`doctype.cxx`,
+   `usmarc.cxx`, `taglist.cxx`) calls `Db->IsStopWord()` while
+   tokenizing real documents — so this wasn't a latent/theoretical bug,
+   it silently disabled stop-word filtering for every document ever
+   indexed through the real `IDB`, bloating every index with "the",
+   "a", "an", "of", etc. Fixed by deleting the early return and
+   restoring the lookup; `BUGFIX #7` in source. Covered by two new
+   tests (`INDEX::IsStopWord recognizes stop words...` /
+   `...returns 0 for ordinary words`) that would have failed against
+   the old body.
+
+2. **`INDEX::CollapseIndexFiles()` read 2 elements of `MERGEUNIT A[2]`
+   out of bounds** — the final merge-loop iterated `for(++k;
+   k<IndexNum; k++)`, using the *whole index's* sub-index count
+   (`IndexNum`, a member field that can be much larger than 2) as the
+   bound for a stack array declared `MERGEUNIT A[2]`, clearly
+   copy-pasted from the analogous loop in `MergeIndexFiles()` (where
+   `A` really is sized `IndexNum`). Whenever `IndexNum > 2`, this read
+   `A[k]` past the end of the 2-element array and called `.Empty()`/
+   `.Smallest()` on whatever garbage stack memory followed it — a real
+   out-of-bounds read, not just a style issue. Fixed by changing the
+   bound to the literal `2`, matching the other two loops in the same
+   function. `BUGFIX #4` in source.
+
+3. **`delete` vs `delete[]` mismatch in `SoundexSearch()`** — `Cache`
+   is allocated with `new GPTYPE[CacheSize*2]` (array form) but was
+   freed with scalar `delete Cache;`, an allocator mismatch that's
+   undefined behavior per the standard (silently tolerated by most
+   allocators for a POD type like `GPTYPE`, which is why it never
+   crashed in practice, but still wrong). Fixed to `delete [] Cache;`.
+   `BUGFIX #5` in source.
+
+4. **`INDEX::MergeIndexFiles()` over-allocated `A` by a factor of
+   `sizeof(MERGEUNIT)`** — `A = new MERGEUNIT[sizeof(MERGEUNIT)*IndexNum];`
+   allocated `sizeof(MERGEUNIT)` times more elements than the `IndexNum`
+   actually used (indices `0..IndexNum-1`, confirmed by the loops right
+   below it). Not out-of-bounds — the oversized array still covers
+   every real access — just a large, pointless memory allocation scaled
+   by an unrelated constant. Fixed to `new MERGEUNIT[IndexNum];`.
+   `BUGFIX #6` in source.
+
+5. **`INDEX::INDEX()` constructor left several members uninitialized**
+   — `SetCache`, `DocTypePtr`, `TheThesaurus` (raw pointers) and
+   `MergeStatus`, `Accesses`, `InCache`, `OutCache` (counters used by
+   `ValidateInField()`'s cache-slide logic) were never assigned in the
+   constructor. `SetCache` and `TheThesaurus` are confirmed (by
+   tree-wide grep) to be 100% dead members — never assigned or read
+   anywhere else — so removing them outright would be the more thorough
+   fix, but that's a header change (GENERAL step 4 freezes public
+   header signatures) and neither is a live bug on its own since
+   nothing dereferences them; left declared, just safely initialized to
+   `nullptr`/`GDT_FALSE`/`0`. `DocTypePtr` *is* live (read via the
+   public `GetDocTypePtr()`), so this one is a genuine fix, not just
+   hardening — confirmed via the new
+   `INDEX constructor safely initializes pointer members` test, which
+   checks `GetDocTypePtr() == nullptr` right after construction.
+   `BUGFIX #3` in source.
+
+Also removed (this turn, `index.cxx` only): the file-scope globals
+`FILE *flist[40]; STRING Names[40]; INT fcount=0;` were declared but
+never read or written anywhere in the tree (confirmed by grep, and
+distinct from `MemoryData`/`MemoryDataLength`, which *are* used
+throughout `AddRecordList()` and were kept). Not a header change — pure
+dead file-scope state — so removed rather than just left alone per
+GENERAL step 6.
+
+Modernization: all 12 `sprintf` call sites converted to `snprintf`
+(each already had a same-scope fixed-size buffer to pass as the size
+argument); the handful of `(FILE*)NULL`/`(PFILE)NULL`/`NULL` comparisons
+converted to `nullptr` (two remaining `NULL` references are inside
+comments, left alone).
+
+**Header note:** `src/index.hxx` needed one small addition to compile
+standalone — a `class DOCTYPE;` forward declaration. It was already
+using `DOCTYPE*` (for `DocTypePtr`/`SetDocTypePtr()`/`GetDocTypePtr()`)
+but relying on every real includer having already pulled in the full
+`doctype/doctype.hxx` transitively via `dtreg.hxx` first (`index.cxx`
+itself includes `dtreg.hxx` before `index.hxx`). This is not a
+signature change — no type, parameter, or return type changed, it's
+exactly the same `DOCTYPE*` as before — just what let
+`tests/src/test_index.cxx` include `index.hxx` directly without pulling
+in the entire not-yet-processed `doctype/` tree.
+
+**BUILD note:** `INDEX`'s implementation spans 5 `.cxx` files (see
+above), all of which had to be added to `TEST_ENGINE_SRCS` for the
+linker to resolve `INDEX::NumericSearch()`, `::DoDateSearch()`,
+`::BoundingRectangle()`, `::MultiTermSearch()`, `::SortNumericFieldData()`,
+etc. — none of those methods are defined in `index.cxx`. Being listed in
+`TEST_ENGINE_SRCS` only means "linked for tests," not "processed" —
+`numsearch.cxx`/`datesearch.cxx`/`geosearch.cxx`/`multiterm.cxx` are
+still `pending` in `docs/PROCESSING_STATUS.md` and get their own
+line-by-line review, `BUGFIX` treatment, and doc comments on their own
+future turns, same as `tokengen.cxx`/`thesaurus.cxx`/`nlist.cxx`/
+`intlist.cxx`/`squery.cxx`/`mergeunit.cxx`, which were also added purely
+to satisfy the link.
+
+Not otherwise pursued this turn (documented here rather than acted on,
+to keep this turn's diff reviewable): `ValidateInField()`'s
+`GpS=Cache[y-CacheBase]; GpE=Cache[y+1-CacheBase];` indexing depends on
+a `CacheBase`/`X` invariant that's easy to misjudge without deeper
+tracing across `SoundexSearch()`'s only caller of it; the many
+unchecked `Parent->ffopen(...)` call sites that would `fgets`/read from
+a null `FILE*` if the open failed (e.g. `MergeIndexFiles()`,
+`CollapseIndexFiles()`) — this is a tree-wide pattern (20+ sites even in
+this one file), not specific to `index.cxx`, so fixing it here alone
+would be inconsistent; and a stray `"found", "",` empty-string entry in
+`src/sw.hxx`'s `stoplist[]` that breaks its strict sort order (relevant
+now that `BUGFIX #7` re-enables the binary search over it) — that's a
+different file, out of scope for this turn.
 controlled data rather than just linked.

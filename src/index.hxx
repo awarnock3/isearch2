@@ -42,6 +42,9 @@ Description:	Class INDEX
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef INDEX_HXX
 #define INDEX_HXX
 
@@ -55,8 +58,24 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "rcache.hxx"
 #include "intlist.hxx"
 #include "date.hxx"
-#include "thesaurus.hxx" 
+#include "thesaurus.hxx"
 
+// Not self-contained without this: DocTypePtr below is only ever used
+// as an opaque pointer here (the full definition comes from
+// doctype/doctype.hxx via dtreg.hxx, included by every real translation
+// unit before this header). Forward-declaring it is not a signature
+// change -- just what lets this header compile standalone, e.g. for
+// tests/src/test_index.cxx, without pulling in the whole doctype/ tree.
+class DOCTYPE;
+
+// Owns and searches one physical on-disk inverted index for an IDB: the
+// global-position (GPTYPE) postings files built during indexing, plus
+// the per-field, numeric, and date search paths that read them back.
+// Only ever heap-allocated and held by pointer (see IDB::MainIndex in
+// idb.cxx) -- never copied or assigned -- so the raw-pointer members
+// below (SetCache, DocTypePtr, TheThesaurus, Dict) don't need copy/move
+// control; they're initialized in the constructor to keep them safe
+// regardless.
 class INDEX {
   friend class IDB;
 #ifdef DICTIONARY

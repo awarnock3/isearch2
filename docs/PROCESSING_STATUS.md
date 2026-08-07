@@ -55,7 +55,7 @@
 | 51 | src/tokengen.hxx | blocked | 2026-08-07 | [src/tokengen.hxx](AUTOPILOT_LOG.md#srctokengenhxx) |
 | 52 | src/squery.hxx | blocked | 2026-08-07 | [src/squery.hxx](AUTOPILOT_LOG.md#srcsqueryhxx) |
 | 53 | doctype/doctype.hxx | done | 2026-08-07 | [doctype/doctype.cxx](BUG_CATALOG.md#doctypedoctypecxx) |
-| 54 | src/index.hxx | pending | | |
+| 54 | src/index.hxx | done | 2026-08-07 | [src/index.cxx](BUG_CATALOG.md#srcindexcxx) |
 | 55 | doctype/sgmlnorm.hxx | pending | | |
 | 56 | doctype/sgmltag.hxx | pending | | |
 | 57 | src/strstack.hxx | pending | | |
@@ -138,7 +138,7 @@
 | 134 | src/gstack.cxx | pending | | |
 | 135 | src/hash.cxx | pending | | |
 | 136 | src/idb.cxx | pending | | |
-| 137 | src/index.cxx | pending | | |
+| 137 | src/index.cxx | done | 2026-08-07 | [src/index.cxx](BUG_CATALOG.md#srcindexcxx) |
 | 138 | src/infix2rpn.cxx | pending | | |
 | 139 | src/intfield.cxx | done | 2026-08-07 | [src/intfield.cxx](BUG_CATALOG.md#srcintfieldcxx) |
 | 140 | src/intlist.cxx | pending | | |
