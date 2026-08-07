@@ -2008,3 +2008,50 @@ role (a payload-free circular-list base class) per GENERAL step 7. No
 `NULL`/`sprintf` usages to modernize; `vlist.hxx`'s own `#include`s were
 already complete (verified by compiling it standalone), unlike
 `reclist.hxx`'s analogous defect above.
+
+## src/attrlist.hxx
+
+Reprocessed via `/reprocess-blocked` after being blocked at GENERAL step
+4 (see `docs/AUTOPILOT_LOG.md#srcattrlisthxx`); the user chose deep-copy
+semantics over making `ATTRLIST` non-copyable, since `ATTRLIST` is a
+live member of both `OPERAND` and `DFD` and non-copyable would have
+required auditing every copy site on both.
+
+1. **No copy constructor** — `ATTRLIST` owns a heap-allocated
+   `PATTR Table` array and already has a correct `operator=`, but
+   declared no copy constructor, so the compiler-generated one did a
+   shallow pointer copy. Confirmed with a standalone repro:
+   copy-constructing a second `ATTRLIST` and destroying both triggered
+   a heap-use-after-free in `~ATTRLIST()`. Fixed by adding
+   `ATTRLIST(const ATTRLIST&)` that deep-copies `Table` (sized to the
+   source's `MaxEntries`), `TotalEntries`, and `MaxEntries`, mirroring
+   `operator=`'s own logic. See `BUGFIX #1` in source; regression test
+   in `tests/src/test_attrlist.cxx`.
+2. **`operator=` had no self-assignment guard** — `delete [] Table;
+   Init();` ran before `OtherAttrlist.GetTotalEntries()` was read; for
+   `x = x;` that's the same object `Init()` had just reset to 0
+   entries, so the rebuild loop below copied nothing back, silently
+   emptying the list. Same shape of bug as the one already found (and
+   fixed) in `STRLIST`'s `operator=` (`docs/BUG_CATALOG.md#srcstrlistcxx`,
+   `BUGFIX #1`) and previously flagged here as "found, not fixed" at
+   `sterm.hxx`'s turn. Fixed with a `this == &OtherAttrlist` guard. See
+   `BUGFIX #2` in source; regression test in `tests/src/test_attrlist.cxx`.
+3. **`Init()` allocated `Table` one element short of `MaxEntries`** —
+   `Table = new ATTR[7]` while `MaxEntries` was set to `8`, so
+   `AddEntry`'s `TotalEntries == MaxEntries` bounds check let the 8th
+   entry write to `Table[7]`, one past the end of the 7-slot
+   allocation — a real heap buffer overflow on every `ATTRLIST` that
+   ever grows past 7 entries, not a latent/dormant one. Confirmed real:
+   a loop adding 20 plain entries crashed with SIGSEGV before this fix
+   (found via this turn's own test, not a pre-existing repro in
+   `docs/AUTOPILOT_LOG.md` — this bug wasn't part of what blocked the
+   file). Fixed by computing the allocation size from `MaxEntries`
+   itself (`new ATTR[MaxEntries]`) instead of duplicating the number as
+   a separate literal, so the two can't drift apart again. See
+   `BUGFIX #3` in source; covered incidentally by the "grows past
+   initial capacity" test in `tests/src/test_attrlist.cxx`, which
+   crashed before this fix and passes clean now.
+
+Also applied: a file-level doc comment on `ATTRLIST` per GENERAL step
+7. No `NULL`/`sprintf` usages to modernize; `attrlist.hxx`'s own
+`#include`s were already complete (verified by compiling it standalone).

@@ -47,10 +47,21 @@ Author:		Nassib Nassar, nrn@cnidr.org
 
 #include "defs.hxx"
 #include "attr.hxx"
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
+// An ordered, resizable array of ATTR (attribute) entries -- e.g. a
+// Z39.50-style Bib-1 attribute set attached to a search term or field.
 class ATTRLIST {
 public:
   ATTRLIST();
+  // BUGFIX #1: ATTRLIST owned a heap-allocated Table array but declared
+  // no copy constructor, so the compiler-generated one did a shallow
+  // pointer copy -- confirmed to double-free Table under ASan.
+  // Deep-copies Table (sized to the source's MaxEntries), TotalEntries,
+  // and MaxEntries, mirroring operator='s own (already-correct) logic.
+  // See docs/BUG_CATALOG.md.
+  ATTRLIST(const ATTRLIST& OtherAttrlist);
   void        Init();
   ATTRLIST&   operator=(const ATTRLIST& OtherAttrlist);
   void        AddEntry(const ATTR& AttrRecord);
