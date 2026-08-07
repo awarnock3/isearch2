@@ -116,6 +116,9 @@ Author:		Edward C. Zimmermann, edz@bsn.com
 Distribution:   Isite modifications by A. Warnock (warnock@clark.net)
 @@@-*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -152,6 +155,10 @@ const CHR *COLONDOC::UnifiedName (const CHR *tag) const
   return tag; // Identity
 }
 
+// Reads NewRecord's bytes off disk, splits them into "Tag:"-delimited
+// segments via the file-local parse_tags(), and adds one DF field
+// (name from UnifiedName(tag), value trimmed of leading/trailing
+// whitespace) per segment to NewRecord's DFT.
 void COLONDOC::ParseFields (PRECORD NewRecord)
 {
   STRING fn;
@@ -168,7 +175,14 @@ void COLONDOC::ParseFields (PRECORD NewRecord)
     {
       fseek (fp, 0L, SEEK_END);
       RecStart = 0;
-      RecEnd = ftell (fp) - 1;
+      // BUGFIX #1: this used to be `ftell(fp) - 1`, silently dropping
+      // the last byte of every record read through this fallback (the
+      // common case: RecordEnd defaults to 0). Neither sgmlnorm.cxx
+      // nor sgmltag.cxx do this same "-1" -- sgmltag.cxx even has a
+      // `//RecEnd -= 1;` left commented out at the same spot, i.e. a
+      // prior author considered and rejected exactly this adjustment.
+      // See docs/BUG_CATALOG.md#doctypecolondoccxx.
+      RecEnd = ftell (fp);
     }
   fseek (fp, (long)RecStart, SEEK_SET);
   GPTYPE RecLength = RecEnd - RecStart;
@@ -178,7 +192,7 @@ void COLONDOC::ParseFields (PRECORD NewRecord)
   RecBuffer[ActualLength] = '\0';
 
   PCHR *tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL || tags[0] == NULL)
+  if (tags == nullptr || tags[0] == nullptr)
     {
       STRING doctype;
       NewRecord->GetDocumentType(&doctype);
@@ -205,18 +219,44 @@ void COLONDOC::ParseFields (PRECORD NewRecord)
   for (PCHR * tags_ptr = tags; *tags_ptr; tags_ptr++)
     {
       PCHR p = tags_ptr[1]; // end of field
-      if (p == NULL) // If no end of field
-	p = &RecBuffer[RecLength]; // use end of buffer
+      // BUGFIX #3: this fallback used RecLength (the buffer's
+      // allocated capacity), not ActualLength (how much was actually
+      // read) -- harmless when they're equal (the normal case, now
+      // that BUGFIX #1 above no longer under-sizes RecLength), but on
+      // a short fread() this would extend the last field's value into
+      // unread/uninitialized bytes rather than stopping at the real
+      // end of the data. See docs/BUG_CATALOG.md#doctypecolondoccxx.
+      if (p == nullptr) // If no end of field
+	p = &RecBuffer[ActualLength]; // use end of buffer
       // eg "Author:"
       size_t off = strlen (*tags_ptr) + 1;
       INT val_start = (*tags_ptr + off) - RecBuffer;
       // Skip while space after the ':'
       while (isspace (RecBuffer[val_start]))
 	val_start++, off++;
-      // Also leave off the \n
-      INT val_len = (p - *tags_ptr) - off - 1;
+      INT val_len = (p - *tags_ptr) - off;
+      // BUGFIX #1b: this used to unconditionally subtract 1 more here
+      // ("leave off the \n"), assuming a trailing newline always sits
+      // just before `p`. True for every interior field (the format
+      // guarantees exactly one '\n' before the next "Tag:" line), but
+      // NOT for the last field's end-of-buffer fallback above when the
+      // file doesn't end with '\n' -- confirmed with a standalone test
+      // (a file ending "...Jane Doe" with no trailing newline came back
+      // as "Jane Do", one byte short). Only exclude it if it's
+      // actually there. See docs/BUG_CATALOG.md#doctypecolondoccxx.
+      if (val_len > 0 && p[-1] == '\n')
+	val_len--;
+      // BUGFIX #2: this checked RecBuffer[val_len + val_start], i.e.
+      // one byte *past* the value's actual last character
+      // (val_start + val_len - 1) -- almost always the delimiter
+      // ('\n' or start of the next tag) that val_len's own "- 1"
+      // above already excludes, and almost always whitespace, so this
+      // silently trimmed one real trailing character off of nearly
+      // every field value. Confirmed with a standalone repro
+      // ("Hello World" came back as "Hello Worl"). See
+      // docs/BUG_CATALOG.md#doctypecolondoccxx.
       // Strip potential trailing while space
-      while (val_len > 0 && isspace (RecBuffer[val_len + val_start]))
+      while (val_len > 0 && isspace (RecBuffer[val_start + val_len - 1]))
 	val_len--;
       if (val_len < 0) continue; // Don't bother with empty fields (J. Mandel)
       //      if (val_len <= 0) continue; // Don't bother with empty fields
@@ -227,13 +267,25 @@ void COLONDOC::ParseFields (PRECORD NewRecord)
       FieldName = unified_name ? unified_name: "Misc";
 #else
       // Ignore "unclassified" fields
-      if (unified_name == NULL) continue; // ignore these
+      if (unified_name == nullptr) continue; // ignore these
       FieldName = unified_name;
 #endif
       dfd.SetFieldName (FieldName);
       Db->DfdtAddEntry (dfd);
       fc.SetFieldStart (val_start);
-      fc.SetFieldEnd (val_start + val_len);
+      // BUGFIX #4: this used to be `SetFieldEnd(val_start + val_len)`,
+      // one past the correct *inclusive* end index (every other
+      // doctype parser -- sgmlnorm.cxx, sgmltag.cxx -- computes
+      // `val_start + val_len - 1` here, and src/index.cxx derives a
+      // field's length as `GetFieldEnd() - GetFieldStart() + 1`, which
+      // only works for an inclusive end). This exact "+1" happened to
+      // cancel out against BUGFIX #2's "-1" above in the common case
+      // (one real trim iteration), which is almost certainly why this
+      // went unnoticed -- but the two bugs were independent, and
+      // fixing #2 alone (without this) would have made the stored
+      // field coordinates wrong instead of accidentally right. See
+      // docs/BUG_CATALOG.md#doctypecolondoccxx.
+      fc.SetFieldEnd (val_start + val_len - 1);
       PFCT pfct = new FCT ();
       pfct->AddEntry (fc);
       df.SetFct (*pfct);
@@ -310,10 +362,10 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
   	      // allocate more space
   	      max_num_tags += TAG_GROW_SIZE;
 	      PCHR *New = new PCHR [max_num_tags];
-	      if (New == NULL)
+	      if (New == nullptr)
 		{
 		  delete [] t;
-		  return NULL; // NO MORE CORE!
+		  return nullptr; // NO MORE CORE!
 		}
 	      memcpy(New, t, tc*sizeof(PCHR));
  	      delete [] t;
@@ -332,6 +384,6 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
 	State = CONTINUING;
 #endif
     }
-  t[tc] = (PCHR) NULL;
+  t[tc] = nullptr;
   return t;
 }

@@ -61,7 +61,7 @@
 | 57 | src/strstack.hxx | done | 2026-08-07 | [src/strstack.hxx](BUG_CATALOG.md#srcstrstackhxx) |
 | 58 | src/infix2rpn.hxx | done | 2026-08-07 | [src/infix2rpn.cxx](BUG_CATALOG.md#srcinfix2rpncxx) |
 | 59 | src/glist.hxx | done | 2026-08-07 | [src/glist.hxx](BUG_CATALOG.md#srcglisthxx) |
-| 60 | doctype/colondoc.hxx | pending | | |
+| 60 | doctype/colondoc.hxx | done | 2026-08-07 | [doctype/colondoc.cxx](BUG_CATALOG.md#doctypecolondoccxx) |
 | 61 | doctype/mailfolder.hxx | pending | | |
 | 62 | src/gstack.hxx | pending | | |
 | 63 | src/isearch.hxx | pending | | |
@@ -192,7 +192,7 @@
 | 188 | doctype/bibtex.cxx | pending | | |
 | 189 | doctype/cipc.cxx | pending | | |
 | 190 | doctype/cipp.cxx | pending | | |
-| 191 | doctype/colondoc.cxx | pending | | |
+| 191 | doctype/colondoc.cxx | done | 2026-08-07 | [doctype/colondoc.cxx](BUG_CATALOG.md#doctypecolondoccxx) |
 | 192 | doctype/dif.cxx | pending | | |
 | 193 | doctype/doctype.cxx | done | 2026-08-07 | [doctype/doctype.cxx](BUG_CATALOG.md#doctypedoctypecxx) |
 | 194 | doctype/dtconf.cxx | pending | | |

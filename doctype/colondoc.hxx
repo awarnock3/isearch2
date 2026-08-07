@@ -6,6 +6,9 @@ Author:		Edward C. Zimmermann, edz@bsn.com
 Copyright:	Basis Systeme netzwerk, Munich
 @@@-*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef COLONDOC_HXX
 #define COLONDOC_HXX
 
@@ -14,6 +17,12 @@ Copyright:	Basis Systeme netzwerk, Munich
 # include "doctype.hxx"
 #endif
 
+// A "colon-tagged" (IAFA-like) DOCTYPE: records are lines of the form
+// "Tag: value", where a field's value continues across following
+// lines until the next "Tag:" line. See the "What"/format comment
+// above the file-local parse_tags() in colondoc.cxx for the exact
+// grammar (no whitespace between field name and ':', field names
+// cannot contain whitespace).
 class COLONDOC :  public DOCTYPE {
 public:
 	COLONDOC(PIDBOBJ DbParent);

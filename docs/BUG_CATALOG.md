@@ -2835,3 +2835,73 @@ destructor/ownership caveat above. Tests (`tests/src/test_glist.cxx`)
 cover empty-list state, forward/backward traversal after `InsertAfter`,
 `Delete` from interior/head/tail/singleton positions, `InsertBefore`
 (including into an empty list), and `Update`.
+
+## doctype/colondoc.cxx
+
+`class COLONDOC` parses "colon-tagged" (IAFA-like) records: lines of
+the form `Tag: value`, where a value continues across following lines
+until the next `Tag:` line. This turn found the most bugs of any file
+so far — four related off-by-ones in `ParseFields()`'s value-boundary
+math, one of which only surfaced once another was fixed.
+
+1. **File read truncated the last byte of every record** —
+   `RecEnd = ftell(fp) - 1;` in the "no explicit RecordEnd" fallback
+   (the common case) meant `fread()` never read the file's actual last
+   byte at all. Neither `sgmlnorm.cxx` nor `sgmltag.cxx` do this same
+   `-1` — `sgmltag.cxx` even has a `//RecEnd -= 1;` left commented out
+   at the equivalent spot, i.e. a prior author considered and rejected
+   this exact adjustment there. Fixed by dropping the `- 1`. `BUGFIX
+   #1` in source.
+2. **Trailing-newline exclusion assumed a newline was always there**
+   — `INT val_len = (p - *tags_ptr) - off - 1;` unconditionally
+   excluded one byte "for the \n", correct for every interior field
+   (the format guarantees exactly one `\n` before the next `Tag:`
+   line) but wrong for the *last* field when the file doesn't end with
+   `\n` — confirmed with a test file ending `...Jane Doe` (no trailing
+   newline): the field came back as `"Jane Do"`, one byte short. Fixed
+   by only excluding it when `p[-1] == '\n'` is actually true. `BUGFIX
+   #1b` in source (found while writing the regression test for
+   `BUGFIX #1`, since removing the `-1` in `BUGFIX #1` is what first
+   made this file long enough for the bug to be reachable in a
+   realistic-looking test case).
+3. **Trailing-whitespace trim checked the wrong index, chopping the
+   last real character off nearly every value** —
+   `RecBuffer[val_len + val_start]` checks one byte *past* the value's
+   actual last character (`val_start + val_len - 1`); since that
+   position is almost always the delimiter (`\n` or the next tag) and
+   almost always whitespace, this trimmed one real trailing character
+   off of nearly every field. Confirmed with a standalone repro:
+   `"Hello World"` came back as `"Hello Worl"`. `BUGFIX #2` in source.
+4. **`SetFieldEnd()` stored one byte too many** —
+   `fc.SetFieldEnd(val_start + val_len)` is one past the correct
+   *inclusive* end index; every other doctype parser (`sgmlnorm.cxx`,
+   `sgmltag.cxx`) computes `val_start + val_len - 1` here, and
+   `src/index.cxx` derives a field's length as
+   `GetFieldEnd() - GetFieldStart() + 1`, which only works for an
+   inclusive end. This `+1` happened to numerically cancel out against
+   `BUGFIX #2`'s `-1` in the common single-trim-iteration case, which
+   is almost certainly why neither was noticed — fixing `BUGFIX #2`
+   alone, without this one, would have turned "accidentally correct"
+   stored field coordinates into genuinely wrong ones. `BUGFIX #4` in
+   source; fixed together with `BUGFIX #2` for exactly this reason.
+5. **Last-field fallback used the wrong length variable** —
+   `p = &RecBuffer[RecLength]` used the buffer's allocated capacity,
+   not `ActualLength` (bytes actually read) — harmless now that
+   `BUGFIX #1` keeps them equal in the normal case, but would have
+   extended the last field into unread/uninitialized-but-allocated
+   bytes on a short `fread()`. Fixed to use `ActualLength`. `BUGFIX #3`
+   in source.
+
+All four numbered fixes (`#1`/`#1b`/`#2`/`#4`; `#3` is a smaller
+consistency fix) are covered together by
+`COLONDOC::ParseFields extracts full field values, including the last
+byte of the file`, which deliberately uses a file with no trailing
+newline and checks the *stored* `FC` coordinates (read back via
+`GetFieldStart()`/`GetFieldEnd()`, the same way the real engine
+retrieves field text) rather than an internal variable — the only way
+to actually catch `BUGFIX #4` given how it interacted with `BUGFIX #2`.
+
+Modernization: all code-level `NULL` uses converted to `nullptr`. No
+`sprintf` calls present. Added class-level and `ParseFields()` doc
+comments. Tests (`tests/doctype/test_colondoc.cxx`) also cover
+`UnifiedName()` and leading-whitespace trimming after the `:`.
