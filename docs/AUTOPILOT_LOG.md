@@ -344,3 +344,75 @@ is reprocessed, alongside the copy-semantics decision.
 
 Row set to `blocked`; needs a signature-change decision (deep-copy vs.
 non-copyable) before reprocessing via `/process src/nlist.hxx`.
+
+## src/intlist.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `INTERVALLIST` (derives
+from `NUMERICLIST`, itself blocked this same batch at
+`docs/AUTOPILOT_LOG.md#srcnlisthxx`) owns its own heap-allocated
+`PINTERVALFLD table` array (`new INTERVALFLD[50*Ncoords]` in both
+constructors, `delete [] table` in the destructor) but declares no copy
+constructor and no `operator=` — the same "no custom copy semantics
+whatsoever" shape as `mdt.hxx`/`fpt.hxx`/`nlist.hxx` earlier this
+batch. This is `INTERVALLIST`'s own, first-party defect (it owns the
+array directly), not just an inherited risk from `NUMERICLIST` the way
+`DF`'s risk from `FCT` was — though it inherits *that* risk too, doubly:
+a compiler-generated copy would shallow-copy both `INTERVALLIST`'s own
+`table` and (via `NUMERICLIST`'s own compiler-generated copy
+constructor, since neither class declares one) the base class's
+`table` as well.
+
+Confirmed real with a standalone repro, same shape as the others this
+batch: default-construct an `INTERVALLIST`, copy-initialize a second
+(`INTERVALLIST b = a;`), let `b` go out of scope, then let `a` be
+destroyed at end of scope. AddressSanitizer reported a
+`heap-use-after-free` in `INTERVALLIST::~INTERVALLIST()`
+(`intlist.cxx:1180`): `b`'s implicit shallow copy shared `a`'s own
+`table` pointer, `b`'s destructor `delete []`'d it first, and `a`'s
+destructor then read the same already-freed block (the base class's
+separately-owned `table` would fail the identical way one level up, in
+`~NUMERICLIST()`, if destruction got that far). No confirmed
+copy-construction call site was found in the live tree (every site
+found in `src/index.cxx`/`src/numsearch.cxx`/`src/idb.cxx` either
+default-constructs a plain `INTERVALLIST` or assigns through its own
+methods), so this is latent rather than actively crashing today.
+
+Fixing it requires adding `INTERVALLIST(const INTERVALLIST&);` and
+`INTERVALLIST& operator=(const INTERVALLIST&);` to `intlist.hxx` —
+deep-copying `table` (sized to the source's `MaxEntries`) and every
+other member listed below — or `= delete`-ing both, mirroring the
+deep-copy-vs-non-copyable choice already resolved case by case for
+`reclist.hxx`/`attrlist.hxx`/`dfdt.hxx`/`mdt.hxx`/`fpt.hxx`. Either way,
+`NUMERICLIST`'s own copy-semantics decision (still pending) needs
+settling first, since `INTERVALLIST`'s base subobject would otherwise
+still be vulnerable to the identical bug even after `INTERVALLIST`'s
+own copy operations are fixed. A call for a human, not an autopilot
+guess, per GENERAL step 4.
+
+Also found while reading, not fixed here since step 4 gates the rest of
+this file's pipeline for this turn — a much larger-scale version of the
+`GlobalStart`-shadowing finding already documented (not fixed, same
+reason) at `docs/BUG_CATALOG.md#srcintfieldcxx`: **`INTERVALLIST`
+redeclares its own private copies of nearly every member `NUMERICLIST`
+already has** — `Count`, `Attribute`, `Pointer`, `MaxEntries`,
+`StartIndex`, `EndIndex`, `Relation`, `FileName`, `Ncoords` are all
+identically-named, identically-typed members shadowing the base
+class's own, plus `table` (a different, `INTERVALFLD`-typed, array).
+Every `INTERVALLIST` method reads/writes its own shadowed copies, never
+the inherited ones (which `NUMERICLIST` declares `private`, making them
+inaccessible to `INTERVALLIST` even if it wanted to reuse them) — so
+every `INTERVALLIST` instance allocates and fully initializes *two*
+separate, independent table arrays (the base's own 100-entry
+`NUMERICFLD[]`, entirely unused after construction, plus the derived
+class's real `INTERVALFLD[]`), wasting an allocation and ~1.2KB per
+instance. The `public` inheritance itself appears to contribute nothing
+functional beyond the (unused, since always shadowed) inherited method
+names — a real design/encapsulation problem, but fixing it means either
+making `NUMERICLIST`'s members `protected` (a header change to a
+different, already-blocked file) or dropping the inheritance entirely,
+both squarely a human design call, not a mechanical fix.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable, and ideally revisited alongside `nlist.hxx`'s own
+decision given the shadowing above) before reprocessing via
+`/process src/intlist.hxx`.

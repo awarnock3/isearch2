@@ -48,7 +48,7 @@
 | 44 | src/nlist.hxx | blocked | 2026-08-07 | [src/nlist.hxx](AUTOPILOT_LOG.md#srcnlisthxx) |
 | 45 | src/date.hxx | done | 2026-08-07 | [src/date.cxx](BUG_CATALOG.md#srcdatecxx) |
 | 46 | src/intfield.hxx | done | 2026-08-07 | [src/intfield.cxx](BUG_CATALOG.md#srcintfieldcxx) |
-| 47 | src/intlist.hxx | pending | | |
+| 47 | src/intlist.hxx | blocked | 2026-08-07 | [src/intlist.hxx](AUTOPILOT_LOG.md#srcintlisthxx) |
 | 48 | src/soundex.hxx | pending | | |
 | 49 | src/mergeunit.hxx | pending | | |
 | 50 | src/thesaurus.hxx | pending | | |
