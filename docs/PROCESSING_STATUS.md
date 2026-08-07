@@ -43,7 +43,7 @@
 | 39 | src/fprec.hxx | done | 2026-08-07 | [src/fprec.cxx](BUG_CATALOG.md#srcfpreccxx) |
 | 40 | src/iresult.hxx | done | 2026-08-07 | [src/iresult.cxx](BUG_CATALOG.md#srciresultcxx) |
 | 41 | src/opobj.hxx | done | 2026-08-07 | [src/opobj.cxx](BUG_CATALOG.md#srcopobjcxx) |
-| 42 | src/fpt.hxx | pending | | |
+| 42 | src/fpt.hxx | blocked | 2026-08-07 | [src/fpt.hxx](AUTOPILOT_LOG.md#srcfpthxx) |
 | 43 | src/nfield.hxx | pending | | |
 | 44 | src/nlist.hxx | pending | | |
 | 45 | src/date.hxx | pending | | |

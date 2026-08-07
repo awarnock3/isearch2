@@ -245,3 +245,46 @@ alongside the copy-semantics fix.
 
 Row set to `blocked`; needs a signature-change decision (deep-copy vs.
 non-copyable) before reprocessing via `/process src/mdt.hxx`.
+
+## src/fpt.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `FPT` owns a
+heap-allocated `FPREC* Table` array (`new FPREC[TableSize]` in
+`Init()`, `delete [] Table` in the destructor) but declares no copy
+constructor and no `operator=` at all — the same "no custom copy
+semantics whatsoever" shape as `mdt.hxx` this batch
+(`docs/AUTOPILOT_LOG.md#srcmdthxx`), not even a hand-written (if buggy)
+`operator=` like `attrlist.hxx`/`dfdt.hxx` had. The compiler-generated
+copy constructor and copy-assignment operator both do a member-wise
+shallow copy of `Table`.
+
+Confirmed real with a standalone repro, same shape as the others this
+batch: construct an `FPT`, open one file through it (`ffopen()`),
+copy-initialize a second (`FPT b = a;` — copy constructor), let `b` go
+out of scope, then let `a` be destroyed at end of scope. AddressSanitizer
+reported a `heap-use-after-free` in `FPREC::GetClosed()` called from
+`FPT::CloseAll()` called from `FPT::~FPT()`: `b`'s implicit shallow
+copy shared `a`'s `Table` pointer, `b`'s destructor `delete []`'d it
+first, and `a`'s destructor then read the same freed block while
+closing any still-open files. Unlike `mdt.hxx`, this one has a
+concrete, non-pointer live call site already in the tree:
+`src/idb.hxx:224` declares `FPT MainFpt;` as a plain (not pointer)
+member of `IDB` (Order 64, still pending) — if `IDB` is ever
+copy-constructed or assigned without `IDB` defining its own copy
+semantics first, `MainFpt` would be silently, shallowly copied right
+along with it. Worth flagging concretely when `idb.hxx` reaches its own
+turn.
+
+Fixing it requires adding `FPT(const FPT&);` and
+`FPT& operator=(const FPT&);` to `fpt.hxx` — deep-copying `Table`,
+`TotalEntries`, `MaximumEntries` — or `= delete`-ing both to make the
+class explicitly non-copyable. Given `FPT`'s `Table` entries each cache
+a live `FILE*` (`FPREC::FilePointer`), a "deep copy" would need to
+decide what a copied-but-still-open file handle even means (duplicate
+the fd? reopen from the file name? leave it closed?) — a design
+question, not just a mechanical copy, so this is a call for a human,
+not an autopilot guess, per GENERAL step 4.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable, and if deep-copy, a decision on open-`FILE*` semantics)
+before reprocessing via `/process src/fpt.hxx`.
