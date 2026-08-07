@@ -15,9 +15,11 @@ Steps:
    confirmed `.cxx`). Flag anything you find that doesn't match these
    extensions before deciding whether it's in scope.
 3. For each file, check whether it already contains the
-   `ISEARCH2-CLEANUP: processed` marker comment. Exclude marked files
-   from the new ordering entirely — leave their existing row in
-   `docs/PROCESSING_STATUS.md` untouched.
+   `ISEARCH2-CLEANUP: processed` marker comment, OR already has a row in
+   `docs/PROCESSING_STATUS.md` with status `generated`. Exclude both
+   from the new ordering entirely — leave their existing row untouched.
+   (`generated` files are machine-produced by another in-scope file and
+   never carry the marker themselves — see the format section below.)
 4. For the remaining (unmarked) files, build a `#include` dependency
    graph within the tree (ignore system/standard headers). Topologically
    sort so files that are `#include`d by the most other in-scope files
