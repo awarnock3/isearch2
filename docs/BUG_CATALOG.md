@@ -1604,3 +1604,39 @@ the file-level comment added to `df.hxx`). No `NULL`/`sprintf` usages.
   constructor for the `Fct` member. Tracked at
   `docs/AUTOPILOT_LOG.md#srcvlisthxx`; not duplicated as a second
   blocked row here for the same reason given in `strlist.hxx`'s turn.
+
+## src/dfd.cxx
+
+`DFD`: a file number plus an `ATTRLIST` of attributes — field name and
+field type are themselves stored as attributes rather than as their own
+members (see the file-level comment added to `dfd.hxx`). No
+`NULL`/`sprintf` usages.
+
+1. **`operator=` had no self-assignment guard** — `dfd = dfd;` would
+   reach `Attributes = OtherDfd.Attributes;` with `OtherDfd.Attributes`
+   being the very same `ATTRLIST` as `Attributes`, hitting
+   `ATTRLIST::operator=`'s own missing-self-assignment-guard bug
+   (`docs/BUG_CATALOG.md#srcoperandhxx`, confirmed reachable during
+   `sterm.hxx`'s turn) and silently emptying it — which, since field
+   name/type live inside `Attributes` here, would also have wiped
+   those. Fixed with a `this == &OtherDfd` guard, the same pattern used
+   for `DF::operator=` (`docs/BUG_CATALOG.md#srcdfcxx`, `BUGFIX #1`).
+   See `BUGFIX #1` in source; regression test in
+   `tests/src/test_dfd.cxx`.
+
+### Found but out of scope for this file (deferred, not fixed)
+
+- **Missing copy constructor, inherited from `ATTRLIST`** — same shape
+  as `DF`'s deferred finding just above: `DFD` has no explicit copy
+  constructor, so copy-constructing a `DFD` falls through to
+  `ATTRLIST`'s (also absent, therefore compiler-generated shallow) copy
+  constructor for the `Attributes` member — the exact bug that got
+  `attrlist.hxx` blocked this batch (`docs/AUTOPILOT_LOG.md#srcattrlisthxx`).
+  Latent rather than confirmed here specifically: every `DFD`-copying
+  call site found in the tree (e.g. `DFDT::AddEntry`/`FastAddEntry` in
+  `src/dfdt.cxx`) default-constructs then assigns
+  (`DFD Dfd; Dfd = DfdRecord;`), the same avoidance pattern already
+  seen for `STRLIST`/`DFD`-shaped classes elsewhere, never
+  copy-constructing directly. Tracked at
+  `docs/AUTOPILOT_LOG.md#srcattrlisthxx`; not duplicated as a second
+  blocked row here for the same reason given in `df.cxx`'s turn.

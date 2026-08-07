@@ -34,7 +34,7 @@
 | 30 | src/attr.hxx | done | 2026-08-07 | [src/attr.cxx](BUG_CATALOG.md#srcattrcxx) |
 | 31 | src/df.hxx | done | 2026-08-07 | [src/df.cxx](BUG_CATALOG.md#srcdfcxx) |
 | 32 | src/attrlist.hxx | blocked | 2026-08-07 | [src/attrlist.hxx](AUTOPILOT_LOG.md#srcattrlisthxx) |
-| 33 | src/dfd.hxx | pending | | |
+| 33 | src/dfd.hxx | done | 2026-08-07 | [src/dfd.cxx](BUG_CATALOG.md#srcdfdcxx) |
 | 34 | src/dfdt.hxx | pending | | |
 | 35 | src/mdtrec.hxx | pending | | |
 | 36 | src/mdt.hxx | pending | | |
@@ -125,7 +125,7 @@
 | 121 | src/datesearch.cxx | pending | | |
 | 122 | src/defs.cxx | pending | | |
 | 123 | src/df.cxx | done | 2026-08-07 | [src/df.cxx](BUG_CATALOG.md#srcdfcxx) |
-| 124 | src/dfd.cxx | pending | | |
+| 124 | src/dfd.cxx | done | 2026-08-07 | [src/dfd.cxx](BUG_CATALOG.md#srcdfdcxx) |
 | 125 | src/dfdt.cxx | pending | | |
 | 126 | src/dft.cxx | pending | | |
 | 127 | src/fc.cxx | pending | | |
