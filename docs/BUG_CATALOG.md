@@ -1759,3 +1759,64 @@ Also applied: file-level and per-method doc comments in `registry.hxx`.
 buffer, comfortably bounded given `INT`'s range) wasn't modernized —
 the function wasn't otherwise touched this turn, per "don't restyle
 code you're not otherwise touching."
+
+## src/result.cxx
+
+`RESULT`: one search hit (key/doctype/path/file name, byte span, score,
+and — for virtual databases — which `MDT` it came from). See the
+file-level comment added to `result.hxx`. Already used `snprintf` in
+`GetVKey()`; no `NULL` usages.
+
+1. **Constructor left `DbNum`/`RecordStart`/`RecordEnd`/`Score`/`MyMdt`
+   indeterminate** — none of these five primitive/pointer members had
+   an in-class initializer or were set in the constructor body (only
+   the `DO_HIGHLIGHTING`-gated `HitTable`, not defined anywhere in this
+   build, was). Unlike the `STRING` members, which self-initialize to
+   empty via `STRING`'s own default constructor, a default-constructed
+   `RESULT` used to start with garbage in all five until a caller
+   happened to `Set` every one of them explicitly. Fixed by initializing
+   all five in the constructor body. See `BUGFIX #1` in source;
+   regression test in `tests/src/test_result.cxx` checks a
+   default-constructed `RESULT` reads back zero/null for all five.
+2. **`operator=` never copied `MyMdt`** — every other field was copied
+   field-by-field except the saved `MDT*`, so after `a = b;`, `a`'s
+   `GetMdt()` kept returning whatever it already had (indeterminate
+   before `BUGFIX #1`, or just stale) instead of `b`'s, silently
+   pointing `GetRecordData()`/highlighting at the wrong virtual
+   database, or an invalid one. Fixed by adding the missing assignment.
+   See `BUGFIX #2` in source; regression test in
+   `tests/src/test_result.cxx` confirms a copy's `GetMdt()` matches the
+   source's.
+3. **`GetRecordData()` narrowed `GPTYPE` (unsigned 32-bit)
+   `RecordStart`/`RecordEnd` to local `INT` (signed 32-bit) variables**
+   — an offset past `INT_MAX` (~2GB into a large indexed corpus) would
+   go negative, breaking both the `fseek()` offset and the computed read
+   size. The same `GPTYPE`-narrowed-to-`INT` category already found,
+   but not yet fixed pending its own turn, in `FC::Write()`/`Read()`
+   (`docs/BUG_CATALOG.md#srcfchxx`). `GetRecordSize()` (just above) was
+   already correctly typed (`LONG`); `GetRecordData()` now reuses it
+   instead of recomputing narrowed. See `BUGFIX #3` in source;
+   regression test in `tests/src/test_result.cxx` confirms a real
+   read still round-trips a specific byte range correctly.
+
+### Found but out of scope for this file (deferred, not fixed)
+
+- **Missing copy constructor** — `RESULT` declares `operator=` but no
+  copy constructor (already flagged as a `DF`/`FCT`/`ATTRLIST`-shaped
+  risk in the comment above `MakeResult()` in
+  `tests/src/test_rset.cxx`, written during `rset.hxx`'s turn). Unlike
+  those three, though, this isn't currently exploitable in *this*
+  tree's actual build: the only member that would be unsafely
+  shallow-copied by the compiler-generated copy constructor —
+  `PFCT HitTable`, owned and `delete`d in the destructor — only exists
+  when `DO_HIGHLIGHTING` is defined, and nothing in the real `Makefile`
+  or `make tests`/`make tests-asan` ever defines it (only
+  `Makefile.asf`, an alternate/legacy build file not used by this
+  cleanup effort, does). `MyMdt`, the only other pointer member, is
+  documented as an intentionally-shared, non-owned reference (see the
+  new doc comment on `SetMdt()`), so shallow-copying it is correct, not
+  a bug. Left unfixed since adding a copy constructor is a header
+  change (GENERAL step 4), and — unlike `attrlist.hxx`/`dfdt.hxx`/
+  `mdt.hxx` this batch — no standalone repro under this tree's actual
+  build flags reproduces a real defect to justify blocking the whole
+  file over it.

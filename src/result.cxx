@@ -39,19 +39,33 @@ Version:	1.00
 Description:	Class RESULT - Search Result
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <stdio.h>
 #include "result.hxx"
 
 
 RESULT::RESULT() {
+  // BUGFIX #1: DbNum/RecordStart/RecordEnd/Score/MyMdt are all
+  // primitive or pointer members with no in-class initializer, and
+  // none of them used to be set here -- unlike the STRING members
+  // (Key/DocumentType/PathName/FileName), which self-initialize to
+  // empty via STRING's own default constructor, a default-constructed
+  // RESULT left these five as indeterminate values until a caller
+  // happened to Set every one of them explicitly.
+  DbNum = 0;
+  RecordStart = 0;
+  RecordEnd = 0;
+  Score = 0.0;
+  MyMdt = 0;
 #ifdef DO_HIGHLIGHTING
   HitTable = new FCT();
 #endif
 }
 
 
-RESULT& 
+RESULT&
 RESULT::operator=(const RESULT& OtherResult) {
   Key = OtherResult.Key;
   DocumentType = OtherResult.DocumentType;
@@ -61,6 +75,12 @@ RESULT::operator=(const RESULT& OtherResult) {
   RecordEnd = OtherResult.RecordEnd;
   Score = OtherResult.Score;
   DbNum = OtherResult.DbNum; // Added for virtual databases
+  // BUGFIX #2: MyMdt was never copied here, so after `a = b;`, a's
+  // GetMdt() kept returning whatever MyMdt a already had (indeterminate
+  // before BUGFIX #1, or just stale) instead of b's -- silently
+  // pointing GetRecordData()/highlighting at the wrong virtual
+  // database, or an invalid one.
+  MyMdt = OtherResult.MyMdt;
 #ifdef DO_HIGHLIGHTING
   *HitTable = *(OtherResult.HitTable);
   HitTable->SortByFc();
@@ -229,10 +249,17 @@ RESULT::GetRecordData(STRING* StringBuffer) const {
     EXIT_ERROR
       }
   else {
-    INT rs = GetRecordStart();
-    INT re = GetRecordEnd();
-    INT size = re - rs + 1;
-    //		fseek(fp, rs, 0);
+    // BUGFIX #3: rs/re/size were INT (signed 32-bit), narrowed from
+    // GPTYPE (unsigned 32-bit) RecordStart/RecordEnd -- an offset past
+    // INT_MAX (~2GB into a large indexed corpus) would go negative,
+    // breaking both the fseek() offset and the read size. Same
+    // GPTYPE-narrowed-to-INT category already found (not yet fixed,
+    // pending its own turn) in FC::Write()/Read(); see
+    // docs/BUG_CATALOG.md#srcfchxx. GetRecordSize() already returns
+    // the correctly-widened LONG; reused here instead of recomputing
+    // narrowed.
+    GPTYPE rs = GetRecordStart();
+    LONG size = GetRecordSize();
     fseek(fp, (long)rs, SEEK_SET);
     PCHR p = new CHR[size+1];
     p[fread(p, 1, size, fp)] = '\0';
@@ -243,9 +270,9 @@ RESULT::GetRecordData(STRING* StringBuffer) const {
 }
 
 
-void 
+void
 RESULT::GetHighlightedRecord(const STRING& BeforeTerm,
-			     const STRING& AfterTerm, 
+			     const STRING& AfterTerm,
 			     STRING* StringBuffer) const {
 #ifdef DO_HIGHLIGHTING
   GetRecordData(StringBuffer);
@@ -257,6 +284,13 @@ RESULT::GetHighlightedRecord(const STRING& BeforeTerm,
         StringBuffer->Insert(Fc.GetFieldEnd() + 2, AfterTerm);
         StringBuffer->Insert(Fc.GetFieldStart() + 1, BeforeTerm);
   }
+#else
+  // BeforeTerm/AfterTerm/StringBuffer are only used when DO_HIGHLIGHTING
+  // is defined, which it isn't anywhere in this build; silence
+  // -Wunused-parameter without changing the public signature.
+  (void)BeforeTerm;
+  (void)AfterTerm;
+  (void)StringBuffer;
 #endif
 }
 
