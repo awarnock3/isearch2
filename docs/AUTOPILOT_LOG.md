@@ -608,3 +608,94 @@ non-copyable, for both `TH_PARENT_LIST` and `TH_ENTRY_LIST`) before
 reprocessing via `/process src/thesaurus.hxx` — recommend fixing the
 `AddEntry` buffer overflow in that same pass given its severity and
 confirmed reachability.
+
+## src/tokengen.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `TOKENGEN` owns a
+heap-allocated `CHR *InCharP` (`InString.NewCString()` in the
+constructor, `delete [] InCharP;` in the destructor) but declares no
+copy constructor and no `operator=` at all — the same "no custom copy
+semantics whatsoever" shape as `mdt.hxx`/`fpt.hxx`/`nlist.hxx`/
+`intlist.hxx`/`mergeunit.hxx` earlier this batch, this time a single
+owned pointer rather than a resizable table.
+
+Confirmed real with a standalone repro, same shape as the others this
+batch: construct a `TOKENGEN` from a real query string, copy-initialize
+a second (`TOKENGEN b = a;`), let `b` go out of scope, then let `a` be
+destroyed at end of scope. AddressSanitizer reported a **double-free**
+in `TOKENGEN::~TOKENGEN()` (`tokengen.cxx:69`): `b`'s implicit shallow
+copy shared `a`'s `InCharP` pointer, `b`'s destructor freed it first,
+and `a`'s destructor freed the same block again. No confirmed
+copy-construction call site was found in the live tree — every site
+(`src/squery.cxx`, `src/infix2rpn.cxx`, `Isearch-cgi/isrch_srch.cxx`,
+`Isearch-cgi/api_search.cxx`, `Isearch-cgi/isrch_html.cxx`) either
+heap-allocates via `new TOKENGEN(...)` or direct-initializes a local
+from a `STRING` argument, never copies one `TOKENGEN` from another — so
+this specific defect is latent.
+
+**Also found while reading, not fixed here since step 4 gates the rest
+of this file's pipeline for this turn:**
+
+- **Header not self-contained** — same defect as `src/fc.hxx`
+  `BUGFIX #1` and many others this project: `tokengen.hxx` declares
+  `STRING`/`STRLIST`-typed members and parameters with
+  `#include "string.hxx"`/`#include "strlist.hxx"` commented out.
+  Confirmed by compiling `tokengen.hxx` as the sole `#include` in a
+  translation unit: 4 errors. The fix (restore the two includes) was
+  drafted and verified during this turn, then reverted along with
+  everything else once the copy-constructor issue above was found,
+  matching how `reclist.hxx`'s analogous header-self-containment fix
+  was ultimately applied together with its copy-constructor fix during
+  its `/reprocess-blocked` pass rather than separately. Trivial to
+  redo; doesn't need a header change beyond restoring what was already
+  there.
+- **`nexttoken()`'s unmatched-quote/brace fallback corrupts the token
+  in two distinct, confirmed ways — real bugs in live search-query
+  parsing, not edge cases**: on a failed quote or brace match, both
+  branches do `token->EraseAfter(token->SearchReverse(CLOSING_CHAR));`
+  to discard whatever was spuriously accumulated during the failed
+  scan — but this only works when the token actually *contains* a
+  literal instance of `CLOSING_CHAR` to search for, which is true only
+  for the unstripped-quote case (`SearchReverse('"')` finds the opening
+  quote itself, since it was literally appended). For the
+  quote-*stripping* case and for braces, the opening delimiter is
+  either never appended (quotes, when `DoStripQuotes` is set) or the
+  wrong character is searched for (braces: searches for the *closing*
+  `'}'`, which by definition was never found in this branch, instead
+  of the opening `'{'`, which was). `SearchReverse` then returns `0`,
+  and `EraseAfter(0)` wipes the *entire* token — not just the failed
+  scan's contents, but any valid text accumulated before the delimiter
+  was even reached. Confirmed with two standalone repros: tokenizing
+  `prefix"unmatched rest` with quote-stripping enabled produced
+  `["nmatched", "rest"]` (losing `prefix` entirely *and* one extra
+  character, `u` — see the second bug below); tokenizing
+  `prefix{unmatched rest` produced `["unmatched", "rest"]` (losing
+  `prefix{` entirely). Fixing the erase call to search for the
+  character that's actually guaranteed to be present (`'{'` for
+  braces; conditionally `'"'` or nothing for quotes, needing its own
+  care) is a pure logic fix, no header change needed.
+- **Same unmatched-quote fallback also skips an extra character when
+  `DoStripQuotes` is set** — `BeginQuote = ++input;` when entering the
+  quote block already advances past the opening quote; the fallback's
+  `input = ++BeginQuote;` increments it a *second* time, skipping the
+  first real character after the quote (confirmed by the repro above:
+  `unmatched` came back as `nmatched`, missing its leading `u`). The
+  unstripped case doesn't pre-increment `BeginQuote`, so its own
+  `++BeginQuote` is correct; the two branches need to agree. No header
+  change needed.
+
+Fixing the copy-semantics question requires adding
+`TOKENGEN(const TOKENGEN&);` and `TOKENGEN& operator=(const TOKENGEN&);`
+to `tokengen.hxx` — deep-copying `InCharP` (a fresh
+`NewCString()`-style duplicate) plus `TokenList`/`DoStripQuotes`/
+`HaveParsed` — or `= delete`-ing both to make the class explicitly
+non-copyable (no confirmed copy-construction call site exists today,
+so non-copyable may be the simpler choice, similar to `mdt.hxx`'s
+reasoning). A call for a human, not an autopilot guess, per GENERAL
+step 4.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable) before reprocessing via `/process src/tokengen.hxx` —
+recommend fixing the header self-containment and the two `nexttoken()`
+parsing bugs in that same pass given their severity (the parsing bugs
+affect real user search queries) and how trivial the header fix is.
