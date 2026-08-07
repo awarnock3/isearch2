@@ -128,3 +128,60 @@ this file is reprocessed, alongside the copy-constructor decision.
 Row set to `blocked`; needs a signature-change decision (deep-copy vs.
 non-copyable, and if non-copyable, an audit of `OPERAND`'s and `DFD`'s
 copy sites) before reprocessing via `/process src/attrlist.hxx`.
+
+## src/dfdt.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `DFDT` owns a
+heap-allocated `PDFD Table` array (`new DFD[...]` in `Initialize()`/
+`Resize()`, `delete [] Table` in the destructor/`Resize()`/`operator=`)
+but declares no copy constructor — only `operator=` — so the
+compiler-generated copy constructor does a shallow pointer copy of
+`Table`. The third instance of the exact pattern already blocked at
+`docs/AUTOPILOT_LOG.md#srcreclisthxx` (`RECLIST`) and
+`docs/AUTOPILOT_LOG.md#srcattrlisthxx` (`ATTRLIST`) this same batch —
+unlike `DF`'s/`DFD`'s *inherited* versions of this risk (via their
+`FCT`/`ATTRLIST` members, documented and deferred without blocking
+those files), `DFDT` owns the raw array directly, so the fix belongs in
+`dfdt.hxx` itself.
+
+Confirmed real with a standalone repro, same shape as `ATTRLIST`'s:
+build a `DFDT`, add one entry, copy-initialize a second (`DFDT b = a;`
+— copy constructor, not `operator=`, since `b` doesn't exist yet), let
+`b` go out of scope, then let `a` be destroyed at end of scope.
+AddressSanitizer reported a `heap-use-after-free` in `DFDT::~DFDT()`
+(`dfdt.cxx:371`): `b`'s implicit shallow copy shared `a`'s `Table`
+pointer, `b`'s destructor freed it first, and `a`'s destructor then
+read/freed the same already-freed block. No confirmed copy-construction
+call site was found in the live tree (every site found uses `DFDT*`,
+default-construction, or `*DfdtBuffer = *MainDfdt;` — assignment, not
+construction), so this is latent rather than actively crashing today,
+the same status `RECLIST` and `ATTRLIST` had when they were blocked.
+
+Fixing it requires adding `DFDT(const DFDT&);` to `dfdt.hxx` — no
+declaration exists today — deep-copying `Table`, `TotalEntries`,
+`MaxEntries`, `Changed` (mirroring `operator=`'s already-correct logic),
+or alternatively `= delete`-ing it to make the class explicitly
+non-copyable, the same deep-copy-vs-non-copyable choice already pending
+on `reclist.hxx`, `vlist.hxx`, and `attrlist.hxx`.
+
+Also found, not fixed here since step 4 gates the rest of this file's
+pipeline for this turn: `DFDT::operator=` (`dfdt.cxx:61`) has no
+self-assignment guard — the identical `delete [] Table; Initialize();`
+-before-reading-`OtherDfdt.GetTotalEntries()` shape as `ATTRLIST`'s and
+`STRLIST`'s already-fixed/blocked instances of the same bug (see
+`docs/BUG_CATALOG.md#srcstrlistcxx`, `BUGFIX #1`, and
+`docs/AUTOPILOT_LOG.md#srcattrlisthxx`). Doesn't need a header change
+and can be fixed the next time this file is reprocessed, alongside the
+copy-constructor decision. Two more pre-existing findings, not fixed
+for the same reason: `DFDT::LoadTable` casts `NULL` to `(CHR*)NULL` for
+`strtok`'s second-and-later calls rather than using `nullptr` (ordinary
+modernization, not a bug); `DFDT::GetDfdRecord`
+(`dfdt.cxx:295`) assigns `DfdRecord=(PDFD)NULL;` to the local
+out-parameter *pointer itself* on a not-found lookup rather than to
+`*DfdRecord`, which has no effect the caller can observe (the pointer
+argument is passed by value) and leaves `*DfdRecord` holding whatever
+the caller passed in — likely meant to signal "not found" but silently
+doesn't; worth a closer look alongside the copy-constructor fix.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable) before reprocessing via `/process src/dfdt.hxx`.
