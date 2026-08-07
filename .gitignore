@@ -95,4 +95,12 @@ Isearch-cgi/isrch_fetch
 Isearch-cgi/isrch_html
 Isearch-cgi/isrch_srch
 Isearch-cgi/search_form
+doctype/dtconf
+
+# Isearch2 cleanup: stray default-named index database left at repo root
+# by running Iindex/Isearch without -d (defaults to DB name "ISEARCH",
+# see src/defs.cxx) -- not a fixture anything relies on, just leftover
+# scratch state from manual testing.
+/ISEARCH.mdt
+/ISEARCH.sta
 
