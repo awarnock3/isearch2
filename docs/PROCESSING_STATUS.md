@@ -38,7 +38,7 @@
 | 34 | src/dfdt.hxx | blocked | 2026-08-07 | [src/dfdt.hxx](AUTOPILOT_LOG.md#srcdfdthxx) |
 | 35 | src/mdtrec.hxx | done | 2026-08-07 | [src/mdtrec.cxx](BUG_CATALOG.md#srcmdtreccxx) |
 | 36 | src/mdt.hxx | blocked | 2026-08-07 | [src/mdt.hxx](AUTOPILOT_LOG.md#srcmdthxx) |
-| 37 | src/registry.hxx | pending | | |
+| 37 | src/registry.hxx | done | 2026-08-07 | [src/registry.cxx](BUG_CATALOG.md#srcregistrycxx) |
 | 38 | src/result.hxx | pending | | |
 | 39 | src/fprec.hxx | pending | | |
 | 40 | src/iresult.hxx | pending | | |
@@ -167,7 +167,7 @@
 | 163 | src/rcache.cxx | pending | | |
 | 164 | src/reclist.cxx | pending | | |
 | 165 | src/record.cxx | pending | | |
-| 166 | src/registry.cxx | pending | | |
+| 166 | src/registry.cxx | done | 2026-08-07 | [src/registry.cxx](BUG_CATALOG.md#srcregistrycxx) |
 | 167 | src/result.cxx | pending | | |
 | 168 | src/rset.cxx | pending | | |
 | 169 | src/soundex.cxx | pending | | |

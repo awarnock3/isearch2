@@ -1683,3 +1683,79 @@ class mirrors its on-disk, fixed-length record layout, since
 Also applied: file-level and per-method doc comments in `mdtrec.hxx`,
 including documenting the fixed-buffer/raw-I/O design rationale so a
 future reader doesn't mistake it for an oversight.
+
+## src/registry.cxx
+
+`REGISTRY`: a first-child/next-sibling tree of named nodes for
+structured config/profile data, addressable by a `STRLIST` path (see
+the file-level comment added to `registry.hxx`). Also home to the free
+function `parseMetaDefaults()`. No `NULL` usages; no `sprintf` in the
+class itself (`GetUniqueKey` wasn't touched — see below).
+
+1. **`operator=` was a non-functional stub that aliased the source's
+   subtree instead of copying it** — the body literally printed
+   `"WARNING: REGISTRY::operator=() not yet implemented!"`, then did
+   `Next = OtherRegistry.Next; Child = OtherRegistry.Child;`: pointer
+   assignment, not a copy. Two `REGISTRY` objects would end up owning
+   the same `Next`/`Child` nodes; since `~REGISTRY()` recursively
+   `delete`s both, destroying either object frees nodes the other still
+   references. `clone()` (just above it in the header) already
+   implements correct recursive deep-copy semantics for this exact
+   `Next`/`Child` shape, so `operator=` now reuses it instead of
+   guessing at new logic. Confirmed real with a standalone repro before
+   the fix — assign one populated `REGISTRY` into another, then let
+   both go out of scope — and confirmed clean after. See `BUGFIX #1` in
+   source; regression tests (deep-copy independence and
+   self-assignment) in `tests/src/test_registry.cxx`.
+2. **`parseMetaDefaults()`'s tokenizer had no bound on its 1024-byte
+   stack buffer** — `char token[1024];` was written via
+   `*(tokenEnd++) = c;` with nothing capping `tokenEnd` at the buffer's
+   end, so any tag name or text run longer than 1024 bytes overflowed
+   the stack. Confirmed with a standalone repro (a file with a
+   >1024-byte unbroken text run): AddressSanitizer reported a
+   `stack-buffer-overflow` at the write. Fixed by capping writes at a
+   `tokenLimit` one byte short of the buffer's end (reserving room for
+   the `'\0'` terminator written after the loop), silently truncating
+   an oversized token the same way `STRING::GetCString` already does
+   elsewhere in this tree. See `BUGFIX #2` in source; regression test
+   in `tests/src/test_registry.cxx` feeds a 2000-byte text run through
+   and confirms it doesn't crash.
+3. **`parseMetaDefaults()`'s `STRLIST* data` was read and `delete`'d
+   uninitialized, and leaked on every iteration but the last** — `data`
+   had no initializer and was only assigned inside the loop when a
+   text/data token was found, yet `delete data;` ran unconditionally
+   after the loop — undefined behavior on whatever garbage pointer
+   value was on the stack for any input with zero data tokens (tags-only
+   content, or an unopenable/empty file). Confirmed reachable with a
+   standalone repro (a well-formed but data-less `<a></a>` file), though
+   it happened not to crash *this* run — consistent with reading an
+   uninitialized pointer being UB rather than something ASan's
+   heap/stack instrumentation reliably catches, not evidence it's safe.
+   Separately, every `data = new STRLIST();` before the last one was
+   never freed (`data` was simply overwritten next iteration) —
+   confirmed as a real leak under LeakSanitizer with a three-data-token
+   input (272 bytes leaked in 8 allocations). Fixed by initializing
+   `data = 0` and `delete`-ing the previous value before each
+   reassignment (`delete` on a null pointer is a documented no-op, so
+   this is correct on the very first assignment too). See `BUGFIX #3`
+   in source; regression tests in `tests/src/test_registry.cxx` cover
+   both the tags-only case and a multi-data-token case.
+4. **`ProfileWrite()` silently ignores both its `FileName` and
+   `Position` parameters** — it always walks every direct child of
+   `this` regardless of `Position` (unlike `SaveToFile()`'s analogous
+   `FindNode(Position)` lookup just above it), and never touches
+   `FileName` at all (it writes to the `ostream&` argument instead).
+   Not called anywhere in this tree today, so this is left as an
+   unresolved-design finding rather than guessed at — it's unclear
+   whether the intent was to filter by `Position` (matching
+   `SaveToFile`) or something else entirely, and inventing behavior for
+   an unused public method isn't a mechanical fix. The parameter names
+   were dropped in the definition (values are unused either way) purely
+   to compile clean under `-Wunused-parameter`; no behavior changed.
+   See `BUGFIX #4` in source.
+
+Also applied: file-level and per-method doc comments in `registry.hxx`.
+`GetUniqueKey()`'s `sprintf` (formatting two `INT`s into a 30-byte
+buffer, comfortably bounded given `INT`'s range) wasn't modernized —
+the function wasn't otherwise touched this turn, per "don't restyle
+code you're not otherwise touching."

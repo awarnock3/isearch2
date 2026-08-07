@@ -39,6 +39,8 @@ Version:	1.00
 Description:	Class REGISTRY - Structured Profile Registry
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <fstream>
 #include <stdlib.h>
@@ -60,12 +62,29 @@ REGISTRY::REGISTRY(const CHR *Title) {
 }
 
 
-REGISTRY& 
+REGISTRY&
 REGISTRY::operator=(const REGISTRY& OtherRegistry) {
-  COUT << "WARNING: REGISTRY::operator=() not yet implemented!" << endl;
+  // BUGFIX #1: the old body was a stub -- it warned that it wasn't
+  // implemented, then did it wrong anyway: `Next = OtherRegistry.Next;`
+  // and `Child = OtherRegistry.Child;` alias the source's subtree
+  // pointers instead of copying it, so two REGISTRY objects would end
+  // up owning the same nodes. ~REGISTRY() recursively deletes both
+  // Next and Child, so destroying either object frees nodes the other
+  // still points to -- the next access, or the other's destructor,
+  // touches freed memory. clone() already implements correct
+  // deep-copy semantics for this same Next/Child shape; reused here.
+  if (this == &OtherRegistry) {
+    return *this;
+  }
+  if (Next) {
+    delete Next;
+  }
+  if (Child) {
+    delete Child;
+  }
   Data = OtherRegistry.Data;
-  Next = OtherRegistry.Next;
-  Child = OtherRegistry.Child;
+  Next = OtherRegistry.Next ? OtherRegistry.Next->clone() : 0;
+  Child = OtherRegistry.Child ? OtherRegistry.Child->clone() : 0;
   return *this;
 }
 
@@ -439,9 +458,17 @@ REGISTRY::ProfileAddFromFile(const STRING& FileName) {
 }
 
 
-void 
-REGISTRY::ProfileWrite(ostream& os, const STRING& FileName, 
-		       const STRLIST& Position) {
+void
+REGISTRY::ProfileWrite(ostream& os, const STRING& /*FileName*/,
+		       const STRLIST& /*Position*/) {
+  // BUGFIX #4: FileName and Position are unused -- this always writes
+  // every direct child of `this`, ignoring Position entirely (unlike
+  // SaveToFile()'s analogous FindNode(Position) lookup above) and never
+  // touching FileName at all. Not called anywhere in this tree today,
+  // so left as an unresolved-design finding (see
+  // docs/BUG_CATALOG.md#srcregistrycxx) rather than guessed at; the
+  // parameter names are just dropped here to compile clean under
+  // -Wunused-parameter.
   REGISTRY *Node = Child;
   while (Node) {
     Node->ProfilePrint(os,0);
@@ -557,8 +584,25 @@ parseMetaDefaults(const STRING& filename) {
   int tagging = 0;
   char token[1024];
   char* tokenEnd;
+  // BUGFIX #2: bounds the tokenizer loop below so it stops writing
+  // once token is full instead of running off the end of the array.
+  // Confirmed with a standalone repro (a file with a >1024-byte run of
+  // text outside any tag): overflowed the stack under ASan before this
+  // fix. -1 reserves room for the '\0' terminator written after the
+  // loop.
+  char* const tokenLimit = token + sizeof(token) - 1;
   STRLIST path;
-  STRLIST* data;
+  // BUGFIX #3: was left uninitialized and unconditionally delete'd
+  // below -- reachable (and confirmed with a standalone repro) for any
+  // input with zero text/data tokens, e.g. tags-only content or an
+  // empty file, which made that final delete undefined behavior on a
+  // garbage pointer. Every *earlier* data token's STRLIST was also
+  // never freed -- only the last one reached that final delete -- and
+  // that leak was confirmed under LeakSanitizer with a two-data-token
+  // input. Initializing to 0 and deleting the previous value before
+  // each reassignment (delete on a null pointer is a documented no-op)
+  // fixes both.
+  STRLIST* data = 0;
   if (fp) {
     char c;
     while ( ! eof ) {
@@ -576,7 +620,7 @@ parseMetaDefaults(const STRING& filename) {
 	if (tagging) {
 	  if (c == '>') {
 	    tokenReady = 1;
-	  } else {
+	  } else if (tokenEnd < tokenLimit) {
 	    *(tokenEnd++) = c;
 	  }
 	} else {
@@ -588,7 +632,7 @@ parseMetaDefaults(const STRING& filename) {
 	      ungetc(c, fp);
 	      tokenReady = 1;
 	    }
-	  } else {
+	  } else if (tokenEnd < tokenLimit) {
 	    *(tokenEnd++) = c;
 	  }
 	}
@@ -607,6 +651,7 @@ parseMetaDefaults(const STRING& filename) {
 	}
       } else {
 	if (path.GetTotalEntries() > 0) {
+	  delete data;
 	  data = new STRLIST();
 	  trimWhitespace(token);
 	  data->AddEntry(token);
