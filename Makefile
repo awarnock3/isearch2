@@ -263,7 +263,7 @@ TEST_CXXFLAGS_ASAN := $(TEST_CXXFLAGS) -fsanitize=address,undefined -g
 # as each file's turn adds tests that need more of the engine; compiled
 # separately from the production build (tests/obj/, TEST_CXXFLAGS) so the
 # two builds never fight over the same .o.
-TEST_ENGINE_SRCS := src/fc.cxx src/fct.cxx src/vlist.cxx src/df.cxx src/dft.cxx src/string.cxx src/common.cxx src/record.cxx src/rcache.cxx src/irset.cxx src/operand.cxx src/opobj.cxx src/rset.cxx src/result.cxx src/iresult.cxx src/attr.cxx src/attrlist.cxx src/mdtrec.cxx src/mdt.cxx src/dfd.cxx src/dfdt.cxx src/strlist.cxx src/defs.cxx src/opstack.cxx src/filemap.cxx src/hash.cxx src/termobj.cxx src/memcntl.cxx src/operator.cxx src/sterm.cxx src/marclib.cxx src/md5.cxx src/registry.cxx src/fprec.cxx src/reclist.cxx src/fpt.cxx src/nfield.cxx src/date.cxx src/intfield.cxx src/soundex.cxx src/squery.cxx src/mergeunit.cxx src/index.cxx src/numsearch.cxx src/datesearch.cxx src/geosearch.cxx src/multiterm.cxx src/tokengen.cxx src/thesaurus.cxx src/nlist.cxx src/intlist.cxx src/strstack.cxx src/infix2rpn.cxx src/glist.cxx
+TEST_ENGINE_SRCS := src/fc.cxx src/fct.cxx src/vlist.cxx src/df.cxx src/dft.cxx src/string.cxx src/common.cxx src/record.cxx src/rcache.cxx src/irset.cxx src/operand.cxx src/opobj.cxx src/rset.cxx src/result.cxx src/iresult.cxx src/attr.cxx src/attrlist.cxx src/mdtrec.cxx src/mdt.cxx src/dfd.cxx src/dfdt.cxx src/strlist.cxx src/defs.cxx src/opstack.cxx src/filemap.cxx src/hash.cxx src/termobj.cxx src/memcntl.cxx src/operator.cxx src/sterm.cxx src/marclib.cxx src/md5.cxx src/registry.cxx src/fprec.cxx src/reclist.cxx src/fpt.cxx src/nfield.cxx src/date.cxx src/intfield.cxx src/soundex.cxx src/squery.cxx src/mergeunit.cxx src/index.cxx src/numsearch.cxx src/datesearch.cxx src/geosearch.cxx src/multiterm.cxx src/tokengen.cxx src/thesaurus.cxx src/nlist.cxx src/intlist.cxx src/strstack.cxx src/infix2rpn.cxx src/glist.cxx src/marc.cxx
 TEST_ENGINE_OBJS      := $(patsubst src/%.cxx,tests/obj/%.o,$(TEST_ENGINE_SRCS))
 TEST_ENGINE_OBJS_ASAN := $(patsubst src/%.cxx,tests/obj-asan/%.o,$(TEST_ENGINE_SRCS))
 
@@ -278,7 +278,7 @@ TEST_ENGINE_CGI_OBJS_ASAN := $(patsubst Isearch-cgi/%.cxx,tests/obj-asan/cgi-%.o
 # 53, is the first file in that directory to reach TEST_ENGINE_SRCS --
 # every later doctype/*.cxx turn should add itself to
 # TEST_ENGINE_DOCTYPE_SRCS below rather than inventing a new list).
-TEST_ENGINE_DOCTYPE_SRCS := doctype/doctype.cxx doctype/sgmlnorm.cxx doctype/sgmltag.cxx doctype/colondoc.cxx
+TEST_ENGINE_DOCTYPE_SRCS := doctype/doctype.cxx doctype/sgmlnorm.cxx doctype/sgmltag.cxx doctype/colondoc.cxx doctype/mailfolder.cxx
 TEST_ENGINE_DOCTYPE_OBJS      := $(patsubst doctype/%.cxx,tests/obj/doctype-%.o,$(TEST_ENGINE_DOCTYPE_SRCS))
 TEST_ENGINE_DOCTYPE_OBJS_ASAN := $(patsubst doctype/%.cxx,tests/obj-asan/doctype-%.o,$(TEST_ENGINE_DOCTYPE_SRCS))
 

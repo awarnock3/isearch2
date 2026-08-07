@@ -2905,3 +2905,88 @@ Modernization: all code-level `NULL` uses converted to `nullptr`. No
 `sprintf` calls present. Added class-level and `ParseFields()` doc
 comments. Tests (`tests/doctype/test_colondoc.cxx`) also cover
 `UnifiedName()` and leading-whitespace trimming after the `:`.
+
+## doctype/mailfolder.cxx
+
+`class MAILFOLDER` parses Unix mail folders (mbox-style): one message
+per `From `/`Article ` boundary, RFC822-ish headers, then a
+`Message-body` field for everything after the blank line separating
+headers from the body. Its `ParseFields()` shares essentially the same
+value-boundary math as `doctype/colondoc.cxx` (processed earlier this
+batch) and has the same five off-by-ones, confirmed and fixed the same
+way -- see that entry for the detailed reasoning behind each. It also
+has two bugs of its own, one of them the most severe found this batch.
+
+1. **`parse_tags()`: unbounded From/Article-line skip caused a real
+   heap-buffer-overflow** — three leading loops (skip whitespace, skip
+   to end of the From/Article line, skip its trailing newlines) advance
+   the local pointer `b` forward but never decremented `len` to match,
+   and had no bound of their own besides the buffer eventually
+   containing a `'\n'` or non-`'\n'` byte -- not guaranteed, since this
+   buffer comes from `fread()`, not line-buffered I/O. The `for`
+   loop right after trusted the *original* `len` as how many bytes are
+   safely readable starting from the now-*advanced* `b`, so it could
+   run up to `len` bytes past the buffer's true end -- and that loop
+   both reads (`b[i]`) and writes (`b[i] = '\0'`) through it, so this
+   was a potential out-of-bounds write, not just a read. Confirmed a
+   real heap-buffer-overflow with a standalone repro (a buffer
+   containing only a valid `From ` line plus one short header, no
+   body -- exactly the shape that leaves nothing after the header for
+   the old code to stop at) compiled under ASan *before* fixing:
+   `AddressSanitizer: heap-buffer-overflow ... READ of size 1 ... in
+   MAILFOLDER::parse_tags`. Fixed by having all three loops stop at
+   `len` too, decrementing it as `b` advances. `BUGFIX #1` in source;
+   re-ran the repro after the fix to confirm clean. Covered by
+   `MAILFOLDER::ParseFields handles a header-only message with no
+   body` (`make tests-asan` is what actually verifies this one, same
+   as the repro).
+2. **`RecEnd = ftell(fp) - 1;`** truncated the last byte of every
+   record read via the common fallback path. Same bug as, and fixed
+   the same way as, `colondoc.cxx`'s `BUGFIX #1`. `BUGFIX #2` in
+   source.
+3. Unconditional **"leave off the `\n`"** subtraction, wrong for the
+   last field when the file doesn't end with `'\n'`. Same bug as, and
+   fixed the same way as (only exclude it when `p[-1] == '\n'`),
+   `colondoc.cxx`'s `BUGFIX #1b`. `BUGFIX #2b` in source.
+4. **Trailing-whitespace trim checked one byte past the value's real
+   last character**, silently chopping a real trailing character off
+   nearly every field. Same bug as, and fixed the same way as,
+   `colondoc.cxx`'s `BUGFIX #2`. `BUGFIX #3` in source.
+5. **`SetFieldEnd()` stored one byte too many**, numerically canceling
+   out against `BUGFIX #3` in the common case (same interaction as
+   `colondoc.cxx`'s `BUGFIX #2`/`#4` -- fixing one without the other
+   would have turned accidentally-correct field coordinates into
+   genuinely wrong ones). Same bug as, and fixed the same way as,
+   `colondoc.cxx`'s `BUGFIX #4`. `BUGFIX #4` in source; fixed together
+   with `BUGFIX #3` for that reason.
+6. **Last-field fallback used `RecLength` instead of `ActualLength`**
+   — harmless now, would extend into unread/uninitialized-but-allocated
+   bytes on a short `fread()`. Same bug as, and fixed the same way as,
+   `colondoc.cxx`'s `BUGFIX #3`. `BUGFIX #5` in source.
+7. **`NameKey()`: `strcpy()` with overlapping source and destination**
+   — both `strcpy(email, s + 1)` and `strcpy(s, e + 1)` shift part of
+   `email` down over itself in place (e.g. `"Name <addr>"` ->
+   `"addr"`), which overlaps whenever the matched delimiter isn't at
+   position 0 -- undefined behavior for `strcpy()` specifically (unlike
+   `memmove()`). Not a latent/theoretical concern: ASan's
+   `strcpy-param-overlap` check aborted on exactly this input
+   (`"Name <addr>"`) while writing the regression test for `BUGFIX #1`
+   above, unprompted. Fixed by using `memmove()`, which is defined for
+   overlapping ranges, at both call sites. `BUGFIX #6` in source.
+   Covered by `MAILFOLDER::NameKey extracts the name part of "Name
+   <addr>"` (again, `make tests-asan` is what actually verifies it).
+
+**Incidental fix (not a `mailfolder.cxx` bug):** linking `src/marc.cxx`
+into `TEST_ENGINE_SRCS` (needed for `RememberKey`, which
+`src/marclib.cxx` — already linked — declares `extern` and expects some
+translation unit to define) collided with `tests/src/test_marclib.cxx`,
+which had its own stub `struct MemBlock *RememberKey = nullptr;`
+because `marc.cxx` (the real definer) wasn't linked yet back when that
+test was written. Removed the now-redundant stub; `marc.cxx`'s real
+definition is used instead.
+
+Modernization: all code-level `NULL` uses converted to `nullptr`. No
+`sprintf` calls present. Added class-level and per-function doc
+comments. Tests (`tests/doctype/test_mailfolder.cxx`) also cover
+`IsMailFromLine()`, `IsNewsLine()`, `accept_tag()`, and a full
+headers-plus-body `ParseFields()` case.

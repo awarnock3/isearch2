@@ -62,7 +62,7 @@
 | 58 | src/infix2rpn.hxx | done | 2026-08-07 | [src/infix2rpn.cxx](BUG_CATALOG.md#srcinfix2rpncxx) |
 | 59 | src/glist.hxx | done | 2026-08-07 | [src/glist.hxx](BUG_CATALOG.md#srcglisthxx) |
 | 60 | doctype/colondoc.hxx | done | 2026-08-07 | [doctype/colondoc.cxx](BUG_CATALOG.md#doctypecolondoccxx) |
-| 61 | doctype/mailfolder.hxx | pending | | |
+| 61 | doctype/mailfolder.hxx | done | 2026-08-07 | [doctype/mailfolder.cxx](BUG_CATALOG.md#doctypemailfoldercxx) |
 | 62 | src/gstack.hxx | pending | | |
 | 63 | src/isearch.hxx | pending | | |
 | 64 | src/idb.hxx | pending | | |
@@ -216,7 +216,7 @@
 | 212 | doctype/listdigest.cxx | pending | | |
 | 213 | doctype/litmed.cxx | pending | | |
 | 214 | doctype/maildigest.cxx | pending | | |
-| 215 | doctype/mailfolder.cxx | pending | | |
+| 215 | doctype/mailfolder.cxx | done | 2026-08-07 | [doctype/mailfolder.cxx](BUG_CATALOG.md#doctypemailfoldercxx) |
 | 216 | doctype/marcdump.cxx | pending | | |
 | 217 | doctype/markdown.cxx | pending | | |
 | 218 | doctype/medline.cxx | pending | | |

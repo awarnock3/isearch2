@@ -115,6 +115,9 @@ Author:		Edward C. Zimmermann, edz@bsn.com
 Distribution:   Isite modifications by A. Warnock (warnock@clark.net)
 @@@-*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -239,7 +242,11 @@ void MAILFOLDER::AddFieldDefs ()
   DOCTYPE::AddFieldDefs ();
 }
 
-void MAILFOLDER::ParseRecords (const RECORD& FileRecord) 
+// Splits FileRecord's underlying mail-folder file into one RECORD per
+// message, at each "blank line immediately followed by a From/Article
+// line" boundary, and adds each to Db via DocTypeAddRecord() (each
+// later gets its own ParseFields() call).
+void MAILFOLDER::ParseRecords (const RECORD& FileRecord)
 {
   // Break up the document into Mail message records
   GPTYPE Start = 0;
@@ -260,7 +267,7 @@ void MAILFOLDER::ParseRecords (const RECORD& FileRecord)
   char buf[512]; // was 256
 
   // Read first line of folder
-  if (fgets(buf, sizeof(buf)/sizeof(char)-1, Fp) == NULL)
+  if (fgets(buf, sizeof(buf)/sizeof(char)-1, Fp) == nullptr)
     {
       fclose(Fp);
       return; // EMPTY Folder
@@ -312,7 +319,7 @@ void MAILFOLDER::ParseRecords (const RECORD& FileRecord)
       Look = (buf[0] == '\n' || buf[0] == '\r') ? GDT_TRUE : GDT_FALSE;
       Position += strlen(buf);
     }
-  while (fgets(buf,sizeof(buf)/sizeof(char)-1,Fp) != NULL);
+  while (fgets(buf,sizeof(buf)/sizeof(char)-1,Fp) != nullptr);
 
   fclose (Fp);
 
@@ -327,6 +334,11 @@ void MAILFOLDER::ParseRecords (const RECORD& FileRecord)
 }
 
 
+// Reads NewRecord's bytes off disk, splits them into header tags via
+// parse_tags() (which also skips the leading From/Article line), and
+// adds one DF field per accepted tag (see accept_tag()) plus a final
+// "Message-body" field for everything after the blank line separating
+// headers from the body.
 void MAILFOLDER::ParseFields (PRECORD NewRecord)
 {
   STRING fn;
@@ -344,7 +356,12 @@ void MAILFOLDER::ParseFields (PRECORD NewRecord)
     {
       fseek (fp, 0L, SEEK_END);
       RecStart = 0;
-      RecEnd = ftell (fp) - 1;
+      // BUGFIX #2: this used to be `ftell(fp) - 1`, silently dropping
+      // the last byte of every record read through this fallback (the
+      // common case: RecordEnd defaults to 0) -- same bug as, and
+      // fixed the same way as, doctype/colondoc.cxx's BUGFIX #1. See
+      // docs/BUG_CATALOG.md#doctypemailfoldercxx.
+      RecEnd = ftell (fp);
     }
   fseek (fp, (long)RecStart, SEEK_SET);
   GPTYPE RecLength = RecEnd - RecStart;
@@ -355,7 +372,7 @@ void MAILFOLDER::ParseFields (PRECORD NewRecord)
   RecBuffer[ActualLength] = '\0';
 
   PCHR *tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL || tags[0] == NULL)
+  if (tags == nullptr || tags[0] == nullptr)
     {
       STRING doctype;
       NewRecord->GetDocumentType(&doctype);
@@ -402,18 +419,35 @@ void MAILFOLDER::ParseFields (PRECORD NewRecord)
 	}
 #endif
       PCHR p = tags_ptr[1];
-      if (p == NULL)
-	p = &RecBuffer[RecLength];
+      // BUGFIX #5: this fallback used RecLength (the buffer's
+      // allocated capacity), not ActualLength (how much was actually
+      // read) -- same as doctype/colondoc.cxx's BUGFIX #3.
+      if (p == nullptr)
+	p = &RecBuffer[ActualLength];
       // eg "From:"
       int off = strlen (*tags_ptr) + 1;
       INT val_start = (*tags_ptr + off) - RecBuffer;
-      // Skip while space 
+      // Skip while space
       while (isspace (RecBuffer[val_start]))
 	val_start++, off++;
-      // Also leave off the \n
-      INT val_len = (p - *tags_ptr) - off - 1;
+      INT val_len = (p - *tags_ptr) - off;
+      // BUGFIX #2b: this used to unconditionally subtract 1 more here
+      // ("leave off the \n"), assuming a trailing newline always sits
+      // just before `p`. True for every interior field, not for the
+      // last field's end-of-buffer fallback when the file doesn't end
+      // with '\n'. Same bug as, and fixed the same way as,
+      // doctype/colondoc.cxx's BUGFIX #1b.
+      if (val_len > 0 && p[-1] == '\n')
+	val_len--;
+      // BUGFIX #3: this checked RecBuffer[val_len + val_start], one
+      // byte *past* the value's actual last character
+      // (val_start + val_len - 1) -- almost always the delimiter and
+      // almost always whitespace, so this silently trimmed one real
+      // trailing character off of nearly every field value. Same bug
+      // as, and fixed the same way as, doctype/colondoc.cxx's
+      // BUGFIX #2. See docs/BUG_CATALOG.md#doctypemailfoldercxx.
       // Strip potential trailing while space
-      while (val_len > 0 && isspace (RecBuffer[val_len + val_start]))
+      while (val_len > 0 && isspace (RecBuffer[val_start + val_len - 1]))
 	val_len--;
 
       if ((*tags_ptr)[0] == '\0' || (*tags_ptr)[0] == '\n')
@@ -427,7 +461,13 @@ void MAILFOLDER::ParseFields (PRECORD NewRecord)
       dfd.SetFieldName (FieldName);
       Db->DfdtAddEntry (dfd);
       fc.SetFieldStart (val_start);
-      fc.SetFieldEnd (val_start + val_len);
+      // BUGFIX #4: this used to be `SetFieldEnd(val_start + val_len)`,
+      // one past the correct *inclusive* end index -- same bug as, and
+      // fixed the same way as, doctype/colondoc.cxx's BUGFIX #4 (see
+      // that entry for why it happened to numerically cancel out
+      // against BUGFIX #3 above in the common case, which is almost
+      // certainly why neither was noticed).
+      fc.SetFieldEnd (val_start + val_len - 1);
       PFCT pfct = new FCT ();
       pfct->AddEntry (fc);
       df.SetFct (*pfct);
@@ -450,8 +490,8 @@ void MAILFOLDER::ParseFields (PRECORD NewRecord)
  */
 PCHR MAILFOLDER::NameKey (PCHR buf, GDT_BOOLEAN name) const
 {
-  PCHR s = NULL;
-  PCHR e = NULL;
+  PCHR s = nullptr;
+  PCHR e = nullptr;
   const size_t input_len = strlen(buf);
   CHR *email = new CHR[input_len + 1];
   char p1, p2, b1, b2;
@@ -468,18 +508,28 @@ PCHR MAILFOLDER::NameKey (PCHR buf, GDT_BOOLEAN name) const
     }
 
   strcpy (email, buf);
-  if (((s = strchr (email, p1)) != NULL) && ((e = strchr (email, p2)) != NULL))
+  // BUGFIX #6: both of these used strcpy() to shift part of `email`
+  // over itself (e.g. "Name <addr>" -> "addr", copying "addr>\0" from
+  // the middle of the buffer down to its start) -- source and
+  // destination overlap whenever the matched delimiter isn't at
+  // position 0, which is undefined behavior for strcpy() specifically
+  // (unlike memmove()). Confirmed real, not just theoretical UB: ASan's
+  // strcpy-param-overlap check aborted on exactly this input
+  // ("Name <addr>") while writing the regression test for BUGFIX #1.
+  // Fixed by using memmove(), which is defined for overlapping ranges.
+  // See docs/BUG_CATALOG.md#doctypemailfoldercxx.
+  if (((s = strchr (email, p1)) != nullptr) && ((e = strchr (email, p2)) != nullptr))
     {
       if (e > s)
 	{
 	  *e = '\0';		/* Chop off everything after p2 (')' or '>') */
-	  strcpy (email, s + 1);
+	  memmove (email, s + 1, strlen (s + 1) + 1);
 	}
     }
-  else if (((s = strchr (email, b1)) != NULL) && ((e = strchr (email, b2)) != NULL))
+  else if (((s = strchr (email, b1)) != nullptr) && ((e = strchr (email, b2)) != nullptr))
     {
       if (e > s)
-	strcpy (s, e + 1);	/* Remove <...> or (...) */
+	memmove (s, e + 1, strlen (e + 1) + 1);	/* Remove <...> or (...) */
     }
   s = email;
   while(isspace(*s) || *s == '"') s++; // Skip leading space
@@ -700,6 +750,15 @@ GDT_BOOLEAN MAILFOLDER::IsNewsLine (const char *line) const
 }
 
 
+// Skips b's leading From/Article line (if any), then splits the
+// remaining header block in place into a nullptr-terminated array of
+// pointers to each header's name (b's ':' bytes are overwritten with
+// '\0' to terminate each). The first blank line ends the scan early
+// (via a zero-length "tag" marking where the message body starts, see
+// ParseFields()'s "Message-body" handling) rather than continuing to
+// scan the message body as if it were more headers. Caller owns the
+// returned array (delete[] it; the CHR* elements point into b, not
+// separately allocated).
 PCHR * MAILFOLDER::parse_tags (PCHR b, GPTYPE len) const
 {
   PCHR *t;			// array of pointers to first char of tags
@@ -708,13 +767,25 @@ PCHR * MAILFOLDER::parse_tags (PCHR b, GPTYPE len) const
   size_t max_num_tags = TAG_GROW_SIZE;	// max num tags for which space is allocated
   enum { HUNTING, STARTED, CONTINUING } State = HUNTING;
 
+  // BUGFIX #1: these three loops advance `b` forward but never
+  // decremented `len` to match, and had no bound of their own besides
+  // the input possibly not containing a '\n' or a non-'\n' byte at
+  // all -- so the `for` loop below, which trusted the *original* `len`
+  // as how many bytes are readable starting from the *advanced* `b`,
+  // could run len bytes past the true end of the buffer. Confirmed a
+  // real heap-buffer-overflow READ (and, since that loop also writes
+  // through `b[i]`, potentially a WRITE) with a standalone repro: a
+  // buffer containing only a valid "From " line plus one short header
+  // line, no body. Every one of these loops now stops at `len` too,
+  // keeping `len` in sync with how far `b` has moved. See
+  // docs/BUG_CATALOG.md#doctypemailfoldercxx.
   // Skip leading bogus white space
-  while (isspace(*b)) b++;
+  while (len > 0 && isspace(*b)) { b++; len--; }
   // Is it a mail or news folder?
-  if (IsMailFromLine(b) || IsNewsLine(b)) { 
+  if (IsMailFromLine(b) || IsNewsLine(b)) {
     // Now skip the From/Article line
-    while (*b != '\n') b++; // looking at end of line
-    while (*b == '\n') b++; // Looking at first character
+    while (len > 0 && *b != '\n') { b++; len--; } // looking at end of line
+    while (len > 0 && *b == '\n') { b++; len--; } // Looking at first character
     // Should now be looking at fist tag line
   }
 
@@ -747,11 +818,11 @@ PCHR * MAILFOLDER::parse_tags (PCHR b, GPTYPE len) const
 	    {
   	      // allocate more space
   	      max_num_tags += TAG_GROW_SIZE;
-	      PCHR *New = (CHR**)(new PCHR[max_num_tags]);
-	      if (New == NULL)
+	      PCHR *New = new PCHR[max_num_tags];
+	      if (New == nullptr)
 		{
 		  delete [] t;
-		  return NULL; // NO MORE CORE!
+		  return nullptr; // NO MORE CORE!
 		}
 	      memcpy(New, t, tc*sizeof(PCHR));
  	      delete [] t;
@@ -764,6 +835,6 @@ PCHR * MAILFOLDER::parse_tags (PCHR b, GPTYPE len) const
 	  State = HUNTING;
 	}
     }
-  t[tc] = (PCHR) NULL;
+  t[tc] = nullptr;
   return t;
 }

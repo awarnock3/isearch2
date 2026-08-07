@@ -5,9 +5,12 @@
 //
 // marclib.cxx's AllocSafe() calls go through a file-scope
 // `extern struct MemBlock *RememberKey;` that's only ever defined in
-// src/marc.cxx (its only current caller, not linked into this test
-// binary), so it's defined here instead -- the same thing every
-// standalone repro used while confirming these bugs did.
+// src/marc.cxx. src/marc.cxx is now linked into this test binary too
+// (added when doctype/mailfolder.cxx's turn needed RememberKey for an
+// unrelated reason), so the stub definition that used to live here
+// (the same thing every standalone repro used while confirming these
+// bugs did, back when marc.cxx wasn't linked) was removed -- keeping
+// both would be a duplicate-definition link error.
 
 #include "catch_amalgamated.hpp"
 
@@ -19,8 +22,6 @@
 #include <cstring>
 #include <cstdlib>
 #include <cstdio>
-
-struct MemBlock *RememberKey = nullptr;
 
 TEST_CASE("GetNum converts a fixed-width digit run to a number", "[marclib]") {
 	REQUIRE(GetNum(const_cast<char*>("00042"), 5) == 42);
