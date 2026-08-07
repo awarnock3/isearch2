@@ -42,6 +42,8 @@ $Revision: 1.5 $
 Description:	Class MDTREC - Multiple Document Table Record
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <string.h>
 
@@ -69,12 +71,27 @@ MDTREC::MDTREC() {
 }
 
 
-MDTREC& 
+MDTREC&
 MDTREC::operator=(const MDTREC& OtherMdtRec) {
-  strcpy(Key, OtherMdtRec.Key);
-  strcpy(DocumentType, OtherMdtRec.DocumentType);
-  strcpy(PathName, OtherMdtRec.PathName);
-  strcpy(FileName, OtherMdtRec.FileName);
+  if (this == &OtherMdtRec) {
+    return *this;
+  }
+  // BUGFIX #1: strcpy assumed OtherMdtRec's buffers were already
+  // null-terminated within their fixed size. MDTREC objects are also
+  // populated by a raw fread() directly into their memory (see
+  // MDT::GetEntry, src/mdt.cxx), which doesn't guarantee that -- a
+  // corrupt or truncated on-disk record could leave a buffer with no
+  // null byte anywhere in it, and strcpy would then read past the end
+  // of the array. memcpy of the full fixed size, followed by forcing
+  // the last byte to '\0', is safe regardless of the source's content.
+  memcpy(Key, OtherMdtRec.Key, DocumentKeySize);
+  Key[DocumentKeySize - 1] = '\0';
+  memcpy(DocumentType, OtherMdtRec.DocumentType, DocumentTypeSize);
+  DocumentType[DocumentTypeSize - 1] = '\0';
+  memcpy(PathName, OtherMdtRec.PathName, DocPathNameSize);
+  PathName[DocPathNameSize - 1] = '\0';
+  memcpy(FileName, OtherMdtRec.FileName, DocFileNameSize);
+  FileName[DocFileNameSize - 1] = '\0';
   GlobalFileStart = OtherMdtRec.GlobalFileStart;
   GlobalFileEnd = OtherMdtRec.GlobalFileEnd;
   LocalRecordStart = OtherMdtRec.LocalRecordStart;
@@ -99,9 +116,14 @@ MDTREC::SetKey(const STRING& NewKey) {
 }
 
 
-void 
+void
 MDTREC::GetKey(STRING* StringBuffer) const {
-  *StringBuffer = Key;
+  // BUGFIX #2: `*StringBuffer = Key;` goes through STRING's const
+  // CHR*-taking assignment, which calls strlen(Key) -- unsafe if Key
+  // isn't null-terminated within its fixed size (see BUGFIX #1 above
+  // for why that can happen). strnlen bounds the scan to the buffer's
+  // actual size.
+  StringBuffer->Set((const UCHR*)Key, strnlen(Key, DocumentKeySize));
 }
 
 
@@ -111,9 +133,10 @@ MDTREC::SetDocumentType(const STRING& NewDocumentType) {
 }
 
 
-void 
+void
 MDTREC::GetDocumentType(STRING* StringBuffer) const {
-  *StringBuffer = DocumentType;
+  // BUGFIX #2: see GetKey() above.
+  StringBuffer->Set((const UCHR*)DocumentType, strnlen(DocumentType, DocumentTypeSize));
 }
 
 
@@ -123,9 +146,10 @@ MDTREC::SetPathName(const STRING& NewPathName) {
 }
 
 
-void 
+void
 MDTREC::GetPathName(STRING* StringBuffer) const {
-  *StringBuffer = PathName;
+  // BUGFIX #2: see GetKey() above.
+  StringBuffer->Set((const UCHR*)PathName, strnlen(PathName, DocPathNameSize));
 }
 
 
@@ -135,16 +159,19 @@ MDTREC::SetFileName(const STRING& NewFileName) {
 }
 
 
-void 
+void
 MDTREC::GetFileName(STRING* StringBuffer) const {
-  *StringBuffer = FileName;
+  // BUGFIX #2: see GetKey() above.
+  StringBuffer->Set((const UCHR*)FileName, strnlen(FileName, DocFileNameSize));
 }
 
 
-void 
+void
 MDTREC::GetFullFileName(STRING* StringBuffer) const {
-  *StringBuffer = PathName;
-  StringBuffer->Cat(FileName);
+  // BUGFIX #2: see GetKey() above; applies to both PathName and
+  // FileName here.
+  StringBuffer->Set((const UCHR*)PathName, strnlen(PathName, DocPathNameSize));
+  StringBuffer->Cat(FileName, strnlen(FileName, DocFileNameSize));
 }
 
 

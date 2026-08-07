@@ -1640,3 +1640,46 @@ members (see the file-level comment added to `dfd.hxx`). No
   copy-constructing directly. Tracked at
   `docs/AUTOPILOT_LOG.md#srcattrlisthxx`; not duplicated as a second
   blocked row here for the same reason given in `df.cxx`'s turn.
+
+## src/mdtrec.cxx
+
+`MDTREC`: one indexed document's key, doctype, path/file name, and its
+byte-offset spans (see the file-level comment added to `mdtrec.hxx`).
+All string fields are fixed-size `CHR` buffers, not `STRING` — this
+class mirrors its on-disk, fixed-length record layout, since
+`MDT::GetEntry`/`AddEntry` (`src/mdt.cxx`, Order 36, still pending)
+`fread()`/`fwrite()` it as a raw block. No `NULL`/`sprintf` usages.
+
+1. **`operator=` and every string getter assumed the fixed buffers were
+   already null-terminated within their size** — `strcpy` in
+   `operator=` and the implicit `STRING::operator=(const CHR*)` (which
+   calls `strlen`) in `GetKey`/`GetDocumentType`/`GetPathName`/
+   `GetFileName`/`GetFullFileName` all scan for a null byte with no
+   bound. Confirmed this isn't just theoretical: `MDT::GetEntry`
+   (`src/mdt.cxx:240`) does `fread((char*)MdtrecPtr, 1, sizeof(MDTREC),
+   MdtFp);` — a raw byte-level read directly into an `MDTREC`'s memory,
+   bypassing the constructor's zeroing entirely. A corrupt or truncated
+   on-disk record (short reads are already handled with a `memset`
+   fallback right after that `fread`, but a *full*-size read of
+   corrupt/incompatible content isn't) could leave any of these buffers
+   with no null byte anywhere in it, and the unbounded scan would then
+   read past the end of the array into whatever memory follows —
+   silently absorbing adjacent fields' bytes into the returned `STRING`
+   rather than crashing (the over-read stays within the same object, so
+   ASan's redzones don't catch it; confirmed by directly `memset`-filling
+   an `MDTREC`'s raw memory with non-null bytes, matching what a
+   corrupt `fread()` would produce, and observing pre-fix `GetKey()`
+   pull in bytes past `Key`'s 16-byte bound). Fixed: `operator=` now
+   `memcpy`s the full fixed size and forces the last byte to `'\0'`
+   (also picking up a self-assignment guard, cheap to add and avoids
+   `memcpy`'s technically-undefined same-pointer-src/dst case); the
+   getters now use `strnlen(buf, BufSize)` and `STRING::Set`/`Cat`'s
+   explicit-length overloads instead of relying on an implicit,
+   unbounded `strlen`. See `BUGFIX #1`/`BUGFIX #2` in source; regression
+   tests in `tests/src/test_mdtrec.cxx` `memset` an `MDTREC`'s raw
+   memory the same way a corrupt `fread()` would and assert every
+   getter's result stays within its buffer's bound.
+
+Also applied: file-level and per-method doc comments in `mdtrec.hxx`,
+including documenting the fixed-buffer/raw-I/O design rationale so a
+future reader doesn't mistake it for an oversight.

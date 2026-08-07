@@ -36,7 +36,7 @@
 | 32 | src/attrlist.hxx | blocked | 2026-08-07 | [src/attrlist.hxx](AUTOPILOT_LOG.md#srcattrlisthxx) |
 | 33 | src/dfd.hxx | done | 2026-08-07 | [src/dfd.cxx](BUG_CATALOG.md#srcdfdcxx) |
 | 34 | src/dfdt.hxx | blocked | 2026-08-07 | [src/dfdt.hxx](AUTOPILOT_LOG.md#srcdfdthxx) |
-| 35 | src/mdtrec.hxx | pending | | |
+| 35 | src/mdtrec.hxx | done | 2026-08-07 | [src/mdtrec.cxx](BUG_CATALOG.md#srcmdtreccxx) |
 | 36 | src/mdt.hxx | pending | | |
 | 37 | src/registry.hxx | pending | | |
 | 38 | src/result.hxx | pending | | |
@@ -149,7 +149,7 @@
 | 145 | src/md5.cxx | pending | | |
 | 146 | src/md5sum.cxx | pending | | |
 | 147 | src/mdt.cxx | pending | | |
-| 148 | src/mdtrec.cxx | pending | | |
+| 148 | src/mdtrec.cxx | done | 2026-08-07 | [src/mdtrec.cxx](BUG_CATALOG.md#srcmdtreccxx) |
 | 149 | src/memcntl.cxx | pending | | |
 | 150 | src/merge.cxx | pending | | |
 | 151 | src/merge.hxx | pending | | |
