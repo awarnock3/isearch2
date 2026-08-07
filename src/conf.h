@@ -43,9 +43,18 @@ $Revision: 1.4 $
 Description:	Variable sizes
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef CONF_H
 #define CONF_H
+
+// Platform type-width constants, substituted by `configure` from
+// src/conf.h.in (the @VAR@ placeholders there are what `configure`
+// fills in) -- this checked-in conf.h is the resolved snapshot for
+// the platform this tree was last configured on. Verified against
+// this platform's actual sizeof(short)/sizeof(int)/sizeof(long)/
+// sizeof(long long) (see tests/src/test_conf.cxx).
 
 #ifdef __cplusplus
 extern "C" {

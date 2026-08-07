@@ -42,9 +42,20 @@ $Revision: 1.4 $
 Description:	Variable sizes
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+//
+// NOTE: this marker and the doc comment below are mirrored from
+// src/conf.h so that re-running `configure` doesn't silently drop them
+// from the regenerated src/conf.h (which would otherwise make ANALYZE
+// re-queue an already-audited file for no reason).
 
 #ifndef CONF_H
 #define CONF_H
+
+// Platform type-width constants, substituted by `configure` (the
+// @VAR@ placeholders below) into src/conf.h, the checked-in resolved
+// snapshot for the platform this tree was last configured on.
 
 #ifdef __cplusplus
 extern "C" {
