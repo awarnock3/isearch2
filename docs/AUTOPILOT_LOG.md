@@ -505,3 +505,106 @@ Row set to `blocked`; needs a signature-change decision (deep-copy vs.
 non-copyable) before reprocessing via `/process src/mergeunit.hxx` —
 recommend fixing the delete/delete[] mismatches in that same pass given
 their severity.
+
+## src/thesaurus.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. Both `TH_PARENT_LIST` and
+`TH_ENTRY_LIST` own a heap-allocated array (`PTH_PARENT table`/
+`PTH_ENTRY table`, `new`'d in each constructor) but declare no copy
+constructor and no `operator=` at all — the same "no custom copy
+semantics whatsoever" shape as `mdt.hxx`/`fpt.hxx`/`nlist.hxx`/
+`intlist.hxx`/`mergeunit.hxx` earlier this batch, this time affecting
+two sibling classes in the same file at once. `THESAURUS` itself holds
+one of each as plain value members (`Parents`/`Children`), so it
+inherits the same risk transitively, though `THESAURUS` is only ever
+used via `new THESAURUS(...)`/pointers in the live tree (`src/Iindex.cxx`,
+`src/squery.cxx`), never copied by value.
+
+Confirmed real with a standalone repro, same shape as the others this
+batch: default-construct a `TH_PARENT_LIST`, copy-initialize a second
+(`TH_PARENT_LIST b = a;`), let `b` go out of scope, then let `a` be
+destroyed at end of scope. AddressSanitizer reported a
+`heap-use-after-free` in `TH_PARENT_LIST::~TH_PARENT_LIST()`
+(`thesaurus.cxx:215`): `b`'s implicit shallow copy shared `a`'s `table`
+pointer, `b`'s destructor `delete []`'d it first, and `a`'s destructor
+then read the same already-freed block (`TH_ENTRY_LIST` has the
+identical shape, unverified standalone but structurally the same code).
+No confirmed copy-construction call site was found in the live tree, so
+this specific defect is latent.
+
+**Also found while reading, not fixed here since step 4 gates the rest
+of this file's pipeline for this turn — the first of these is far more
+urgent than the copy-semantics question above, and confirmed actively
+reachable, not latent:**
+
+- **`AddEntry` has no bounds check against the hard-coded 100-entry
+  table — a real, confirmed heap buffer overflow** — both
+  `TH_PARENT_LIST::AddEntry()` and `TH_ENTRY_LIST::AddEntry()`
+  unconditionally do `table[Count] = New...; Count++;` against a table
+  allocated once at construction (`new TH_PARENT[100]`/
+  `new TH_ENTRY[100]`) with no `Resize()`/`Expand()` anywhere in this
+  file, unlike every sibling table-owning class this batch
+  (`ATTRLIST`, `DFDT`, `MDT`, ...), all of which grow their table when
+  full. `MaxEntries` is set to `100` in both constructors and never
+  read again anywhere in this file — confirmed by `grep`, not just
+  inspection. Confirmed with a standalone repro: adding 150 entries to
+  a `TH_PARENT_LIST` crashed with a `heap-buffer-overflow` under ASan,
+  writing past the 100-element allocation on the 101st `AddEntry()`
+  call. **Confirmed actively reachable, not latent**: the index-time
+  `THESAURUS` constructor (`src/Iindex.cxx:903`, live production code,
+  not the file's own `#ifdef MAIN` demo block) parses a
+  user-supplied synonym source file and calls `Parents.AddEntry()`/
+  `Children.AddEntry()` once per parent/child term with no upper bound
+  on the source file's size — any real thesaurus with more than 100
+  distinct parent terms, or more than 100 total child-term entries
+  across all parents, corrupts the heap today. The fix (grow `table`
+  when `Count == MaxEntries`, mirroring `ATTRLIST`'s/`DFDT`'s own
+  `Resize()` bodies) doesn't need a header change — `AddEntry()`'s
+  public signature is unaffected, only its internal implementation —
+  and should be the very first thing fixed the next time this file is
+  reprocessed, independent of the copy-semantics decision.
+- **`GetEntry()`'s bounds check is off by one, in all four overloads**
+  — `TH_PARENT_LIST`'s and `TH_ENTRY_LIST`'s `GetEntry(index, ...)` and
+  `GetEntry(index)` all guard with `if (index <= Count)`, not
+  `index < Count`; `Count` itself is the index of the next *unused*
+  slot (0-based throughout this file, e.g. `AddEntry`'s own
+  `table[Count] = ...; Count++;`), so `GetEntry(Count, ...)` silently
+  returns whatever indeterminate/never-written entry happens to be at
+  `table[Count]` instead of leaving the output untouched or signaling
+  "not found." Every live call site found (`THESAURUS::LoadParents()`/
+  `LoadChildren()`) only ever calls with `index` in `[0, Count-1]`, so
+  this specific slack isn't hit today, but it's a real off-by-one in a
+  public method. No header change needed.
+- **`TH_PARENT`'s and `TH_ENTRY`'s default constructors leave their
+  `INT4` members indeterminate** — `TH_PARENT::TH_PARENT() {}` doesn't
+  initialize `GlobalStart` (`Term`, a `STRING`, self-initializes to
+  empty regardless); `TH_ENTRY::TH_ENTRY() {}` doesn't initialize
+  either `GlobalStart` or `ParentPtr`. Same "indeterminate primitive
+  member" category already fixed multiple times this batch (`RESULT`,
+  `NUMERICFLD`, `SRCH_DATE`). Interacts with the `GetEntry` off-by-one
+  above: the one-past-the-end slot it can return is exactly one of
+  these never-explicitly-set entries. No header change needed.
+- **`TH_PARENT::Copy()` is declared and defined but its body is
+  empty** — `void TH_PARENT::Copy(const TH_PARENT& OtherValue) { }`
+  does nothing at all, unlike the adjacent (correct) `operator=` two
+  lines below it, which actually copies `GlobalStart`/`Term`. Not
+  called anywhere in the tree today (confirmed by search), so this is
+  dead code rather than an active bug, but worth either implementing to
+  match `operator=` or removing as redundant — a design call, though a
+  much smaller one than the others above, deferred here only because
+  step 4 gates the whole file this turn.
+
+Fixing the copy-semantics question requires adding
+`TH_PARENT_LIST(const TH_PARENT_LIST&);`/
+`TH_PARENT_LIST& operator=(const TH_PARENT_LIST&);` and the same pair
+for `TH_ENTRY_LIST`, to `thesaurus.hxx` — deep-copying each `table`
+(sized to the source's `MaxEntries`) plus `Count`/`MaxEntries` — or
+`= delete`-ing both pairs to make both classes explicitly non-copyable.
+No confirmed copy-construction call site exists for either today. A
+call for a human, not an autopilot guess, per GENERAL step 4.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable, for both `TH_PARENT_LIST` and `TH_ENTRY_LIST`) before
+reprocessing via `/process src/thesaurus.hxx` — recommend fixing the
+`AddEntry` buffer overflow in that same pass given its severity and
+confirmed reachability.

@@ -51,7 +51,7 @@
 | 47 | src/intlist.hxx | blocked | 2026-08-07 | [src/intlist.hxx](AUTOPILOT_LOG.md#srcintlisthxx) |
 | 48 | src/soundex.hxx | done | 2026-08-07 | [src/soundex.cxx](BUG_CATALOG.md#srcsoundexcxx) |
 | 49 | src/mergeunit.hxx | blocked | 2026-08-07 | [src/mergeunit.hxx](AUTOPILOT_LOG.md#srcmergeunithxx) |
-| 50 | src/thesaurus.hxx | pending | | |
+| 50 | src/thesaurus.hxx | blocked | 2026-08-07 | [src/thesaurus.hxx](AUTOPILOT_LOG.md#srcthesaurushxx) |
 | 51 | src/tokengen.hxx | pending | | |
 | 52 | src/squery.hxx | pending | | |
 | 53 | doctype/doctype.hxx | pending | | |
