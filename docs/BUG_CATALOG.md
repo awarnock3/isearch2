@@ -2627,3 +2627,59 @@ given, so a temp file's full path has to go through `SetPathName()`
 `SetFileName()` alone; and `DF::SetFieldName()` (`src/df.cxx`)
 uppercases internally regardless of what the caller passes in, so
 `<title>` legitimately becomes field name `TITLE`, not `title`.
+
+## doctype/sgmltag.cxx
+
+`class SGMLTAG` is a second, independent tag-parsing `DOCTYPE` (not a
+subclass of `SGMLNORM`) with a stricter contract: only tag pairs whose
+open/close text matches exactly (besides the closing `/`) count as a
+field.
+
+1. **`SGMLTAG::ParseFields()` leaked its filename buffer on every
+   single return path** — `file = fn.NewCString();` allocates a
+   heap C-string near the top of the function (used by two `perror()`
+   calls), but nothing ever `delete []`s it: not on any of the 9 early
+   `return`s (bad open, seek failures, zero-length record, allocation
+   "failures", short/failed `fread`, failed `sgml_parse_tags()`), and
+   not on the normal-completion path either. Every call to
+   `SGMLTAG::ParseFields()` — i.e. every SGML-tagged record indexed
+   through this doctype — leaked one allocation the length of the
+   record's file name. Fixed by adding `delete [] file;` immediately
+   before all 10 exit points. `BUGFIX #1` in source. Covered by
+   `SGMLTAG::ParseFields does not leak the file-name buffer on a
+   missing file` (exercises the file-not-found path;
+   `make tests-asan`'s LeakSanitizer is what actually verifies this,
+   not the assertions in the test itself).
+
+2. **Dead `OrigRecBuffer` copy, and unused `val_len2`** — `ParseFields()`
+   allocated a second `RecLength+1`-byte buffer, `memcpy`'d the record
+   into it, and null-terminated it (per the file's own 1.02 changelog
+   entry, this used to matter — "OrigRecBuffer was being overwritten" —
+   implying some earlier version read from it), but nothing in the
+   current function ever reads `OrigRecBuffer` again; it's allocated,
+   populated, and immediately `delete[]`'d on every path, achieving
+   nothing observable. `val_len2` was declared and never used at all.
+   Not a correctness bug — no wrong behavior resulted — but a confirmed
+   100%-dead allocation/copy on every call, removed per GENERAL step 6
+   (same rationale as the dead `flist`/`Names`/`fcount` globals removed
+   from `src/index.cxx` this batch).
+
+Not otherwise pursued: `sgml_parse_tags()`'s `case '<': t[tc] = &b[i+1];`
+doesn't skip leading whitespace after `<` (unlike `SGMLNORM::parse_tags()`,
+which does) — this looks like a genuine behavioral difference between the
+two SGML parsers, not an obvious regression, so left alone rather than
+"fixed" on a guess; and `*numtags`'s `UsefulSearchField()`-gated count is
+computed correctly but never read by `ParseFields()`, its only caller
+(tested directly in `test_sgmltag.cxx` since the function's own contract
+is still worth verifying, even though nothing consumes it yet).
+
+Modernization: all 9 code-level `NULL` uses converted to `nullptr` (6
+more, in doc-comment prose, correctly left as English "NULL"). No
+`sprintf` calls present. Added class/function doc comments to
+`sgmltag.hxx`.
+
+Tests (`tests/doctype/test_sgmltag.cxx`) cover `sgml_parse_tags()`
+(tag extraction and the `numtags` count), `find_end_tag()` (match,
+and SGMLTAG's stricter no-match case for attribute-bearing tags), a
+`ParseFields()` integration test against a real temp file, and the
+leak regression test described above.

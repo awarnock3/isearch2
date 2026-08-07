@@ -57,7 +57,7 @@
 | 53 | doctype/doctype.hxx | done | 2026-08-07 | [doctype/doctype.cxx](BUG_CATALOG.md#doctypedoctypecxx) |
 | 54 | src/index.hxx | done | 2026-08-07 | [src/index.cxx](BUG_CATALOG.md#srcindexcxx) |
 | 55 | doctype/sgmlnorm.hxx | done | 2026-08-07 | [doctype/sgmlnorm.cxx](BUG_CATALOG.md#doctypesgmlnormcxx) |
-| 56 | doctype/sgmltag.hxx | pending | | |
+| 56 | doctype/sgmltag.hxx | done | 2026-08-07 | [doctype/sgmltag.cxx](BUG_CATALOG.md#doctypesgmltagcxx) |
 | 57 | src/strstack.hxx | pending | | |
 | 58 | src/infix2rpn.hxx | pending | | |
 | 59 | src/glist.hxx | pending | | |
@@ -225,7 +225,7 @@
 | 221 | doctype/para.cxx | pending | | |
 | 222 | doctype/referbib.cxx | pending | | |
 | 223 | doctype/sgmlnorm.cxx | done | 2026-08-07 | [doctype/sgmlnorm.cxx](BUG_CATALOG.md#doctypesgmlnormcxx) |
-| 224 | doctype/sgmltag.cxx | pending | | |
+| 224 | doctype/sgmltag.cxx | done | 2026-08-07 | [doctype/sgmltag.cxx](BUG_CATALOG.md#doctypesgmltagcxx) |
 | 225 | doctype/simple.cxx | pending | | |
 | 226 | doctype/soif.cxx | pending | | |
 | 227 | doctype/taglist.cxx | pending | | |

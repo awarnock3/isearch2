@@ -43,6 +43,9 @@ Author:		Kevin Gamiel, Kevin.Gamiel@cnidr.org
 Changes:	See sgmltag.cxx
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef SGMLTAG_HXX
 #define SGMLTAG_HXX
 
@@ -51,14 +54,30 @@ Changes:	See sgmltag.cxx
 #include "defs.hxx"
 #include "doctype.hxx"
 
-class SGMLTAG 
+// A stricter SGML-like DOCTYPE than SGMLNORM: only tag pairs whose open
+// and close tags are exactly the same text (e.g. <title>...</title>,
+// excluding the closing slash) become fields -- see the "What"/"Pre"/
+// "Post" comments above ParseFields()/sgml_parse_tags() in sgmltag.cxx
+// for the precise contract. Independent implementation of DOCTYPE, not
+// a subclass of SGMLNORM.
+class SGMLTAG
   : public DOCTYPE {
 
 public:
   SGMLTAG(PIDBOBJ DbParent);
   ~SGMLTAG();
   void ParseFields(PRECORD NewRecord);
+  // Scans t (nullptr-terminated) starting at *t for a "/"+tag closing
+  // tag matching tag's full text, case-insensitively. Returns a
+  // pointer to the matching entry, or nullptr if none/t is empty.
   virtual char *find_end_tag(char **t, char *tag);
+  // Splits b (len bytes) in place into a nullptr-terminated array of
+  // pointers to each tag's contents (each tag's '>' is overwritten
+  // with '\0' to terminate it); *numtags counts how many of those tags
+  // DOCTYPE::UsefulSearchField() considers worth indexing (informational
+  // only -- ParseFields() doesn't currently act on it). Returns nullptr
+  // on allocation failure. Caller owns the returned array (delete[] it;
+  // the char* elements point into b, not separately allocated).
   virtual char **sgml_parse_tags(char *b, int len, int *numtags);
 };
 
