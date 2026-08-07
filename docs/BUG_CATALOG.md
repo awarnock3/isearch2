@@ -2055,3 +2055,50 @@ required auditing every copy site on both.
 Also applied: a file-level doc comment on `ATTRLIST` per GENERAL step
 7. No `NULL`/`sprintf` usages to modernize; `attrlist.hxx`'s own
 `#include`s were already complete (verified by compiling it standalone).
+
+## src/dfdt.hxx
+
+Reprocessed via `/reprocess-blocked` after being blocked at GENERAL step
+4 (see `docs/AUTOPILOT_LOG.md#srcdfdthxx`); the user chose deep-copy
+semantics over making `DFDT` non-copyable.
+
+1. **No copy constructor** — `DFDT` owns a heap-allocated `PDFD Table`
+   array and already has a correct `operator=`, but declared no copy
+   constructor, so the compiler-generated one did a shallow pointer
+   copy. Confirmed with a standalone repro: copy-constructing a second
+   `DFDT` and destroying both triggered a heap-use-after-free in
+   `~DFDT()`. The third instance of this exact pattern this batch
+   (after `reclist.hxx` and `attrlist.hxx`); no confirmed live
+   copy-construction call site was found, so this one is latent, not
+   actively reachable. Fixed by adding `DFDT(const DFDT&)` that
+   deep-copies `Table` (sized to the source's `MaxEntries`),
+   `TotalEntries`, `MaxEntries`, and `Changed`, mirroring `operator=`'s
+   own logic. See `BUGFIX #1` in source; regression test in
+   `tests/src/test_dfdt.cxx`.
+2. **`operator=` had no self-assignment guard** — identical shape to
+   `ATTRLIST`'s already-fixed instance of this bug this batch
+   (`docs/BUG_CATALOG.md#srcattrlisthxx`, `BUGFIX #2`): `delete []
+   Table; Initialize();` ran before `OtherDfdt.GetTotalEntries()` was
+   read, so `x = x;` silently emptied the table. Fixed with a `this ==
+   &OtherDfdt` guard. See `BUGFIX #2` in source; regression test in
+   `tests/src/test_dfdt.cxx`.
+3. **`GetDfdRecord`'s not-found path was dead code** — on a failed
+   lookup it ran `DfdRecord=(PDFD)NULL;`, which assigns to the local
+   copy of the by-value pointer *parameter*, not to `*DfdRecord` — the
+   caller can never observe this write, so the line did nothing.
+   Checked the sole live call site (`src/idb.cxx:441`): it never checks
+   for a null/sentinel result and simply relies on `*DfdRecord` being
+   left as whatever the caller passed in, which is exactly what
+   already happens once the no-op line is understood as such — so this
+   is a dead-code cleanup, not a behavior change. Removed the line; the
+   function's contract (leave `*DfdRecord` untouched if `FieldName`
+   isn't found, same convention as `GetEntry()`) is now documented on
+   the declaration in `dfdt.hxx`. See `BUGFIX #3` in source and test in
+   `tests/src/test_dfdt.cxx`.
+
+Also applied: `LoadTable`'s five `strtok((CHR*)NULL,"\n")` calls
+modernized to `strtok(nullptr,"\n")`, per this file's own
+`docs/AUTOPILOT_LOG.md` entry flagging it as ready for the next
+reprocessing. A file-level doc comment on `DFDT` per GENERAL step 7.
+`dfdt.hxx`'s own `#include`s were already complete (verified by
+compiling it standalone).

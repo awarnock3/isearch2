@@ -35,7 +35,7 @@
 | 31 | src/df.hxx | done | 2026-08-07 | [src/df.cxx](BUG_CATALOG.md#srcdfcxx) |
 | 32 | src/attrlist.hxx | done | 2026-08-07 | [src/attrlist.hxx](BUG_CATALOG.md#srcattrlisthxx) |
 | 33 | src/dfd.hxx | done | 2026-08-07 | [src/dfd.cxx](BUG_CATALOG.md#srcdfdcxx) |
-| 34 | src/dfdt.hxx | blocked | 2026-08-07 | [src/dfdt.hxx](AUTOPILOT_LOG.md#srcdfdthxx) |
+| 34 | src/dfdt.hxx | done | 2026-08-07 | [src/dfdt.hxx](BUG_CATALOG.md#srcdfdthxx) |
 | 35 | src/mdtrec.hxx | done | 2026-08-07 | [src/mdtrec.cxx](BUG_CATALOG.md#srcmdtreccxx) |
 | 36 | src/mdt.hxx | blocked | 2026-08-07 | [src/mdt.hxx](AUTOPILOT_LOG.md#srcmdthxx) |
 | 37 | src/registry.hxx | done | 2026-08-07 | [src/registry.cxx](BUG_CATALOG.md#srcregistrycxx) |

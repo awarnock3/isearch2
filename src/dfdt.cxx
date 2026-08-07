@@ -49,7 +49,21 @@ DFDT::DFDT() {
 }
 
 
-void 
+// BUGFIX #1: see docs/BUG_CATALOG.md. Deep-copies Table instead of
+// sharing the source's pointer.
+DFDT::DFDT(const DFDT& OtherDfdt) {
+  INT x;
+  Table = new DFD[OtherDfdt.MaxEntries];
+  for (x=0; x<OtherDfdt.TotalEntries; x++) {
+    Table[x] = OtherDfdt.Table[x];
+  }
+  TotalEntries = OtherDfdt.TotalEntries;
+  MaxEntries = OtherDfdt.MaxEntries;
+  Changed = OtherDfdt.Changed;
+}
+
+
+void
 DFDT::Initialize() {
   Table = new DFD[500];
   TotalEntries = 0;
@@ -58,8 +72,16 @@ DFDT::Initialize() {
 }
 
 
-DFDT& 
+DFDT&
 DFDT::operator=(const DFDT& OtherDfdt) {
+  // BUGFIX #2: no self-assignment guard -- delete [] Table; Initialize();
+  // ran before OtherDfdt.GetTotalEntries() was read, so `x = x;` saw an
+  // already-emptied table and copied nothing back, silently wiping it.
+  // Same shape of bug already found and fixed in ATTRLIST's/STRLIST's
+  // operator='s. See docs/BUG_CATALOG.md.
+  if (this == &OtherDfdt) {
+    return *this;
+  }
   if (Table) {
     delete [] Table;
   }
@@ -130,17 +152,17 @@ DFDT::LoadTable(const STRING& FileName) {
   // attribute types and values
   for (x=0; x<DfdCount; x++) {
     AttrList = new ATTRLIST();
-    pBuf = strtok((CHR*)NULL,"\n");         // Get the file #
+    pBuf = strtok(nullptr,"\n");         // Get the file #
     dfd.SetFileNumber(atoi(pBuf));    // Save it
-    pBuf = strtok((CHR*)NULL,"\n");         // Get the # of attributes
+    pBuf = strtok(nullptr,"\n");         // Get the # of attributes
     AttrCount = atoi(pBuf);
     for (y=0;y<AttrCount;y++) {
-      pBuf = strtok((CHR*)NULL,"\n");
+      pBuf = strtok(nullptr,"\n");
       s = pBuf;
       attr.SetSetId(s);
-      pBuf = strtok((CHR*)NULL,"\n");
+      pBuf = strtok(nullptr,"\n");
       attr.SetAttrType(atoi(pBuf));
-      pBuf = strtok((CHR*)NULL,"\n");
+      pBuf = strtok(nullptr,"\n");
       s = pBuf;
       attr.SetAttrValue(s);
       AttrList->AddEntry(attr);
@@ -291,9 +313,13 @@ DFDT::GetDfdRecord(const STRING& FieldName, PDFD DfdRecord) const {
     }
     x++;
   }
-  // Error - FieldName not found
-  DfdRecord=(PDFD)NULL;
-  return;
+  // BUGFIX #3: FieldName not found. This used to do
+  // `DfdRecord=(PDFD)NULL;` here, which assigns to the local copy of
+  // the by-value pointer parameter and has no effect the caller can
+  // observe -- confirmed dead by checking the sole call site
+  // (src/idb.cxx:441), which never checks for a null/sentinel result
+  // and simply relies on *DfdRecord being left as whatever the caller
+  // passed in. See docs/BUG_CATALOG.md.
 }
 
 
