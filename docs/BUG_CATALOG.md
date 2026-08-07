@@ -1321,3 +1321,37 @@ header in this tree — harmless in practice today since `gdt.h`'s own
 guard already prevents `confwin.h` from being pulled in twice in one
 translation unit, but not guaranteed if something ever includes it
 directly.
+
+## src/gdt.h
+
+No bugs found. This is the foundational typedef header nearly every
+other file in the tree depends on (`INT`/`CHR`/`UINT4`/`GDT_BOOLEAN`/
+etc.), so it got a thorough pass: already self-contained (own
+`#ifndef`/`#define` guard, includes `<stdio.h>`/`<stdlib.h>` directly,
+pulls in `conf.h`/`confwin.h` itself — confirmed by compiling it
+standalone). Verified via `static_assert` that every size-derived
+typedef actually matches its documented width on this platform
+(`INT2`/`UINT2` == 2 bytes, `INT4`/`UINT4` == 4, `INT8`/`UINT8` == 8,
+`CHR` == 1, `GDT_TRUE`/`GDT_FALSE` round-trip through `bool`
+correctly) — the `#if (SIZEOF_INT == N)` / `#else #if (SIZEOF_LONG_INT
+== N)` cascades all resolve to the branches this platform's `conf.h`
+values (verified under `src/conf.h`'s own entry above) actually
+predict.
+
+One line checked closely but left alone, not confirmed as a bug: `#if
+!defined(_MSDOS) || !defined(WINAPI)` guarding the `LONG`/`ULONG`
+typedefs. Every *other* DOS/Windows-family check in this same file uses
+`defined(_MSDOS) || defined(_WIN32)` ("any DOS/Windows build"), which
+by analogy suggests this line's intent was
+`!defined(_MSDOS) && !defined(WINAPI)` (skip only on a real Unix build
+with neither macro present) — as written, the typedefs are skipped only
+when `_MSDOS` and `WINAPI` are *both* defined at once, a narrower and
+arguably backwards condition. But `WINAPI` is never defined anywhere in
+this tree's own build files (`grep -rn WINAPI` across `src/`,
+`doctype/`, `Isearch-cgi/`, and every `*.mak`/`configure.ac` turns up
+only this one line), so it's unreachable on every config this codebase
+actually ships — and even where it might trigger on some external
+build, redeclaring `LONG` as `long` a second time is legal C++ (same
+underlying type), not a compile error. Not enough to confirm as a live
+defect, so left as-is with a comment explaining the ambiguity for
+whoever looks next.

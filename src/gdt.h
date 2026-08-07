@@ -42,6 +42,8 @@ $Revision: 1.13 $
 Description:	Generic Data Type definitions
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef GDT_H
 #define GDT_H
@@ -68,6 +70,19 @@ typedef UCHR*         PUCHR;
 typedef UCHR**        PPUCHR;
 typedef FILE*         PFILE;
 
+// Checked, not confirmed as a bug (see docs/BUG_CATALOG.md#srcgdth):
+// every other DOS/Windows-family check in this file uses
+// `defined(_MSDOS) || defined(_WIN32)` to mean "any DOS/Windows
+// build," which would suggest this line's intent was
+// `!defined(_MSDOS) && !defined(WINAPI)` (define our own LONG/ULONG
+// only when neither is present, e.g. a real Unix::LONG-less build) --
+// as written, `||` only skips the typedefs when _MSDOS and WINAPI are
+// BOTH defined simultaneously. `WINAPI` is never defined anywhere in
+// this tree's own build files, so this is unreachable either way on
+// every config this codebase actually ships, and even if it did
+// trigger, redeclaring `LONG` as `long` a second time is harmless
+// (identical underlying type, legal in C++). Left as-is: unconfirmed
+// and unreachable, not a live defect to fix.
 #if !defined(_MSDOS) || !defined(WINAPI)
   typedef long          LONG;
   typedef unsigned long ULONG;
