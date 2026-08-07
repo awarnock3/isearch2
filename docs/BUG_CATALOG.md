@@ -1890,3 +1890,53 @@ none of them are newly introduced by this turn. Added
 abstract) covering the default virtuals' documented no-op behavior;
 `Next`'s initialization isn't unit-testable from outside `OPSTACK` for
 the same friend-access reason it wasn't reachable as a bug.
+
+## src/reclist.hxx
+
+Reprocessed via `/reprocess-blocked` after being blocked at GENERAL step
+4 (see `docs/AUTOPILOT_LOG.md#srcreclisthxx`); the user chose deep-copy
+semantics over making `RECLIST` non-copyable.
+
+1. **Header not self-contained** — same defect as `src/fc.hxx`
+   `BUGFIX #1` and `src/record.hxx`/`src/irset.hxx`'s own instances of
+   it: `reclist.hxx` declared `RECORD`/`PRECORD`/`INT`-typed members and
+   methods with its `#include`s commented out. Confirmed real by
+   compiling `reclist.hxx` as the sole `#include` in a translation
+   unit: it failed with 8 errors. Fixed by restoring `defs.hxx` (for
+   `INT`) and `record.hxx` (for `RECORD`/`PRECORD`); `string.hxx` was
+   left out of the restored set — nothing in this header uses `STRING`
+   directly, and `record.hxx` already brings it in transitively for
+   anything that does. Verified fixed by recompiling the same
+   standalone reproduction, which now succeeds with zero warnings under
+   `-Wall -Wextra`. See `BUGFIX #1` in source.
+2. **No copy constructor or `operator=`** — `RECLIST` owns a
+   heap-allocated `PRECORD Table` array (`new RECORD[...]` in the
+   constructor/`Resize`, `delete [] Table` in the destructor/`Resize`)
+   but declared neither, so the compiler-generated ones did a shallow
+   pointer copy. Confirmed with a standalone repro: copy-constructing a
+   second `RECLIST` and destroying both triggered a heap-use-after-free
+   in `RECLIST::~RECLIST()` (a second `delete []` on the already-freed
+   `Table`) under AddressSanitizer. `RECLIST` is currently dormant in
+   the live tree (its only two references, in `src/Iindex.cxx` and
+   `src/idb.hxx`, are both commented out), so this wasn't an active
+   crash, but a real latent defect. Fixed by adding
+   `RECLIST(const RECLIST&)` and `operator=(const RECLIST&)` that
+   deep-copy `Table` (sized to the source's `MaxEntries`),
+   `TotalEntries`, and `MaxEntries`; `operator=` guards against
+   self-assignment before freeing the old `Table`, deliberately not
+   repeating the missing-guard bug already found (though not yet fixed)
+   in `ATTRLIST`'s/`DFDT`'s hand-written `operator=`'s this same batch.
+   Verified fixed by turning the original standalone repro into a
+   permanent regression test, which now passes clean under
+   `make tests-asan`. See `BUGFIX #2` in source; regression test in
+   `tests/src/test_reclist.cxx`.
+
+Also applied: a file-level doc comment on `RECLIST` explaining its role
+and documenting `GetEntry()`'s 1-based indexing as this file's own
+convention, independent of `STRING`'s, per GENERAL step 7. No
+`NULL`/`sprintf` usages to modernize. The new `BUGFIX #2` bodies
+necessarily live in `src/reclist.cxx`, whose own full turn (Order 164)
+is still `pending` — only that minimal, scoped addition was made there;
+nothing else in that file was touched, and it was not marked
+`processed`. `src/reclist.cxx` was added to `TEST_ENGINE_SRCS` in the
+Makefile so `tests/src/test_reclist.cxx` can link against it.

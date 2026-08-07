@@ -59,6 +59,39 @@ RECLIST::RECLIST() {
 	MaxEntries = 1000;
 }
 
+// BUGFIX #2: see docs/BUG_CATALOG.md. Deep-copies Table instead of
+// sharing the source's pointer.
+RECLIST::RECLIST(const RECLIST& OtherReclist) {
+	INT x;
+	Table = new RECORD[OtherReclist.MaxEntries];
+	for (x=0; x<OtherReclist.TotalEntries; x++) {
+		Table[x] = OtherReclist.Table[x];
+	}
+	TotalEntries = OtherReclist.TotalEntries;
+	MaxEntries = OtherReclist.MaxEntries;
+}
+
+// BUGFIX #2 (continued): no operator= existed at all before this fix.
+// Guards against self-assignment before freeing Table -- deliberately
+// not repeating the missing-guard bug already found (though not yet
+// fixed) in ATTRLIST's/DFDT's hand-written operator='s this same batch.
+RECLIST& RECLIST::operator=(const RECLIST& OtherReclist) {
+	PRECORD Temp;
+	INT x;
+	if (this == &OtherReclist)
+		return *this;
+	Temp = new RECORD[OtherReclist.MaxEntries];
+	for (x=0; x<OtherReclist.TotalEntries; x++) {
+		Temp[x] = OtherReclist.Table[x];
+	}
+	if (Table)
+		delete [] Table;
+	Table = Temp;
+	TotalEntries = OtherReclist.TotalEntries;
+	MaxEntries = OtherReclist.MaxEntries;
+	return *this;
+}
+
 void RECLIST::AddEntry(const RECORD& RecordEntry) {
 	if (TotalEntries == MaxEntries)
 		Expand();
