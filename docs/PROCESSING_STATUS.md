@@ -63,7 +63,7 @@
 | 59 | src/glist.hxx | done | 2026-08-07 | [src/glist.hxx](BUG_CATALOG.md#srcglisthxx) |
 | 60 | doctype/colondoc.hxx | done | 2026-08-07 | [doctype/colondoc.cxx](BUG_CATALOG.md#doctypecolondoccxx) |
 | 61 | doctype/mailfolder.hxx | done | 2026-08-07 | [doctype/mailfolder.cxx](BUG_CATALOG.md#doctypemailfoldercxx) |
-| 62 | src/gstack.hxx | pending | | |
+| 62 | src/gstack.hxx | done | 2026-08-07 | [src/gstack.hxx](BUG_CATALOG.md#srcgstackhxx) |
 | 63 | src/isearch.hxx | pending | | |
 | 64 | src/idb.hxx | pending | | |
 | 65 | src/vidb.hxx | pending | | |
@@ -135,7 +135,7 @@
 | 131 | src/fpt.cxx | pending | | |
 | 132 | src/geosearch.cxx | pending | | |
 | 133 | src/glist.cxx | done | 2026-08-07 | [src/glist.hxx](BUG_CATALOG.md#srcglisthxx) |
-| 134 | src/gstack.cxx | pending | | |
+| 134 | src/gstack.cxx | done | 2026-08-07 | [src/gstack.hxx](BUG_CATALOG.md#srcgstackhxx) |
 | 135 | src/hash.cxx | pending | | |
 | 136 | src/idb.cxx | pending | | |
 | 137 | src/index.cxx | done | 2026-08-07 | [src/index.cxx](BUG_CATALOG.md#srcindexcxx) |

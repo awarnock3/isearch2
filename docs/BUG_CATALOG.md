@@ -2990,3 +2990,52 @@ Modernization: all code-level `NULL` uses converted to `nullptr`. No
 comments. Tests (`tests/doctype/test_mailfolder.cxx`) also cover
 `IsMailFromLine()`, `IsNewsLine()`, `accept_tag()`, and a full
 headers-plus-body `ParseFields()` case.
+
+## src/gstack.hxx
+
+`class GSTACK` is a LIFO stack of untyped `GATOM*` pointers, backed by
+a `GLIST Stack;` member plus a `CurrentIndex` cursor. Used by 5
+`doctype/*.cxx` files (`cipc.cxx`, `cipp.cxx`, `anzmeta.cxx`,
+`anzlic.cxx`, `fgdc.cxx`, all still `pending`) to track nested-field
+depth while parsing.
+
+1. **`Top()`/`Pop()` crashed (null-pointer dereference) on an empty
+   stack** — both computed `CurrentIndex = Stack.First()` (`nullptr`
+   when empty) and then called `Stack.Retrieve(CurrentIndex)`, which
+   dereferences its argument unconditionally
+   (`GLIST::Retrieve(GPOSITION *c) { return c->Atom; }`). Confirmed a
+   real crash with a standalone repro (`GSTACK().Top()`) before fixing:
+   `AddressSanitizer: SEGV ... in GLIST::Retrieve`. Every call site
+   found in the tree happens to check `GetSize() != 0` before reaching
+   `Top()`/`Pop()` via its own surrounding logic, so this wasn't
+   observed to crash in practice, but `GSTACK` itself shouldn't depend
+   on every caller getting that right. Fixed both to check
+   `CurrentIndex == nullptr` and return `nullptr` instead of
+   dereferencing it. `BUGFIX #2` in source. Covered by `GSTACK::Top and
+   Pop on an empty stack return nullptr instead of crashing`.
+2. **Constructor left `CurrentIndex` uninitialized** — never actually
+   reachable as a live bug (`Push()`/`Top()`/`Pop()` all unconditionally
+   overwrite it before any read), but the same class of fix as this
+   batch's other uninitialized-raw-pointer-member turns
+   (`src/index.cxx`, `src/infix2rpn.cxx`). Fixed via a member-
+   initializer list. `BUGFIX #1` in source.
+
+**Not fixed (needs a header change):** `GSTACK` publicly inherits
+`GLIST` (`class GSTACK : public GLIST`) but never uses that base
+class — every method operates on the `Stack` *member* instead, so the
+inherited `GLIST`'s own `Head`/`Tail`/`Length` sit there permanently
+empty and unused on every `GSTACK` instance. Confirmed by reading every
+method: none call an inherited (unqualified, implicit-`this`) `GLIST`
+method. Not a currently-live bug either — grepping all 5 real callers
+shows none call an inherited `GLIST` method (`IsEmpty()`, `First()`,
+etc.) directly on a `GSTACK` instance, only `GSTACK`'s own
+`Push`/`Top`/`Pop`/`GetSize` — but if one ever did, it would silently
+operate on the wrong (always-empty) list instead of `Stack`. Removing
+`: public GLIST` is a signature change (GENERAL step 4 header freeze),
+so this turn documented it rather than fixing it, same rationale as
+`src/glist.hxx`'s missing-destructor note from earlier this batch.
+
+No `NULL`/`sprintf` usages present. Added class-level and per-method
+doc comments, including the vestigial-inheritance note above. Tests
+(`tests/src/test_gstack.cxx`) cover empty-stack state, the
+`BUGFIX #2` regression, and LIFO Push/Top/Pop ordering.
