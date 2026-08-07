@@ -1495,3 +1495,57 @@ Also modernized: the one `sprintf` call (in `ParseIsoDate`, formatting
 the normalized `YYYY-MM-DD` digits) is now `snprintf`, bounded by the
 `NewCString()`-allocated buffer's actual size
 (`TmpDate.GetLength() + 1`). No `NULL` usages were present.
+
+## src/strlist.cxx
+
+`STRLIST`: an ordered list of `STRING` entries, each entry its own
+`VLIST` node (see the file-level comment added to `strlist.hxx`). No
+`NULL`/`sprintf` usages to modernize.
+
+1. **`operator=` had no self-assignment guard** — `Clear()` ran first,
+   deleting every node; `GetTotalEntries()` was then read off
+   `OtherStrlist` afterward, which for `list = list;` is the same
+   object `Clear()` had just emptied, so the copy loop below saw 0
+   entries and copied nothing back — silently wiping the whole list.
+   Fixed with a `this == &OtherStrlist` guard. See `BUGFIX #1` in
+   source; regression test in `tests/src/test_strlist.cxx`.
+2. **`Split(const CHR*, const STRING&)` looped forever on an empty
+   Separator** — `S.Search("")` matches at position 1 every call
+   (documented empty-needle behavior), and
+   `S.EraseBefore(Position + SLen)` with `SLen == 0` is
+   `EraseBefore(1)`, a documented no-op — so `S` never shrinks and the
+   loop never terminates. Confirmed with a standalone repro linking the
+   real `STRING`/`VLIST`/`STRLIST` implementations, run under a
+   timeout: it hung and had to be killed. The identical failure mode
+   was already found and fixed in `STRING::Replace`
+   (`docs/BUG_CATALOG.md#srcstringhxx`, `BUGFIX #3`); fixed here the
+   same way, with an early-return guard for `SLen == 0`. See
+   `BUGFIX #2` in source; regression test bounds the call and asserts
+   it returns a single whole-string entry rather than hanging.
+3. **The two `Split` overloads disagreed on a trailing empty
+   segment** — `Split(const CHR*, ...)` only appends the remainder if
+   it's non-empty; `Split(const CHR, ...)` appended it unconditionally,
+   so splitting `"a,b,"` produced `["a","b",""]` on the single-char
+   overload but `["a","b"]` on the string overload for the same
+   separator. Both overloads are exercised across the tree (e.g.
+   `src/Iget.cxx:151` uses the `CHR` overload, `src/squery.cxx:104` the
+   `CHR*` overload) with no indication either relies on a trailing
+   empty entry. Matched the `CHR` overload to the `CHR*` overload's
+   behavior. See `BUGFIX #3` in source.
+
+### Found but out of scope for this file (deferred, not fixed)
+
+- **Missing copy constructor, inherited from `VLIST`** — `STRLIST` has
+  no explicit copy constructor (only `operator=`, fixed above), so
+  copy-construction (as opposed to assignment) falls through to
+  `VLIST`'s compiler-generated shallow copy, corrupting the circular
+  list exactly as described for `VLIST` itself
+  (`docs/AUTOPILOT_LOG.md#srcvlisthxx`, which already named `STRLIST`
+  as one of the two derived classes carrying this risk today). Every
+  call site in this tree already avoids triggering it — see `Split()`
+  above, which default-constructs `NewList` and assigns rather than
+  copy-constructing. Not fixed here because the fix belongs in
+  `vlist.hxx` (adding a declaration there), which is already `blocked`
+  pending a human header-signature decision; duplicating that block on
+  this row would just be the same open question asked twice. Documented
+  in `strlist.hxx`'s new file-level comment instead.

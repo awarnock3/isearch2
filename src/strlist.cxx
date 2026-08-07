@@ -41,6 +41,8 @@ $Revision: 1.9 $
 Description:	Class STRLIST - String List
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include "strlist.hxx"
 
@@ -50,8 +52,16 @@ STRLIST::STRLIST()
 }
 
 
-STRLIST& STRLIST::operator=(const STRLIST& OtherStrlist) 
+STRLIST& STRLIST::operator=(const STRLIST& OtherStrlist)
 {
+  // BUGFIX #1: without this guard, `list = list;` would Clear() the
+  // list before reading OtherStrlist's entries. Since OtherStrlist and
+  // *this are the same object in that case, GetTotalEntries() below
+  // would then see the now-empty list and copy nothing back, silently
+  // wiping every entry.
+  if (this == &OtherStrlist) {
+    return *this;
+  }
   Clear();
   SIZE_T x;
   SIZE_T y = OtherStrlist.GetTotalEntries();
@@ -123,6 +133,20 @@ STRLIST::Split(const CHR* Separator, const STRING& TheString)
   STRLIST NewList;
   STRING S, T;
   SIZE_T SLen = strlen(Separator);
+  // BUGFIX #2: an empty Separator makes S.Search("") match at position
+  // 1 every time (STRING::Search's documented empty-needle behavior)
+  // while S.EraseBefore(Position + SLen) = EraseBefore(1) is a no-op,
+  // so S never shrinks -- an infinite loop, confirmed by a standalone
+  // repro that had to be killed after hanging. Mirrors the identical
+  // failure mode already fixed in STRING::Replace; see
+  // docs/BUG_CATALOG.md#srcstringhxx, BUGFIX #3.
+  if (SLen == 0) {
+    if (TheString.GetLength() > 0) {
+      NewList.AddEntry(TheString);
+    }
+    *this = NewList;
+    return;
+  }
   S = TheString;
   // parse S and build list of terms
   while ( (Position=S.Search(Separator)) != 0) {
@@ -152,7 +176,13 @@ STRLIST::Split(const CHR Separator, const STRING& TheString)
     S.EraseBefore(Position + 1);
     NewList.AddEntry(T);
   }
-  NewList.AddEntry(S);	// add the remaining entry
+  // BUGFIX #3: this was unconditional, unlike the CHR*-separator
+  // overload above -- splitting "a,b," on ',' produced a trailing
+  // empty entry (["a","b",""]) while splitting on "," (string)
+  // produced (["a","b"]). Matched to the CHR*-overload's behavior so
+  // the two agree for the common single-character-separator case.
+  if (S.GetLength() > 0)
+    NewList.AddEntry(S);	// add the remaining entry
   *this = NewList;
 }
 

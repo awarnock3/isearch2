@@ -30,7 +30,7 @@
 | 26 | src/string.hxx | done | 2026-08-05 | [src/string.hxx](BUG_CATALOG.md#srcstringhxx) |
 | 27 | src/vlist.hxx | blocked | 2026-08-07 | [src/vlist.hxx](AUTOPILOT_LOG.md#srcvlisthxx) |
 | 28 | src/common.hxx | done | 2026-08-07 | [src/common.cxx](BUG_CATALOG.md#srccommoncxx) |
-| 29 | src/strlist.hxx | pending | | |
+| 29 | src/strlist.hxx | done | 2026-08-07 | [src/strlist.cxx](BUG_CATALOG.md#srcstrlistcxx) |
 | 30 | src/attr.hxx | pending | | |
 | 31 | src/df.hxx | pending | | |
 | 32 | src/attrlist.hxx | pending | | |
@@ -175,7 +175,7 @@
 | 171 | src/sterm.cxx | pending | | |
 | 172 | src/stopword.cxx | pending | | |
 | 173 | src/string.cxx | done | 2026-08-05 | [src/string.cxx](BUG_CATALOG.md#srcstringcxx) |
-| 174 | src/strlist.cxx | pending | | |
+| 174 | src/strlist.cxx | done | 2026-08-07 | [src/strlist.cxx](BUG_CATALOG.md#srcstrlistcxx) |
 | 175 | src/strstack.cxx | pending | | |
 | 176 | src/termobj.cxx | pending | | |
 | 177 | src/thesaurus.cxx | pending | | |
