@@ -2171,3 +2171,53 @@ compiling it standalone). `MDT` has no default constructor — it always
 opens/creates real on-disk `.mdt`/`.mdg`/`.mdk` files via a file stem —
 so `tests/src/test_mdt.cxx` uses a `TempMdt` fixture, the same pattern
 already established in `tests/src/test_filemap.cxx`.
+
+## src/fpt.hxx
+
+Reprocessed via `/reprocess-blocked` after being blocked at GENERAL step
+4 (see `docs/AUTOPILOT_LOG.md#srcfpthxx`); the user chose non-copyable,
+the same choice made for `MDT` this batch and for the same reason —
+copying a table of open file handles has no single obviously-correct
+meaning.
+
+1. **No copy constructor and no `operator=` at all** — the same
+   "no custom copy semantics whatsoever" shape as `MDT` this batch.
+   `FPT` owns a heap-allocated `FPREC* Table` array where each entry
+   caches a live `FILE*`, so the compiler-generated copy operations did
+   a member-wise shallow copy. Confirmed with a standalone repro
+   (construct, open one real file through it, copy-construct a second,
+   destroy both): AddressSanitizer reported a heap-use-after-free
+   inside `FPT::CloseAll()` during destruction, from the shared
+   `Table` pointer being `delete []`'d twice. Unlike `MDT`, this one
+   has a concrete live call site today: `IDB::MainFpt`
+   (`src/idb.hxx:224`) is a plain, non-pointer `FPT` member, so a
+   future copy of `IDB` (still pending) without its own copy semantics
+   would hit this transitively. Fixed by declaring
+   `FPT(const FPT&) = delete;` and `FPT& operator=(const FPT&) = delete;`
+   — no body to write, so no `BUGFIX #1` comment in `.cxx`, just the
+   declarations in `fpt.hxx`. Compile-time regression test
+   (`std::is_copy_constructible`/`is_copy_assignable`) in
+   `tests/src/test_fpt.cxx`.
+2. **`ffopen`'s cache-hit branch read `Closed` and never used it** — a
+   pre-existing `-Wunused-but-set-variable` warning, not introduced
+   this turn, that GENERAL step 9 requires resolving before the file
+   compiles clean. Traced every branch before removing it (not just
+   silencing the warning): the "w"/"a" branches unconditionally
+   `fclose()` and reopen; the "r" branch always reuses the cached
+   `Fp`, which is safe regardless of `Closed`'s value because
+   `ffclose()` never physically closes an entry that's still reachable
+   via `Lookup()` — only `CloseAll()` (which also zeroes
+   `TotalEntries`, hiding every slot from `Lookup()`) or an
+   eviction/mode-change (which replaces the slot's `FilePointer`
+   before anyone could reuse a stale one) actually call `fclose()` on
+   a live slot. So the read was genuinely dead, not a missing check —
+   removed rather than "fixed" into using it. See `BUGFIX #2` in
+   source.
+
+Also applied: a file-level doc comment on `FPT` per GENERAL step 7,
+including how `ffclose()`/`CloseAll()`/eviction divide up when a
+handle is actually physically closed (the context that made `BUGFIX
+#2` provable rather than speculative). `fpt.hxx`'s own `#include`s
+were already complete (verified by compiling it standalone).
+`src/fpt.cxx` was added to `TEST_ENGINE_SRCS` in the Makefile so
+`tests/src/test_fpt.cxx` can link against it.

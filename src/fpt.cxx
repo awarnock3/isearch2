@@ -154,12 +154,20 @@ FPT::ffopen(const STRING& FileName, const CHR *Type) {
     FPREC Fprec;
     STRING Fn, Om;
     PFILE Fp;
-    GDT_BOOLEAN Closed;
     Fprec = Table[z-1];
     Fp = Fprec.GetFilePointer();
     Fprec.GetFileName(&Fn);
     Fprec.GetOpenMode(&Om);
-    Closed = Fprec.GetClosed();
+    // BUGFIX #2: `GDT_BOOLEAN Closed = Fprec.GetClosed();` used to be
+    // read here and never consulted by any branch below (confirmed by
+    // tracing every path: the "w"/"a" branches unconditionally
+    // fclose()+reopen, the "r" branch always reuses the cached Fp, and
+    // that reuse is safe regardless of Closed's value -- ffclose()
+    // never physically closes an entry still reachable via Lookup(),
+    // only CloseAll() (which also zeroes TotalEntries, hiding the slot
+    // from Lookup()) or an eviction/mode-change (which replaces the
+    // slot's FilePointer before anyone could reuse the stale one) do.
+    // Dead read, not a missing check; removed. See docs/BUG_CATALOG.md.
     if (Om == Type) {
       // If same OpenMode, use the cached information
       if (Om.SearchReverse("w")) {
