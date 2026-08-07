@@ -2769,3 +2769,69 @@ translation and their symbolic aliases, paren precedence, implicit-
 default-operator insertion between adjacent terms, the 3-arg
 constructor (valid and oversized `Op`), `SetDefaultOp()`'s own
 too-long fallback, and both `BUGFIX`es above.
+
+## src/glist.hxx
+
+`class GLIST` is a generic intrusive doubly-linked list of untyped
+`GATOM*` (`void*`) pointers, each cell tagged with a type code. Used by
+`GSTACK` (`src/gstack.hxx`/`.cxx`, its own future turn).
+
+1. **`Delete()` left a dangling `Prev` pointer on interior deletes,
+   confirmed a real heap-use-after-free** — deleting a cell from the
+   *interior* of the list (not head, not tail) did
+   `c->Prev->Next = c->Next; c->Next = c->Prev;` — the second line sets
+   a field on `c` itself, which is about to be `delete`d anyway,
+   accomplishing nothing, instead of `c->Next->Prev = c->Prev;`, which
+   is what actually needs updating so `c`'s successor no longer points
+   back at the freed cell. Confirmed with a standalone repro (insert
+   3 cells, delete the middle one, then `Prev()`/`Retrieve()` the last
+   cell) compiled under ASan *before* fixing:
+   `AddressSanitizer: heap-use-after-free ... READ of size 8 ... in
+   GLIST::Retrieve`. Fixed to update the correct pointer; re-ran the
+   same repro after the fix to confirm it's clean. `BUGFIX #1` in
+   source. Covered by `GLIST Delete from an interior position relinks
+   both neighbors` (the assertions there confirm the relink; the
+   use-after-free itself is what `make tests-asan` verifies on a
+   regression).
+2. **`InsertBefore()` decoupled each atom from its own type tag** —
+   "insert before c" is implemented by inserting a new cell *after* c
+   and then swapping data between the two cells (so callers already
+   holding a `GPOSITION*` to `c` keep pointing at the right logical
+   position). The swap used `Update()`, which only ever sets `Atom`
+   (never `Type`), so after the swap the new atom's `Type` stayed on
+   the cell that ended up holding the *old* atom, and vice versa.
+   Confirmed with a standalone repro: `InsertBefore` an atom tagged 99
+   next to one tagged 42, and the two atoms came back with their type
+   tags crossed. Fixed by swapping `Atom` and `Type` together directly
+   on the two cells instead of going through `Update()`. `BUGFIX #2` in
+   source; the 2-argument `InsertBefore(c, a)` overload (which this
+   also fixes) is reachable in the tree today via `GSTACK::Push()`
+   (`src/gstack.cxx`). Covered by `GLIST InsertBefore keeps each atom
+   paired with its own type tag`.
+
+**Not fixed (needs a header change):** `GLIST` has no destructor at
+all, so any cells still linked when a `GLIST` is destroyed leak --
+confirmed with the same standalone repro used for `BUGFIX #1`
+(LeakSanitizer flagged the two cells that test intentionally left
+un-`Delete()`d: `64 byte(s) leaked in 2 allocation(s)`). Unlike the
+`BUGFIX`es above, there's no way to add automatic cleanup without
+declaring `~GLIST()` in `glist.hxx`, which GENERAL step 4 reserves for
+a human decision -- and unlike this session's other blocked files
+(`mergeunit.hxx`/`tokengen.hxx`/`thesaurus.hxx`/`squery.hxx`, all
+blocked over a *copy*-safety double-free/UAF risk), this is "just" a
+leak with no corruption/crash risk on its own, and `Delete()`'s own doc
+comment ("Caller has freed memory allocated within the atom in c")
+already documents an expectation of manual, node-by-node cleanup
+discipline -- so this turn fixed the two confirmed memory-*safety* bugs
+above and documented the leak here rather than blocking the whole file
+over it. Proposed fix for a future header-focused pass: a
+`~GLIST()` that walks `Head` and `delete`s each remaining cell (atoms
+are never owned, so nothing else to free).
+
+Modernization: all code-level `NULL` uses converted to `nullptr`
+(4 more, in doc-comment prose, correctly left as English "NULL"). No
+`sprintf` calls present. Added class/method doc comments, including the
+destructor/ownership caveat above. Tests (`tests/src/test_glist.cxx`)
+cover empty-list state, forward/backward traversal after `InsertAfter`,
+`Delete` from interior/head/tail/singleton positions, `InsertBefore`
+(including into an empty list), and `Update`.

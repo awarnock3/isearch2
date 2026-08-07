@@ -60,7 +60,7 @@
 | 56 | doctype/sgmltag.hxx | done | 2026-08-07 | [doctype/sgmltag.cxx](BUG_CATALOG.md#doctypesgmltagcxx) |
 | 57 | src/strstack.hxx | done | 2026-08-07 | [src/strstack.hxx](BUG_CATALOG.md#srcstrstackhxx) |
 | 58 | src/infix2rpn.hxx | done | 2026-08-07 | [src/infix2rpn.cxx](BUG_CATALOG.md#srcinfix2rpncxx) |
-| 59 | src/glist.hxx | pending | | |
+| 59 | src/glist.hxx | done | 2026-08-07 | [src/glist.hxx](BUG_CATALOG.md#srcglisthxx) |
 | 60 | doctype/colondoc.hxx | pending | | |
 | 61 | doctype/mailfolder.hxx | pending | | |
 | 62 | src/gstack.hxx | pending | | |
@@ -134,7 +134,7 @@
 | 130 | src/fprec.cxx | done | 2026-08-07 | [src/fprec.cxx](BUG_CATALOG.md#srcfpreccxx) |
 | 131 | src/fpt.cxx | pending | | |
 | 132 | src/geosearch.cxx | pending | | |
-| 133 | src/glist.cxx | pending | | |
+| 133 | src/glist.cxx | done | 2026-08-07 | [src/glist.hxx](BUG_CATALOG.md#srcglisthxx) |
 | 134 | src/gstack.cxx | pending | | |
 | 135 | src/hash.cxx | pending | | |
 | 136 | src/idb.cxx | pending | | |
