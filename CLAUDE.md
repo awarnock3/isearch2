@@ -297,26 +297,48 @@ run of that same target.
 
 Documented here conceptually; the actual invokable slash commands live
 in `.claude/commands/` (see the files provided alongside this one) so
-you can type `/analyze`, `/process-next`, and `/process <filename>`
-directly in the Claude Code tab.
+you can type `/analyze`, `/process-next`, `/process <filename>`,
+`/process-5`, and `/sync-upstream` directly in the Claude Code tab.
 
 - **ANALYZE** — ensures branch + baseline (see GIT), scans `src/`,
   `doctype/`, `Isearch-cgi/`; builds a `#include` dependency graph;
   excludes anything already carrying the `ISEARCH2-CLEANUP: processed`
-  marker; topologically sorts the rest (least-depended-upon-by files
-  first, ties broken by directory precedence
-  `src/` → `doctype/` → `Isearch-cgi/`, then alphabetically); writes or
-  updates the pending rows in `docs/PROCESSING_STATUS.md`, then commits
-  and pushes that file (message `Isearch2 cleanup: update processing
-  order (ANALYZE)`, skipped if nothing changed). **Never modifies a
-  source file.** Safe to re-run any time.
+  marker or a `generated` row in `docs/PROCESSING_STATUS.md`;
+  topologically sorts the rest (least-depended-upon-by files first,
+  ties broken by directory precedence `src/` → `doctype/` →
+  `Isearch-cgi/`, then alphabetically); writes or updates the pending
+  rows in `docs/PROCESSING_STATUS.md`, then commits and pushes that file
+  (message `Isearch2 cleanup: update processing order (ANALYZE)`,
+  skipped if nothing changed). **Never modifies a source file.** Safe to
+  re-run any time.
 - **PROCESS NEXT** — reads `docs/PROCESSING_STATUS.md`, takes the
   lowest-`Order` `pending` row, runs the GENERAL pipeline (including
-  both commits and both pushes) on that one file, then stops.
+  both commits and both pushes) on that one file, then stops. A
+  `blocked` outcome (see AUTONOMY) also stops here, same as normal.
 - **PROCESS `<filename>`** — runs the GENERAL pipeline on the named
   file regardless of its current status (the reprocess path, typically
-  after you've hand-edited an already-done file). The checkpoint commit
-  is what makes this safe — even an uncommitted hand-edit gets captured
-  and pushed before Claude touches it. If the name is ambiguous
+  after you've hand-edited an already-done file, or to pick a `blocked`
+  file back up once its signature question is resolved). The checkpoint
+  commit is what makes this safe — even an uncommitted hand-edit gets
+  captured and pushed before Claude touches it. If the name is ambiguous
   (matches files in more than one directory), ask which one before
   proceeding. Updates that file's row and re-timestamps it, then stops.
+- **PROCESS-5** — batch version of PROCESS NEXT: runs the same
+  per-file pipeline up to 5 times in one invocation, skipping (not
+  halting on) `blocked` files so one problem file doesn't stall the rest
+  of the batch. See AUTONOMY for how blocking works unattended.
+- **SYNC-UPSTREAM** — fetches and merges `upstream/main` into
+  `cleanup/isearch2`, tags the sync point, and reruns ANALYZE so newly
+  merged files get queued immediately rather than sitting untracked (as
+  happened after the `49e7b2d` merge before this command existed). Not
+  run automatically by anything else — invoke it deliberately.
+
+When you're ready to hand the cleaned-up branch to your colleague for
+review, open a cross-fork pull request against the upstream repository:
+```
+gh pr create --repo awarnock3/isearch2 --base main \
+  --head fulltonj:cleanup/isearch2 \
+  --title "Isearch2 cleanup: <summary>" --body "<description>"
+```
+This is a manual, deliberate step — never run it as part of an
+automated batch.
