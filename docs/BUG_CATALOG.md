@@ -1154,3 +1154,78 @@ both still pending) is the only current subclass.
 
 Also applied: a class-level doc comment explaining `IDBOBJ`'s role and
 its all-but-three-methods-optional override contract.
+
+## src/marclib.hxx
+
+Free-function C-style MARC record/field parsing library; `src/marc.cxx`
+(Order 143, still pending) is its only current caller. Unlike every
+other `.hxx` processed so far, this header was **already**
+self-contained — no `BUGFIX #1` needed here, because the previous
+turn's fix to `src/marcdefs.hxx` (adding `#include "gdt.h"` there)
+transitively closed the exact gap this header would otherwise have had
+(confirmed: compiling `marclib.hxx` as the sole `#include` in a
+translation unit succeeds with zero errors). Following the same
+precedent as `src/rcache.hxx` and `src/hash.hxx` above (fixing
+confirmed bugs in a header's own not-yet-processed `.cxx` pair rather
+than deferring), all bugs below were found and fixed in
+`src/marclib.cxx`. `src/marclib.cxx` itself stays `pending` in
+`docs/PROCESSING_STATUS.md` with no processed marker.
+
+1. **`SetSubF` wrote past `subfcodes[21]` for a field with more than 20
+   subfields** — `subfcodes[0]` is a running count with no bound check
+   against the fixed-size array it indexes into (`MARC_FIELD`'s
+   `subfcodes[21]`, from `src/marcdefs.hxx`: index 0 is the count, so
+   only indices 1..20 are valid data slots). Every `$`-delimited
+   subfield in a field's raw data incremented the count and wrote a
+   code byte, with nothing stopping it past 20. Confirmed real with a
+   standalone repro: a field built with 25 subfields — UBSan reported
+   `index 21 out of bounds for type 'char [21]'` at the write. Past
+   that point it corrupts `MARC_FIELD`'s own `length` member and then
+   heap memory beyond the struct (it's always heap-allocated via
+   `AllocSafe`, per `SetField`/`GetMARC`). Fixed by capping the count
+   at the array's usable size; subfield *data* past the 20th is still
+   linked into the field's subfield list, just no longer indexable by
+   code via `GetSubf()` (matches this tree's established
+   degrade-rather-than-corrupt pattern, e.g. `HASH::Insert`'s table-
+   overflow return code). See `BUGFIX #1` in source. Verified fixed:
+   the same 25-subfield repro now exits cleanly under ASan+UBSan.
+
+2. **`SetField` trusted a directory entry's field-start offset with no
+   bounds check, reading out of the record buffer** — `f->data =
+   rec->BaseAddr + GetNum(dir->fstart,5)` took the offset straight from
+   the (possibly corrupted or adversarial) MARC record's own directory,
+   then immediately read two bytes through it for `indicator1`/
+   `indicator2`, with no check that the offset actually lands inside
+   the record. Confirmed real with a standalone repro: a 37-byte record
+   whose directory entry claims a field starts at offset 9000 — ASan
+   reported a `heap-buffer-overflow READ` at the `indicator1` line.
+   Since `ReadMARC` reads records straight off disk, a truncated or
+   adversarially-crafted MARC file reaches this path directly. Fixed by
+   validating the computed offset against `rec->length` (available via
+   the `MARC_REC*` already passed in) and rejecting the field — same
+   "return `nullptr`" convention this function already uses for
+   allocation failure — when it doesn't fit. See `BUGFIX #2` in source.
+   Verified fixed: the same repro now safely prints "bad field start
+   offset" and rejects the record instead of reading out of bounds; a
+   separate repro with a well-formed record (real leader/directory/
+   subfields) still parses correctly and finds both subfields, so nothing
+   legitimate regressed.
+
+3. **`normalize()` used `sprintf` into a caller-owned buffer with no
+   size parameter** — modernization target (`sprintf`-family →
+   `snprintf`), sharpened by GENERAL step 4 keeping this function's
+   signature frozen (it takes no `out`-buffer-size parameter to pass
+   through). `mainclass`/`decimal`/`subcutter`, the pieces fed into the
+   format string, are all built from fixed-size local buffers whose own
+   loops already bail out (returning `nullptr`) if the source would
+   overflow them — so the format's total output is provably under 64
+   bytes for any input that reaches the `sprintf` call. Switched to
+   `snprintf(out, 64, ...)`: identical output for every realistic
+   caller, safe truncation instead of a theoretical overflow for a
+   caller with an undersized buffer. Currently dead code (no caller in
+   this tree — confirmed via `grep`), same as `RCACHE` was, so this is
+   a contract-gap close rather than a live-exploit fix. See `BUGFIX #3`
+   in source.
+
+Also modernized throughout `marclib.cxx`: every code-position `NULL` →
+`nullptr` (comments describing "returns NULL" behavior left as prose).
