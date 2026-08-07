@@ -42,6 +42,9 @@ Description:	Class IRESULT - Internal Search Result
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef IRESULT_HXX
 #define IRESULT_HXX
 
@@ -52,9 +55,15 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "fct.hxx"
 #endif
 
+// A search hit as tracked internally during scoring/merging (as
+// opposed to RESULT, src/result.hxx, which is the externally-facing
+// form materialized once a hit is finalized): just an MDT row index,
+// running hit count and score, and -- for virtual databases -- which
+// DbNum/MDT it came from.
 class IRESULT {
 public:
   IRESULT();
+  // Copies every field, including Mdt; safe under self-assignment.
   IRESULT& operator=(const IRESULT& OtherIresult);
   void   SetMdtIndex(const INT NewMdtIndex);
   INT    GetMdtIndex() const;
@@ -68,8 +77,10 @@ public:
 #ifdef DO_HIGHLIGHTING
   void   SetHitTable(const FCT& NewHitTable);
   void   GetHitTable(PFCT HitTableBuffer) const;
+  // Appends ResultRecord's HitTable entries onto this one's.
   void   AddToHitTable(const IRESULT& ResultRecord);
 #endif
+  // Saves a reference to NewMdt (not a copy or an owned pointer).
   void   SetMdt(MDT& NewMdt);
   MDT*   GetMdt() const;
   void   SetDbNum(const INT NewDbNum);

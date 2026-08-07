@@ -1844,3 +1844,15 @@ close when the table is full. See the file-level comment added to
 Also applied: file-level and per-method doc comments in `fprec.hxx`.
 Added `fprec.cxx` to `TEST_ENGINE_SRCS` (it wasn't linked into the test
 binary before this turn).
+
+## src/iresult.cxx
+
+No bugs found. `IRESULT` (an internal-scoring counterpart to `RESULT`,
+see the file-level comment added to `iresult.hxx`) already initializes
+every member in its constructor — including `Mdt`, unlike `RESULT`'s
+constructor this same batch (`docs/BUG_CATALOG.md#srcresultcxx`,
+`BUGFIX #1`) — and `operator=` already copies every field, including
+`Mdt` (again unlike `RESULT`'s `operator=` before this batch's
+`BUGFIX #2`). One `NULL` usage modernized: `Mdt = (MDT*)NULL;` →
+`Mdt = nullptr;`. No `sprintf` usages. Added file-level and per-method
+doc comments plus `tests/src/test_iresult.cxx`.

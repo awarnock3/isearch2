@@ -41,7 +41,7 @@
 | 37 | src/registry.hxx | done | 2026-08-07 | [src/registry.cxx](BUG_CATALOG.md#srcregistrycxx) |
 | 38 | src/result.hxx | done | 2026-08-07 | [src/result.cxx](BUG_CATALOG.md#srcresultcxx) |
 | 39 | src/fprec.hxx | done | 2026-08-07 | [src/fprec.cxx](BUG_CATALOG.md#srcfpreccxx) |
-| 40 | src/iresult.hxx | pending | | |
+| 40 | src/iresult.hxx | done | 2026-08-07 | [src/iresult.cxx](BUG_CATALOG.md#srciresultcxx) |
 | 41 | src/opobj.hxx | pending | | |
 | 42 | src/fpt.hxx | pending | | |
 | 43 | src/nfield.hxx | pending | | |
@@ -142,7 +142,7 @@
 | 138 | src/infix2rpn.cxx | pending | | |
 | 139 | src/intfield.cxx | pending | | |
 | 140 | src/intlist.cxx | pending | | |
-| 141 | src/iresult.cxx | pending | | |
+| 141 | src/iresult.cxx | done | 2026-08-07 | [src/iresult.cxx](BUG_CATALOG.md#srciresultcxx) |
 | 142 | src/irset.cxx | pending | | |
 | 143 | src/marc.cxx | pending | | |
 | 144 | src/marclib.cxx | pending | | |
