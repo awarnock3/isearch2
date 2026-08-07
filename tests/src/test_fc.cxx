@@ -48,14 +48,18 @@ TEST_CASE("FC operator<< prints \"start end\"", "[fc]") {
 	REQUIRE(os.str() == "5 9\n");
 }
 
-TEST_CASE("FC FlipBytes executes without throwing", "[fc]") {
-	// NOTE: GpSwab (src/common.cxx) reads an uninitialized local
+TEST_CASE("FC FlipBytes round-trips both fields", "[fc]") {
+	// GpSwab (src/common.cxx) used to read an uninitialized local
 	// whenever CROSS_PLATFORM isn't defined -- which it never is
-	// anywhere in this build -- so FlipBytes' result is presently
-	// undefined. That's src/common.cxx's bug to fix on its own turn;
-	// this only guards against a crash, not correctness, until then.
+	// anywhere in this build -- so FlipBytes' result was undefined.
+	// Fixed on src/common.cxx's own turn; see
+	// docs/BUG_CATALOG.md#srccommoncxx (BUGFIX #2). Flipping twice
+	// should now reliably restore the original values.
 	FC fc;
 	fc.SetFieldStart(1u);
 	fc.SetFieldEnd(2u);
-	REQUIRE_NOTHROW(fc.FlipBytes());
+	fc.FlipBytes();
+	fc.FlipBytes();
+	REQUIRE(fc.GetFieldStart() == 1u);
+	REQUIRE(fc.GetFieldEnd() == 2u);
 }

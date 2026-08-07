@@ -1410,3 +1410,88 @@ below are both macro-related.
   `result.cxx` reaching its own turn (Order 167), at which point both
   should change together: add the missing semicolon there, wrap the
   three macros here.
+
+## src/common.cxx
+
+Tree-wide grab bag of free functions: filesystem path helpers, file/db
+existence and size checks, endianness helpers, and a few string/date
+utilities (see the file-level comment added to `common.hxx`). Two of
+the six findings below were already flagged in advance, with root
+cause identified, during `fc.hxx`'s turn — see
+`docs/BUG_CATALOG.md#srcfchxx`, "Found but out of scope for this file".
+
+1. **`IsFile`'s Windows branch(es)** — both overloads had
+   `if (_S_IFREG && status.st_mode)`: a nonzero constant logically
+   ANDed with the mode word, true for anything `stat()`/`_stat()` could
+   report — directories included — not just regular files. Needs the
+   actual bitwise AND against the file-type bits,
+   `status.st_mode & _S_IFREG`. This is the file/bug used as this
+   project's own worked example for this catalog's format (see
+   CLAUDE.md). Fixed identically in both the `STRING` and `CHR*`
+   overloads; see `BUGFIX #1` in source. Windows-only code, so not
+   exercised by this Linux build either way — `tests/src/test_common.cxx`
+   covers `IsFile`'s `S_ISREG` (UNIX) branch instead, which was already
+   correct.
+2. **`GpSwab`** — read an uninitialized `GPTYPE Gp;` whenever
+   `CROSS_PLATFORM` isn't defined, which is always in this build
+   (confirmed by `-Wuninitialized` and, independently, by `grep -r
+   CROSS_PLATFORM` finding only this one `#ifdef` tree-wide). Simply
+   seeding `Gp` from `*GpPtr` wasn't sufficient on its own: the
+   function's word-swap step only reverses the two 16-bit halves of
+   `Gp`, not its 4 individual bytes — a full byte-order reversal (what
+   every real caller needs; `FC::FlipBytes()`/`MDTREC::FlipBytes()`
+   only ever call it when the on-disk data's endianness doesn't match
+   the host's) only happened when `CROSS_PLATFORM` was defined, because
+   `swab()` additionally byte-swapped each half before the word-swap
+   ran. Replaced the whole two-step trick with a direct, unconditional
+   4-byte reversal that's correct regardless of `CROSS_PLATFORM` or
+   `swab()` availability. See `BUGFIX #2` in source. Verified with
+   `tests/src/test_common.cxx` (byte-level reversal and
+   swap-is-its-own-inverse) and by strengthening
+   `tests/src/test_fc.cxx`'s `FlipBytes` test from "doesn't throw" to
+   an actual round-trip check, per the note left there during `fc.hxx`'s
+   turn.
+3. **`rename(const STRING, const STRING)`** — `return rename(From, To);`
+   inside this very overload was an exact-match call to itself (`STRING`
+   needs a user-defined conversion to reach the C library's
+   `rename(const char*, const char*)`, and overload resolution always
+   prefers an exact match over one needing a conversion), so every call
+   recursed until the stack overflowed. Confirmed by
+   `-Winfinite-recursion`. Fixed by casting both arguments to
+   `const char*` first, making the C library overload the exact match.
+   See `BUGFIX #3` in source. Verified with a real
+   `mkstemp`-created file in `tests/src/test_common.cxx`: renames it,
+   confirms the new path exists and the old one doesn't.
+4. **`RemoveFileExtension`** — `SearchReverse('.')` returns 0 when
+   there's no `.`, and `EraseAfter(0)` truncates to zero characters — so
+   a filename with no extension had its entire name wiped, instead of
+   being left alone the way the analogous `RemovePath()` leaves a
+   slash-less name alone. Fixed by guarding the erase behind the same
+   "found" check `RemovePath()` already uses. See `BUGFIX #4` in
+   source. (Note: `RemoveFileExtension` is declared but never called
+   anywhere else in this tree today, so this was latent rather than an
+   active miscompile of real behavior. Its complementary
+   `EraseAfter(x)` — keeping the matched `.` itself rather than
+   stripping it too — is unrelated pre-existing behavior, left as-is;
+   documented in `common.hxx`'s new doc comment and covered by
+   `tests/src/test_common.cxx` so it doesn't regress silently.)
+5. **`ParseIsoDate`'s `date_val`/`time_val`** — both declared with no
+   initializer and only conditionally assigned (`date_val` inside
+   `if (TmpDate.Search('-'))`; `time_val` inside either the no-`'T'`
+   branch or `if (TmpTime.Search(':'))`), then unconditionally read by
+   the final `return (date_val + time_val)`. A date with no `-` or a
+   `T`-bearing input whose time half has no `:` reads one or both
+   uninitialized. Fixed by initializing both to `0.0` at declaration.
+   See `BUGFIX #5` in source.
+6. **`ParseIsoDate`'s non-digit-date path leaked `tDate`** — the
+   `else { return -99999999.0; }` branch returned before reaching the
+   `delete [] tDate;` a few lines down, leaking the `NewCString()`
+   buffer on every call with a `-`-containing but non-digit-leading
+   date. Confirmed with LeakSanitizer via
+   `tests/src/test_common.cxx`'s non-digit-date test before the fix.
+   Fixed by deleting `tDate` on both paths. See `BUGFIX #6` in source.
+
+Also modernized: the one `sprintf` call (in `ParseIsoDate`, formatting
+the normalized `YYYY-MM-DD` digits) is now `snprintf`, bounded by the
+`NewCString()`-allocated buffer's actual size
+(`TmpDate.GetLength() + 1`). No `NULL` usages were present.
