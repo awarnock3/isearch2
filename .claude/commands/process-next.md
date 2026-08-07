@@ -17,22 +17,29 @@
    Push: `git push origin cleanup/isearch2` (or `git push -u origin
    cleanup/isearch2` if no upstream tracking yet).
 5. Run the full GENERAL pipeline on that one file exactly as defined in
-   CLAUDE.md (read file + header, freeze public header signatures
-   unless you stop to ask, catalog bugs into `docs/BUG_CATALOG.md` with
-   `BUGFIX #n` comments at each fix site, modernize `NULL`→`nullptr` and
-   `sprintf`→`snprintf`, add file/function doc comments, write or update
-   the Catch2 test under the mirrored path in `tests/`, compile clean
-   via `make tests`, run `make tests-asan`, add the
-   `ISEARCH2-CLEANUP: processed` marker with today's date).
-6. Update that file's row in `docs/PROCESSING_STATUS.md` to `done`, set
-   `Last Processed`, and link the relevant `docs/BUG_CATALOG.md`
-   subsection.
-7. **Processed commit, then push.** `git add --` the target file, its
+   CLAUDE.md (read file + header, freeze public header signatures per
+   GENERAL step 4 — interactively, stop and ask; unattended, mark
+   `blocked` and log to `docs/AUTOPILOT_LOG.md` per AUTONOMY — catalog
+   bugs into `docs/BUG_CATALOG.md` with `BUGFIX #n` comments at each fix
+   site, modernize `NULL`→`nullptr` and `sprintf`→`snprintf`, add
+   file/function doc comments, write or update the Catch2 test under the
+   mirrored path in `tests/`, compile clean via `make tests`, run `make
+   tests-asan`, add the `ISEARCH2-CLEANUP: processed` marker with
+   today's date).
+6. **If GENERAL blocked the file** (step 4), it already committed and
+   pushed the `blocked` status change and its `docs/AUTOPILOT_LOG.md`
+   entry — skip steps 6–7 below, go straight to step 8/9 and report the
+   block.
+7. Otherwise, update that file's row in `docs/PROCESSING_STATUS.md` to
+   `done`, set `Last Processed`, and link the relevant
+   `docs/BUG_CATALOG.md` subsection.
+8. **Processed commit, then push.** `git add --` the target file, its
    header (only if changed), the new/updated test file,
    `docs/PROCESSING_STATUS.md`, and `docs/BUG_CATALOG.md`. Commit
    message: `Isearch2 cleanup: processed <file> — N bugs fixed, tests
    added`. Push: `git push origin cleanup/isearch2`.
-8. **Stop.** Do not proceed to another file in this same invocation,
+9. **Stop.** Do not proceed to another file in this same invocation,
    even if there are more pending rows.
-9. Report back: which file was processed, bugs found/fixed, tests
-   added, compile/sanitizer status, and both commit hashes.
+10. Report back: which file was processed (or blocked, and why), bugs
+    found/fixed, tests added, compile/sanitizer status, and both commit
+    hashes.
