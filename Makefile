@@ -337,3 +337,41 @@ tests-asan: $(TEST_OBJS_ASAN)
 	echo "Report saved to $$REPORT"
 
 .PHONY: tests tests-asan
+
+#
+# Isearch2 cleanup: integration smoke test (see CLAUDE.md)
+#
+# Unlike `tests`/`tests-asan` above (which only link a growing subset of
+# engine sources, TEST_ENGINE_SRCS), this builds the REAL production
+# binaries -- the full tree, processed and not-yet-processed files
+# together -- and exercises them the way an actual user would: index a
+# real corpus, then confirm each document is actually findable by
+# search. Complements the unit tests; doesn't replace them. Manual/
+# on-demand only -- not run automatically by /process-next or
+# /process-5.
+#
+# NB: `grep` in this environment is `ugrep`, which silently treats some
+# of the sample FGDC-metadata .txt files as binary and skips them
+# unless given `-a`/`--text` -- hence the `-a` below. Don't drop it.
+SMOKE_DB := /tmp/ISEARCH_SMOKE
+
+smoke-test: isearch isearch-cgi
+	$(RM) -f $(SMOKE_DB).*
+	./bin/Iindex -d $(SMOKE_DB) data/TEXT/*.txt
+	@echo "--- verifying indexed documents are findable ---"
+	@FAIL=0; \
+	for pair in Watersheds:cgia-wswtemp Oceanography:dds10 Dust:dust \
+	            glaciers:glaciers Naval:goes_9_conus; do \
+	  term=$${pair%%:*}; expect=$${pair##*:}; \
+	  out=$$(./bin/Isearch -d $(SMOKE_DB) -t "$$term"); \
+	  if echo "$$out" | grep -aqi "$$expect"; then \
+	    echo "  OK    $$term -> $$expect"; \
+	  else \
+	    echo "  FAIL  $$term -> expected '$$expect' in results, got:"; \
+	    echo "$$out" | sed 's/^/        /'; \
+	    FAIL=1; \
+	  fi; \
+	done; \
+	exit $$FAIL
+
+.PHONY: smoke-test

@@ -293,12 +293,34 @@ separate binary, not a re-instrumented overwrite of the first — and
 either target only recompiles what actually changed since its own last
 run of that same target.
 
+## SMOKE TEST — whole-tree integration check, `make smoke-test`
+
+`make tests`/`make tests-asan` only ever link a growing *subset* of
+engine sources (`TEST_ENGINE_SRCS`) — they never exercise the real
+production build or the actual indexer/search CLI. `make smoke-test`
+does: it builds `isearch`/`isearch-cgi` (the real `bin/Iindex`,
+`bin/Isearch`, etc., from the full tree exactly as it sits on disk —
+processed and not-yet-processed files together), indexes the sample
+corpus at `data/TEXT/`, and confirms each of the 5 sample documents is
+actually findable by a real search query. This is the check that would
+catch, e.g., a header signature subtly wrong in a way isolated unit
+tests can't see because they don't link the whole tree together.
+
+Complements the unit tests, doesn't replace them. **Manual/on-demand
+only** — nothing in `/process-next` or `/process-5` runs this
+automatically; invoke `/smoke-test` yourself whenever you want that
+broader confidence (e.g. after a batch, or before opening a PR). See
+the `smoke-test` target in the `Makefile` (right after `tests-asan`)
+for the exact mechanics, and `.claude/commands/smoke-test.md` for how
+to interpret a failure.
+
 ## COMMANDS
 
 Documented here conceptually; the actual invokable slash commands live
 in `.claude/commands/` (see the files provided alongside this one) so
 you can type `/analyze`, `/process-next`, `/process <filename>`,
-`/process-5`, and `/sync-upstream` directly in the Claude Code tab.
+`/process-5`, `/sync-upstream`, and `/smoke-test` directly in the
+Claude Code tab.
 
 - **ANALYZE** — ensures branch + baseline (see GIT), scans `src/`,
   `doctype/`, `Isearch-cgi/`; builds a `#include` dependency graph;
@@ -331,6 +353,11 @@ you can type `/analyze`, `/process-next`, `/process <filename>`,
   `cleanup/isearch2`, tags the sync point, and reruns ANALYZE so newly
   merged files get queued immediately rather than sitting untracked (as
   happened after the `49e7b2d` merge before this command existed). Not
+  run automatically by anything else — invoke it deliberately.
+- **SMOKE-TEST** — see SMOKE TEST above. Builds the real production
+  binaries and verifies indexing + search actually work against the
+  sample corpus. Read-only with respect to the cleanup tree itself (no
+  commits, no status updates) — it's a check, not a pipeline step. Not
   run automatically by anything else — invoke it deliberately.
 
 When you're ready to hand the cleaned-up branch to your colleague for

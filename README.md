@@ -57,10 +57,15 @@ make install INSTALL=/your/bin/path
 
 ## Quick start (local smoke test)
 
-Index sample files and run a query:
+`make smoke-test` builds `isearch`/`isearch-cgi`, indexes the sample
+corpus, and verifies each document is actually findable by search —
+see CLAUDE.md for what it checks.
+
+To do it by hand instead (note: the sample `.txt` files live under
+`data/TEXT/`, not directly in `data/`):
 
 ```bash
-./bin/Iindex -d /tmp/ISEARCH_SMOKE ./data/*.txt
+./bin/Iindex -d /tmp/ISEARCH_SMOKE ./data/TEXT/*.txt
 ./bin/Isearch -d /tmp/ISEARCH_SMOKE dust
 ```
 
