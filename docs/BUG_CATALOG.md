@@ -1229,3 +1229,50 @@ than deferring), all bugs below were found and fixed in
 
 Also modernized throughout `marclib.cxx`: every code-position `NULL` →
 `nullptr` (comments describing "returns NULL" behavior left as prose).
+
+## src/md5.hxx
+
+Classic public-domain MD5 (RFC 1321) implementation by Colin Plumb,
+1993; `src/md5sum.cxx` (Order 146, still pending) is this tree's only
+current caller, and only through the opaque `MD5Init`/`MD5Update`/
+`MD5Final` trio — nothing external touches `MD5Context`'s fields or
+calls `MD5Transform` directly, which is what made fixing `uint32`
+in-place safe without a header-signature stop-and-ask: no caller's
+visible contract changes, only this header's own internal (and
+currently wrong) implementation detail.
+
+1. **`uint32` was 64 bits wide on this platform, not 32** — typedef'd
+   from `unsigned long`, correct on the 32-bit-`long` platforms this
+   file targeted in 1993 (with a `__alpha` carve-out for one of the
+   first 64-bit exceptions of that era), but every 64-bit Unix/Linux
+   target this tree actually builds on today uses the LP64 model, where
+   `long` is 64 bits too — so the 1990s heuristic now picks the wrong
+   branch everywhere. This broke two separate things at once: (a) MD5's
+   bit-rotation macro (`w<<s | w>>(32-s)`) no longer wraps at the
+   32-bit boundary the algorithm requires, silently producing
+   non-standard digests; (b) `MD5Transform`'s `(uint32*)ctx->in` cast,
+   meant to view the 64-byte `in` buffer as 16 32-bit words, instead
+   reads/writes 16 *8*-byte words — 128 bytes into a 64-byte buffer.
+   Confirmed real two ways: `sizeof(uint32)` was 8 on this platform, and
+   a standalone repro running `MD5Init`/`MD5Update`/`MD5Final` crashed
+   under ASan with a stack-buffer-overflow at the `MD5Transform` write.
+   Fixed by using the real fixed-width `uint32_t` from `<stdint.h>`
+   instead of guessing from platform macros. See `BUGFIX #1` in source.
+   Verified fixed two ways: the same repro now runs clean under
+   ASan+UBSan, and — more importantly, since a memory-safe wrong answer
+   is still wrong — a standalone repro checking all 7 RFC 1321 test
+   vectors (`MD5("") == d41d8cd9...`, `MD5("abc") == 900150983c...`,
+   etc.) now matches every one exactly; before the fix these were never
+   checked anywhere in this tree; `sizeof(struct MD5Context)` also
+   correctly reports 88 now (was 112).
+
+2. **`MD5Final`'s scrub-on-completion cleared 8 bytes, not the whole
+   context** — `memset(ctx, 0, sizeof(ctx))`, but `ctx` is a
+   `struct MD5Context *`; `sizeof(ctx)` is the pointer's size, not the
+   88-byte struct it points to. The comment right there ("In case it's
+   sensitive") states the intent plainly — this line has never actually
+   fulfilled it. GCC's `-Wsizeof-pointer-memaccess` already flags this
+   exact mistake. Confirmed real with a standalone repro: after
+   `MD5Final`, `memcmp`ing the whole context against a zeroed buffer of
+   the same size failed before the fix, succeeded after. Fixed by
+   changing to `sizeof(*ctx)`. See `BUGFIX #2` in source.

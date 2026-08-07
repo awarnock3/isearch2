@@ -144,7 +144,14 @@ void MD5Final(unsigned char digest[16], struct MD5Context *ctx)
     MD5Transform(ctx->buf, (uint32 *) ctx->in);
     byteReverse((unsigned char *) ctx->buf, 4);
     memcpy(digest, ctx->buf, 16);
-    memset(ctx, 0, sizeof(ctx));	/* In case it's sensitive */
+    // BUGFIX #2: ctx is a `struct MD5Context *`, so `sizeof(ctx)` was
+    // the size of the pointer (8 bytes), not the struct it points to
+    // -- this scrub-on-completion step (per its own comment, for
+    // sensitive data) was clearing only the first 8 of the context's
+    // ~24-88 bytes, not the whole thing. GCC already flags this class
+    // of mistake (-Wsizeof-pointer-memaccess). See
+    // docs/BUG_CATALOG.md#srcmd5hxx.
+    memset(ctx, 0, sizeof(*ctx));	/* In case it's sensitive */
 }
 
 #ifndef ASM_MD5

@@ -21,7 +21,7 @@
 | 17 | src/hash.hxx | done | 2026-08-06 | [src/hash.hxx](BUG_CATALOG.md#srchashhxx) |
 | 18 | src/idbobj.hxx | done | 2026-08-06 | [src/idbobj.hxx](BUG_CATALOG.md#srcidbobjhxx) |
 | 19 | src/marclib.hxx | done | 2026-08-07 | [src/marclib.hxx](BUG_CATALOG.md#srcmarclibhxx) |
-| 20 | src/md5.hxx | pending | | |
+| 20 | src/md5.hxx | done | 2026-08-07 | [src/md5.hxx](BUG_CATALOG.md#srcmd5hxx) |
 | 21 | src/reclist.hxx | pending | | |
 | 22 | src/conf.h | pending | | |
 | 23 | src/confwin.h | pending | | |
