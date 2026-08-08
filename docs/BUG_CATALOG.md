@@ -3523,3 +3523,53 @@ comments, including a note on `Find()`'s incomplete
 `fields[FieldIndex].Find(Key,Relation)` call (also left commented out
 by the original author — `Find()` currently always returns 1 once
 `Attribute` matches a loaded field, regardless of `Key`/`Relation`).
+
+## src/nlatlon.cxx
+
+Two free functions, `ParseLatToNum`/`ParseLonToNum`, that parse a
+`"12.5N"`/`"98.2W"`-style term into a latitude/longitude double. Like
+the previous two files this batch (`src/nfldmgr.cxx`,
+`src/nlatlon.cxx` itself), neither has any caller anywhere in the
+current tree and neither is in `src/Makefile`'s production `OBJ` list
+— dead code, still processed per the standard pipeline.
+
+1. **Leak on the invalid-character early return, in both functions** —
+   each function `new[]`s a scratch accumulator buffer, then loops over
+   the input string; any character outside the recognized set (digits,
+   `.`, `-`, and `N`/`S` for latitude or `E`/`W` for longitude) returns
+   immediately without freeing it. The success path *does* free it
+   (`delete [] accum;` right before the final range check), so only the
+   malformed-input path leaked. Confirmed with a real before/after ASan
+   comparison: reverting the fix and re-running just this file's tests
+   reproduced a clean leak report —
+   ```
+   Direct leak of 2 byte(s) in 1 object(s) allocated from:
+       ... in ParseLatToNum(char*) src/nlatlon.cxx:83
+   Direct leak of 2 byte(s) in 1 object(s) allocated from:
+       ... in ParseLonToNum(char*) src/nlatlon.cxx:152
+   ```
+   — restoring the fix (add `delete [] accum;` immediately before each
+   early `return`) made it disappear. `BUGFIX #1` (`ParseLatToNum`) and
+   `BUGFIX #2` (`ParseLonToNum`) in source.
+2. **`isdigit()` called on a plain, possibly-signed `char`** — undefined
+   behavior per the C standard for any value not representable as
+   `unsigned char` or equal to `EOF`; a byte with the high bit set
+   (non-ASCII/extended input) triggers this. Not confirmed to
+   misbehave on this platform's libc, but a standard, free hardening
+   fix. Fixed by casting to `unsigned char` before the call, in both
+   functions. `BUGFIX #3` in source.
+
+Also corrected a stale doc comment: `ParseLonToNum`'s header comment
+claimed "Errors are returned as -999," but the actual `LonERROR` macro
+(`nlatlon.hxx`) is `-99.0`, matching `LatERROR` — the comment was
+simply wrong, not a behavioral bug (a real error return has always
+been `-99.0`).
+
+Covered by `tests/src/test_nlatlon.cxx`: normal signed/hemisphere-
+suffixed parses for both functions, out-of-range magnitudes, the
+invalid-character leak regression (verified leak-free under `make
+tests-asan`, `BUGFIX #1`/`#2`), and a high-bit-set byte not crashing
+(`BUGFIX #3`).
+
+No live `NULL`/`sprintf` usage to modernize. Added file-level and
+per-function doc comments.

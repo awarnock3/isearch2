@@ -42,6 +42,13 @@ Description:	Utility functions for longitude and latitude
 Author:		Archie Warnock (warnock@awcubed.com), A/WWW Enterprises
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+// Free functions with no callers anywhere in the current tree, and
+// nlatlon.o isn't in src/Makefile's production OBJ list either -- dead
+// code, though still processed per the standard pipeline.
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -84,7 +91,10 @@ double ParseLatToNum(char *Term)
   while (Term[i] != '\0') {
     if (Term[i] == '-')
       sign = -1.0;
-    else if (isdigit(Term[i])) {
+    // BUGFIX #3: isdigit() is only defined for values representable as
+    // unsigned char (or EOF); passing a plain (possibly signed) char
+    // with the high bit set is undefined behavior. Cast explicitly.
+    else if (isdigit((unsigned char)Term[i])) {
       tmpnum[0] = Term[i];
       strcat(accum,tmpnum);
     }
@@ -96,8 +106,14 @@ double ParseLatToNum(char *Term)
       sign = 1.0;
     else if ((Term[i] == 'S') || (Term[i] == 's'))
       sign = -1.0;
-    else
+    else {
+      // BUGFIX #1: this early return used to skip freeing `accum`,
+      // leaking it on every input containing a character outside
+      // [-0-9.NnSs] (confirmed via a standalone leak check before
+      // fixing; see docs/BUG_CATALOG.md#srcnlatloncxx).
+      delete [] accum;
       return(LatERROR);
+    }
     i++;
   }
   value = atof(accum);
@@ -127,7 +143,8 @@ DESCRIPTION
        suffixed with "E" and "W".  Negative longitudes will be assumed
        to be the same as west longitudes.
 
-       Errors are returned as -999.
+       Errors are returned as -99 (LonERROR in nlatlon.hxx; this
+       comment previously said -999, which doesn't match the macro).
 */
 
 double ParseLonToNum(char *Term)
@@ -148,7 +165,8 @@ double ParseLonToNum(char *Term)
   while (Term[i] != '\0') {
     if (Term[i] == '-')
       sign = -1.0;
-    else if (isdigit(Term[i])) {
+    // BUGFIX #3: see the identical fix in ParseLatToNum above.
+    else if (isdigit((unsigned char)Term[i])) {
       tmpnum[0] = Term[i];
       strcat(accum,tmpnum);
     }
@@ -160,8 +178,12 @@ double ParseLonToNum(char *Term)
       sign = 1.0;
     else if ((Term[i] == 'W') || (Term[i] == 'w'))
       sign = -1.0;
-    else
+    else {
+      // BUGFIX #2: same leak-on-early-return as ParseLatToNum's
+      // BUGFIX #1, same fix.
+      delete [] accum;
       return(LonERROR);
+    }
     i++;
   }
   value = atof(accum);
