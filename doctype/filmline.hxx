@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		filmline.hxx
 Version:	1.00
@@ -15,7 +18,11 @@ Copyright:	Basis Systeme netzwerk, Munich
 #endif
 #include "medline.hxx"
 
-// Filmline v 1.x Interchange format
+// Filmline v 1.x Interchange format. Record splitting and field
+// parsing are entirely inherited from MEDLINE; FILMLINE only
+// customizes UnifiedName() (mapping Filmline's own two-letter field
+// codes, e.g. "DI" for director, onto the shared Medline field-parser
+// hooks) and Present() (a brief-headline composer for BRIEF_MAGIC).
 class FILMLINE :  public MEDLINE {
 public:
 	FILMLINE(PIDBOBJ DbParent);

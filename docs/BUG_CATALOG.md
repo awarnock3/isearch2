@@ -4529,3 +4529,68 @@ non-`"B"` element set returning the *original* file's real contents
 tests-asan`); and `Present()` not crashing when the target file is
 missing.
 
+## doctype/filmline.cxx
+
+`class FILMLINE` (`: public MEDLINE`) is the Filmline v1.x document
+type — record splitting and field parsing are entirely inherited from
+`MEDLINE`; this file only customizes `UnifiedName()` (mapping
+Filmline's own two-letter field codes onto the shared Medline
+field-parser hooks) and `Present()` (a brief-headline composer). One
+real bug, and it's severe: a 100%-reliable, always-reachable
+null-pointer-dereference crash.
+
+1. **`Present()`'s `BRIEF_MAGIC` ("B") branch crashed whenever the
+   primary title field was empty** — when `UnifiedName("TI")`'s
+   (`"title_true"`) lookup came back empty, the code fell back to
+   `Tag = UnifiedName("TO");` — but `"TO"` is not one of
+   `UnifiedName()`'s recognized field codes at all (its table has no
+   such entry; only `"TI"`/`"TE"`/`"TU"`/`"SH"` among the title-ish
+   codes), so this call always returned `nullptr`. The very next line,
+   `Tag = <that nullptr>;`, invokes `STRING::operator=(const CHR*)`,
+   which calls `strlen()` on its argument unconditionally — a
+   null-pointer-dereference crash, with no guard anywhere in between.
+   Confirmed with a real repro: a plain `FILMLINE` object backed by a
+   default (no-op) `TESTIDBOBJ` — whose `GetFieldData()` never finds
+   anything, so the primary `"TI"` lookup is unconditionally empty —
+   segfaults on every single call to `Present(result, "B", &out)`, no
+   contrived edge case needed:
+   ```
+   FILMLINE::Present element set B does not crash when the title field is empty
+   tests/doctype/test_filmline.cxx:60: FAILED:
+   due to a fatal error condition:
+     SIGSEGV - Segmentation violation signal
+   ```
+   confirmed via a before-fix standalone run of just this test case
+   (the SIGSEGV terminated the whole test binary, not just this one
+   `TEST_CASE`, cutting the surviving suite from ~550 down to 61 test
+   cases). Fixed by capturing `UnifiedName("TO")`'s result in a local
+   `const CHR*` first and only assigning it to `Tag` (and calling
+   `DOCTYPE::Present()` with it) when it's non-null — the comment
+   right above this code already says "Should not really happen,"
+   confirming a silent no-fallback skip (leaving `Title` empty, same
+   as if the whole `if` block weren't there) was always the intended
+   behavior for the case where no better title can be found, not a
+   guaranteed crash. `BUGFIX #1` in source.
+
+Also documented, not changed: `UnifiedName()`'s field-code table is
+commented `/* Sorted List! */` but is not actually in alphabetical
+order (e.g. `"LA"` appears before `"KW"`, and `"SS"` is out of its
+alphabetical position among the other `"S*"` codes) — harmless, since
+the lookup is a linear scan (`strcmp` against every entry), not a
+binary search, so correctness never depended on the ordering; noted
+in a doc comment rather than resorting the table (a resort of ~50
+hand-transcribed two-letter codes risked introducing a real
+transcription error for a purely cosmetic fix). `NULL` converted to
+`nullptr` at the one live call site (a `/* NO NULL please! */` comment
+elsewhere refers to not adding a null-terminator sentinel to the table
+array, not the macro, and was left alone). No `sprintf` usage. Added
+class-level and per-function doc comments. `doctype/filmline.cxx`
+added to `TEST_ENGINE_DOCTYPE_SRCS` (`doctype/medline.cxx`, its base
+class, was already linked in from an earlier turn).
+
+`tests/doctype/test_filmline.cxx` covers: `UnifiedName()` mapping known
+Filmline field codes to their unified names and returning `nullptr` for
+an unrecognized code; and `Present()`'s `"B"` element set not crashing
+when the title field is empty (`BUGFIX #1`'s direct regression,
+confirmed via the real before/after SIGSEGV repro described above).
+

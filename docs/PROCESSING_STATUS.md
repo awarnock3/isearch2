@@ -86,7 +86,7 @@
 | 82 | doctype/fgdc.hxx | done | 2026-08-08 | [doctype/fgdc.hxx](BUG_CATALOG.md#doctypefgdccxx) |
 | 83 | doctype/fgdcsite.hxx | done | 2026-08-08 | [doctype/fgdcsite.hxx](BUG_CATALOG.md#doctypefgdcsitecxx) |
 | 84 | doctype/filename.hxx | done | 2026-08-08 | [doctype/filename.hxx](BUG_CATALOG.md#doctypefilenamecxx) |
-| 85 | doctype/filmline.hxx | pending | | |
+| 85 | doctype/filmline.hxx | done | 2026-08-08 | [doctype/filmline.hxx](BUG_CATALOG.md#doctypefilmlinecxx) |
 | 86 | doctype/firstline.hxx | pending | | |
 | 87 | doctype/ftp.hxx | pending | | |
 | 88 | doctype/gils.hxx | pending | | |
@@ -201,7 +201,7 @@
 | 197 | doctype/fgdc.cxx | done | 2026-08-08 | [doctype/fgdc.cxx](BUG_CATALOG.md#doctypefgdccxx) |
 | 198 | doctype/fgdcsite.cxx | done | 2026-08-08 | [doctype/fgdcsite.cxx](BUG_CATALOG.md#doctypefgdcsitecxx) |
 | 199 | doctype/filename.cxx | done | 2026-08-08 | [doctype/filename.cxx](BUG_CATALOG.md#doctypefilenamecxx) |
-| 200 | doctype/filmline.cxx | pending | | |
+| 200 | doctype/filmline.cxx | done | 2026-08-08 | [doctype/filmline.cxx](BUG_CATALOG.md#doctypefilmlinecxx) |
 | 201 | doctype/firstline.cxx | pending | | |
 | 202 | doctype/ftp.cxx | pending | | |
 | 203 | doctype/gils.cxx | pending | | |
