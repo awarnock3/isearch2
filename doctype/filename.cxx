@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*
 
 File:        filename.cxx
@@ -13,17 +16,18 @@ Author:      Erik Scott, Scott Technologies, Inc.
 FILENAME::FILENAME(PIDBOBJ DbParent) : DOCTYPE(DbParent) {
 }
 
+// Iindex can only index text it can get a file pointer to, so this
+// writes the record's own filename out to a sibling "<name>.fn" file
+// and indexes *that* file instead of the original -- a search then
+// matches records by filename rather than content. Removed here:
+// unused `GPTYPE Start/Position/Pos;` locals and a `static int
+// gdb_tester;`, none of which were ever read or written anywhere in
+// this function -- surfaced by -Wunused-variable while bringing this
+// file to a clean -Wall -Wextra build for the first time.
 void FILENAME::ParseRecords(const RECORD& FileRecord) {
-
-
-  GPTYPE Start = 0;
-  GPTYPE Position = 0;
-  GPTYPE Pos = 0;
 
   STRING Fn;
   FileRecord.GetFullFileName (&Fn);
-  static int gdb_tester;
-  
 
   // Now we know the filename.  Make a "filename.fn" filename, and write
   // the file name into that file?  Make sense?  Of course not.  Here's
@@ -45,7 +49,7 @@ void FILENAME::ParseRecords(const RECORD& FileRecord) {
   // file name in there, and close up that file.
 
   FILE *fnfp = fopen(newfilename,"wb");
-  if (fnfp == NULL) {
+  if (fnfp == nullptr) {
     cout << "Cannot write file " << newfilename << ", bailing out.\n";
     return; // leaking all the way...
   }
@@ -90,6 +94,10 @@ void FILENAME::ParseRecords(const RECORD& FileRecord) {
 }
 
 
+// ElementSet "B" returns the record's raw indexed data (the filename
+// text written to the "<name>.fn" sibling file by ParseRecords()
+// above); anything else strips the ".fn" suffix back off and returns
+// the *original* file's contents instead.
 void FILENAME::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 		       STRING* StringBufferPtr) {
   *StringBufferPtr = "";
@@ -110,6 +118,14 @@ void FILENAME::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 
   // First, let's get the (eh, "amended") filename...
 
+  // Documented, not changed: if ".fn" is somehow absent, SearchReverse()
+  // returns 0 and `dotFN - 1` underflows (STRINGINDEX is size_t) to
+  // SIZE_MAX; EraseAfter() bounds-checks its argument against Length
+  // and no-ops rather than crashing, so this degrades to leaving
+  // hackedFN unmodified instead of corrupting it. Not reachable in
+  // practice: every RESULT of this DOCTYPE was indexed via
+  // ParseRecords() above, which always appends ".fn" before calling
+  // Db->DocTypeAddRecord().
   STRING hackedFN;
   ResultRecord.GetFullFileName(&hackedFN);
   STRINGINDEX dotFN = hackedFN.SearchReverse(".fn");
@@ -180,7 +196,15 @@ void FILENAME::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 
   RecBuffer[ActualLength]='\0';  // NULL-terminate the buffer for strfns
 
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypefilenamecxx): RecBuffer was
+  // never freed after this assignment. STRING::operator=(const CHR*)
+  // copies the bytes into the STRING's own internal buffer (it doesn't
+  // take ownership of RecBuffer), so every successful "F"-element-set
+  // call leaked the whole file buffer -- same bug shape as
+  // doctype/bibtex.cxx's BUGFIX #1 and doctype/emacsinfo.cxx's
+  // BUGFIX #1.
   *StringBufferPtr = RecBuffer;
+  delete [] RecBuffer;
 
 }
 

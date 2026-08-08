@@ -4477,3 +4477,55 @@ it isn't reachable from an external test without a friend/subclass
 workaround, which wasn't judged worth adding for a straightforward
 linear name-search function.
 
+## doctype/filename.cxx
+
+`class FILENAME` (`: public DOCTYPE`) indexes a file by its *filename*
+rather than its content: since Iindex can only index text it can get a
+file pointer to, `ParseRecords()` writes the record's own filename out
+to a sibling `"<name>.fn"` file and indexes that instead, so a search
+matches records whose filename contains the query term. A small,
+self-contained file — one real bug (a leak on every successful
+"return-the-real-file" read) plus some dead-code cleanup.
+
+1. **`Present()` leaked the whole file buffer on every non-`"B"`
+   element-set call** — `RecBuffer` (allocated to hold the original
+   file's contents once the `".fn"` suffix is stripped back off) was
+   assigned into `*StringBufferPtr` via `STRING::operator=(const
+   CHR*)`, which copies the bytes into the `STRING`'s own internal
+   buffer rather than taking ownership of `RecBuffer` — so `RecBuffer`
+   itself was never freed. Same bug shape as `doctype/bibtex.cxx`'s
+   `BUGFIX #1` and `doctype/emacsinfo.cxx`'s `BUGFIX #1`. Fixed by
+   adding `delete [] RecBuffer;` right after the assignment. Confirmed
+   leak-free under `make tests-asan`. `BUGFIX #1` in source.
+
+Also fixed while bringing this file to a clean `-Wall -Wextra` build
+for the first time: removed `ParseRecords()`'s three unused `GPTYPE
+Start/Position/Pos;` locals and a `static int gdb_tester;`, none of
+which were ever read or written anywhere in the function. `NULL`
+converted to `nullptr` at the one live call site (a "NULL-terminate"
+comment elsewhere is English prose about NUL-termination, not the
+macro, and was left alone). Also documented, not changed: `Present()`'s
+`hackedFN.SearchReverse(".fn")` returns `0` if `".fn"` is somehow
+absent, and the following `EraseAfter(dotFN - 1)` would underflow
+(`STRINGINDEX` is `size_t`) to `SIZE_MAX` — but `EraseAfter()` itself
+bounds-checks its argument against `Length` and no-ops rather than
+crashing, and every `RESULT` of this `DOCTYPE` was indexed via
+`ParseRecords()` above, which always appends `".fn"` before calling
+`Db->DocTypeAddRecord()` — so this is provably unreachable in practice,
+not a live bug. `doctype/filename.cxx` added to
+`TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_filename.cxx` covers: `ParseRecords()` actually
+writing the `".fn"` sibling file and calling
+`Db->DocTypeAddRecord()` with a filename ending in `".fn"`;
+`Present()`'s `"B"` element set returning the indexed filename text
+(exercised directly, unlike most other `doctype/` tests' `"B"`/`"F"`
+paths — `RESULT::GetRecordData()` only crashes when `fopen()` fails on
+an empty/invalid path, and pointing a real `SetPathName()`/
+`SetFileName()`/`SetRecordStart()`/`SetRecordEnd()`-populated `RESULT`
+at a real file avoids that path entirely); `Present()` with a
+non-`"B"` element set returning the *original* file's real contents
+(`BUGFIX #1`'s direct regression, confirmed leak-free under `make
+tests-asan`); and `Present()` not crashing when the target file is
+missing.
+
