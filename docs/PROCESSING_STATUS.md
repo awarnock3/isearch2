@@ -69,7 +69,7 @@
 | 65 | src/vidb.hxx | done | 2026-08-08 | [src/vidb.hxx](BUG_CATALOG.md#srcvidbhxx) |
 | 66 | Isearch-cgi/cgi-util.hxx | done | 2026-08-08 | [Isearch-cgi/cgi-util.hxx](BUG_CATALOG.md#isearch-cgicgi-utilhxx) |
 | 67 | src/marc.hxx | done | 2026-08-08 | [src/marc.hxx](BUG_CATALOG.md#srcmarchxx) |
-| 68 | doctype/medline.hxx | pending | | |
+| 68 | doctype/medline.hxx | done | 2026-08-08 | [doctype/medline.hxx](BUG_CATALOG.md#doctypemedlinehxx) |
 | 69 | src/nfldmgr.hxx | pending | | |
 | 70 | src/nlatlon.hxx | pending | | |
 | 71 | src/stopword.hxx | pending | | |
@@ -219,7 +219,7 @@
 | 215 | doctype/mailfolder.cxx | done | 2026-08-07 | [doctype/mailfolder.cxx](BUG_CATALOG.md#doctypemailfoldercxx) |
 | 216 | doctype/marcdump.cxx | pending | | |
 | 217 | doctype/markdown.cxx | pending | | |
-| 218 | doctype/medline.cxx | pending | | |
+| 218 | doctype/medline.cxx | done | 2026-08-08 | [doctype/medline.cxx](BUG_CATALOG.md#doctypemedlinehxx) |
 | 219 | doctype/memodoc.cxx | pending | | |
 | 220 | doctype/oneline.cxx | pending | | |
 | 221 | doctype/para.cxx | pending | | |

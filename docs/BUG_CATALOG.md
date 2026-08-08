@@ -3353,3 +3353,94 @@ minimal well-formed MARC record by hand (same byte layout as
 `tests/src/test_marclib.cxx`'s existing helper) and cover a normal
 parse-and-print, the leak regression, a malformed-record case, and the
 long-field word-wrap regression.
+
+## doctype/medline.hxx
+
+`class MEDLINE` parses MEDLINE-format records: lines of the form
+`AB  -value` (a 2-4 letter tag, then a mandatory space/dash separator),
+value continuing across following lines until the next tag. Its
+`ParseFields()` has the exact same shape as `doctype/colondoc.cxx`'s
+(third file this session with this pattern, after
+`doctype/mailfolder.cxx`), and turned out to share the identical
+five-bug family, plus two bugs unique to this file.
+
+1. **File read truncated the last byte of every record** — same as
+   `doctype/colondoc.cxx`'s `BUGFIX #1`: `RecEnd = ftell(fp) - 1;`
+   dropped the file's actual last byte before `fread()` ever saw it.
+   Fixed the same way, by dropping the `- 1`. `BUGFIX #1` in source.
+2. **Trailing-newline exclusion assumed a newline was always there** —
+   same as `doctype/colondoc.cxx`'s `BUGFIX #1b`: an unconditional
+   `val_len = (...) - off - 1;` is wrong for the last field in a file
+   with no trailing `\n`. Fixed by only excluding the byte when
+   `p[-1] == '\n'` is actually true. `BUGFIX #1b` in source.
+3. **Trailing-whitespace trim checked the wrong index** — same as
+   `doctype/colondoc.cxx`'s `BUGFIX #2`: `RecBuffer[val_len +
+   val_start]` checks one byte past the value's actual last character
+   instead of `RecBuffer[val_start + val_len - 1]`, silently chopping a
+   real trailing character off nearly every field. `BUGFIX #2` in
+   source.
+4. **`SetFieldEnd()` stored one byte too many** — same as
+   `doctype/colondoc.cxx`'s `BUGFIX #4`: `fc.SetFieldEnd(val_start +
+   val_len)` is one past the correct inclusive end index. As with
+   `colondoc.cxx`, this `+1` happened to numerically cancel `BUGFIX
+   #2`'s `-1` in the common case, which is why neither was
+   independently noticed; fixed together with `BUGFIX #2` for the same
+   reason documented there. `BUGFIX #4` in source.
+5. **Last-field fallback used the wrong length variable** — same as
+   `doctype/colondoc.cxx`'s `BUGFIX #3`: `p = &RecBuffer[RecLength]`
+   used the buffer's allocated capacity rather than `ActualLength`
+   (bytes actually read); harmless once `BUGFIX #1` keeps them equal,
+   but wrong on a short `fread()`. `BUGFIX #5` in source.
+6. **Unconditional debug `printf()` in `UnifiedName()`** — a stray
+   `printf("Medline:UnifiedName called\n");` fired on every call,
+   unconditionally, including the normal `Present()` path used to
+   build the brief-element headline (three calls per `Present()`, for
+   the `TI`/`SO`/`AU` tags). Since `Present()`'s whole purpose is to
+   write into an HTTP response body via a CGI frontend (see
+   `Isearch-cgi/cgi-util.hxx`'s bug cluster earlier in this file for
+   the general class of problem), this would have interleaved debug
+   spam directly into `stdout`/the response every time a record was
+   presented. Removed. `BUGFIX #6` in source.
+7. **Unsigned-length underflow caused a real heap-buffer-overflow in
+   `parse_tags()`** — `for (i = 0; i < len - 4; i++)`, where `len` is
+   `GPTYPE` (`typedef UINT4 GPTYPE`, unsigned). For any record shorter
+   than 4 bytes, `len - 4` underflows to a huge value, turning both of
+   `parse_tags()`'s scanning loops into reads far past the small
+   allocated buffer. Confirmed with a standalone repro (a 2-byte
+   record) before fixing — the first attempt at timing this repro
+   conflated ~85s of compile time with the run itself and looked like
+   a hang; separating compile and run into two independent steps
+   showed the actual failure is immediate and deterministic, not a
+   hang:
+   ```
+   AddressSanitizer: heap-buffer-overflow doctype/medline.cxx:528 in parse_tags
+   READ of size 1 ... 1 bytes after 3-byte region
+   ```
+   Fixed with an explicit short-record guard before the vulnerable
+   loops:
+   ```cpp
+   if (len < 4) {
+     t[0] = nullptr;
+     return t;
+   }
+   ```
+   `BUGFIX #7` in source. This is the most severe bug in this file —
+   unlike bugs #1-#5, which corrupt field boundaries, this one is a
+   real out-of-bounds read reachable by simply indexing a MEDLINE-type
+   database with a short or malformed record.
+
+Bugs `#1`/`#1b`/`#2`/`#4`/`#5` are covered together by `MEDLINE::
+ParseFields extracts full field values, including the last byte of the
+file` (a file with no trailing newline, checking exact `FC`-derived
+substrings, same approach as the `colondoc.cxx`/`mailfolder.cxx`
+regression tests). `#6` is exercised (not asserted on, since
+`TESTIDBOBJ` doesn't implement `GetFieldData()`) by `MEDLINE::Present
+with the brief element set does not crash`. `#7` is covered by
+`MEDLINE::ParseFields does not overflow on a record too short to hold
+a tag`, which reproduces the original 2-byte-record crash as a
+regression test and was verified against the real, unfixed code path
+(via a temporarily-disabled fix) to confirm it reproduces the exact
+same ASan report shown above before confirming the fix suppresses it.
+
+Modernization: all `NULL` uses converted to `nullptr`. No live
+`sprintf` calls. Added class-level and per-function doc comments.
