@@ -3747,31 +3747,74 @@ No memory safety issues detected.
 
 ## doctype/anzmeta.hxx
 
-1. **strcmp() logic error in ParseFields()** — line 887 (now fixed after cleanup marker added)
-   checked `if (strcmp(*tags_ptr,"/custom"))` without negation. `strcmp()` returns non-zero when
-   strings do NOT match, so this condition was true for every non-"/custom" tag and false only for
-   the "/custom" end tag itself — inverting the intended logic. This caused incorrect handling of
-   custom tags in ANZMETA document parsing, paralleling the same bug found in doctype/anzlic.cxx
-   (BUGFIX #1 there). The fix is to use `!strcmp()`. See `BUGFIX #1` in source.
+`class ANZMETA` (`: public SGMLNORM`) is the ANZLIC/FGDC-derived metadata
+DOCTYPE — a small SGML-tag scanner (`parse_tags()`/`find_end_tag()`,
+shared with `anzlic.cxx`/`cipc.cxx`/`cipp.cxx`) feeding `ParseFields()`,
+which also tracks a stack of currently-open fields (`Nested`) to build
+compound names for anything nested inside a `<custom>` field. Reprocessed
+after its original turn's tests turned out not to actually link against
+this file at all (see the `Makefile` note below) — a fresh read surfaced
+two more real bugs beyond the one already fixed.
 
-### Modernization
+1. **`strcmp()` logic error in `ParseFields()`'s closing-tag handling** —
+   `if (strcmp(*tags_ptr,"/custom"))` was missing the negation: `strcmp()`
+   returns non-zero when strings do *not* match, so this ran the
+   Nested-popping logic for every closing tag *except* "/custom", and ran
+   `InCustom=GDT_FALSE` only for "/custom" itself — both backwards. Same
+   defect class as `doctype/anzlic.cxx`'s `BUGFIX #1`. Fixed by using
+   `!strcmp()`. `BUGFIX #1` in source.
+2. **`Nested.Top()` called with no `GetSize()!=0` guard, then immediately
+   dereferenced** — reached whenever a "/custom" closing tag is seen.
+   Not just a malformed-input edge case: opening a `<custom>` field sets
+   `InCustom=GDT_TRUE` *before* the `!InCustom` check that would
+   otherwise `Nested.Push()` it (custom content is deliberately excluded
+   from indexing), so `Nested` is still empty by the time `</custom>` is
+   reached even for a simple, well-formed `<custom>text</custom>` field —
+   every real use of this field crashed, not just malformed records.
+   Confirmed with a standalone repro (a record containing only
+   `</custom>`) before fixing: `AddressSanitizer: SEGV ... in
+   ANZMETA::ParseFields, doctype/anzmeta.cxx:902` (a null-pointer
+   dereference via `STRING::Equals` on a null `this`). Fixed by guarding
+   with `Nested.GetSize() != 0`, the same pattern already used for the
+   second `Nested.Top()` call a few lines below. `BUGFIX #2` in source.
+3. **`pTag` (`new ZMD_Element()`) leaked on two paths** — allocated
+   unconditionally per tag, but only ever freed via `Nested.Push()` plus
+   a later `Pop()`/`delete`; both the "unclassified tag" `continue` and
+   the `InCustom` (inside a `<custom>` field) case skipped that push,
+   leaking one `ZMD_Element` — plus its two `STRING` members — per
+   skipped or custom-nested tag. Confirmed via a before/after
+   AddressSanitizer leak-detector comparison on the `BUGFIX #2`
+   regression tests (a `<custom>` field is exactly the `InCustom=true`
+   leak case): `AddressSanitizer: 156 byte(s) leaked in 6 allocation(s)`
+   before the fix, clean after. Fixed by moving the allocation from the
+   top of the tag-pair branch to immediately before its first real use,
+   inside the `!InCustom` block — a skipped tag now never allocates one
+   at all. `BUGFIX #3` in source.
 
-- Replaced all `NULL` with `nullptr` throughout .cxx file (29 replacements total across strtok,
-  pointer comparisons, and casts).
-- Added file-level doc comment to mark cleanup completion.
-- Fixed missing parent class include (`sgmlnorm.hxx`) in `anzmeta.hxx` to ensure header
-  self-containment (discovered during test compilation).
+Modernization: all `NULL` uses converted to `nullptr` throughout (29
+call sites: `strtok`, pointer comparisons, casts). Restored the missing
+`sgmlnorm.hxx` include in `anzmeta.hxx` for header self-containment
+(`ANZMETA : public SGMLNORM` used the base class without including its
+definition). Removed two now-genuinely-dead locals surfaced by bringing
+this file to a clean `-Wall -Wextra` build for the first time: `Left` in
+`ParseExtent()` (declared, never used) and `LastEnd` (written every
+iteration, but its only read lived in an inert
+`if (Nested.GetSize() != 0) { pTmp = Nested.Top(); }` block that computed
+a value and threw it away — removed both together).
 
-### Tests
-
-Created `tests/doctype/test_anzmeta.cxx` with 12 test cases covering:
-- Header constant definitions (ANZ_ACCEPT_EMPTY_TAGS, MAXNESTINGLEN, BRIEF_MAGIC) — 3 sub-tests
-- File extension constants (standard, short, and uppercase variants) — 18 sub-tests
-- ZMD_Element class operations (set/get tag, start, end positions, array operations) — 4 sub-tests
-- ANZMETA type definitions and string buffer operations — 2 sub-tests
-
-All tests pass under plain compilation and AddressSanitizer/UndefinedBehaviorSanitizer.
-No memory safety issues detected.
+Also fixed, this turn: `doctype/anzmeta.cxx` was missing from
+`TEST_ENGINE_DOCTYPE_SRCS` in the top-level `Makefile`. That meant this
+file's original turn could never actually have linked a test against a
+real `ANZMETA` method — which is exactly why `BUGFIX #2` and `#3` went
+undetected then: nothing had ever called the real `ParseFields()` under
+test, plain or ASan. Added it. `tests/doctype/test_anzmeta.cxx` now
+covers: `ParseFields` not crashing on a stray unmatched `/custom` closing
+tag (`BUGFIX #2`'s standalone repro) and on a well-formed
+`<custom>text</custom>` field (the realistic case, same root cause); a
+`<custom>` field followed by a real field not crashing or hanging
+(`BUGFIX #1`); plus the pre-existing header-constant and `ZMD_Element`
+accessor checks. All pass under plain compilation and
+AddressSanitizer/UndefinedBehaviorSanitizer, leak detector clean.
 
 ## doctype/doc_conf.hxx
 
@@ -4938,4 +4981,61 @@ though the leak itself isn't independently observable via a `REQUIRE`
 since `LeakSanitizer` doesn't track file descriptors); `"B"` falling
 back to the record's filename when there is no `.cap` file; and `"F"`
 returning the raw record data.
+
+## doctype/html.cxx
+
+`class HTML` (`: public SGMLNORM`) is a WWW HTML DOCTYPE. Tag scanning
+itself (`parse_tags()`/`find_end_tag()`/`store_attributes()`) is
+entirely inherited from `SGMLNORM`, already reviewed on its own turn —
+this file only adds HTML-specific tag filtering (`IgnoreHTMLTag()`, or
+`IsHTMLFieldTag()`'s allowlist if `STRICT_HTML` is defined) and a
+hand-rolled fallback for HTML's common "minimized tag" idioms
+(`<DD>`/`<DT>`/`<LI>`/`<TL>` used without a matching close). One real
+bug — the same error-path resource leak shape already found in
+`doctype/gils.cxx` and `doctype/gopher.cxx` this batch.
+
+1. **`ParseFields()` leaked the open file handle on an `fseek()`
+   failure** — after a successful `fopen()`, `if (-1 == fseek(fp,
+   (long)RecStart, SEEK_SET)) goto error;` jumped to a shared `error:`
+   label whose body is just `cout << ...; return;` — correct for the
+   *other* jump to that same label (where `fp == nullptr`, so there's
+   nothing to close) but wrong for this one, where `fp` is a real, open
+   handle. Same leaked-resource-on-early-return shape as
+   `doctype/gils.cxx`'s `BUGFIX #1` and `doctype/gopher.cxx`'s
+   `BUGFIX #1`, and the same "the shared label can't be fixed once for
+   both call sites" wrinkle already seen in `doctype/gils.cxx`. Fixed
+   by adding `fclose(fp);` at this specific call site, right before the
+   `goto error;`. Not forced via a real repro (would need a
+   non-seekable stream on an already-`fopen()`'d handle, and
+   `LeakSanitizer` doesn't track file descriptors regardless). `BUGFIX
+   #1` in source.
+
+Also fixed while bringing this file to a clean `-Wall -Wextra` build
+(checked under both the default configuration and `-DSTRICT_HTML=1`,
+since `IsHTMLFieldTag()`'s `#if STRICT_HTML`-gated body is genuinely
+compilable, real code, not permanently dead like `ParseRecords()`'s
+`#if 1`/`#else` — see below): an unused `mdType` parameter in
+`GetMetadata()` (unnamed in the `.cxx`, matching the established
+convention for a required-but-unused parameter). `NULL` converted to
+`nullptr` at all 14 live call sites, including inside the
+`STRICT_HTML`-gated code and the several `static const char* const
+tags[] = {...}` sentinel-terminated local arrays in the DD/DT/LI/TL
+fallback. Not modernized: `ParseRecords()`'s `#else` branch (disabled
+by a hardcoded `#if 1`, so it's never actually compiled by any build
+configuration, unlike `STRICT_HTML`'s real off-by-default flag) is
+abandoned work per its own `/* DOES NOT WORK, Why? */` comment — left
+alone as genuinely dead code, matching the session's established
+"genuinely commented-out code stays untouched" convention. Added
+class-level and per-function doc comments. `doctype/html.cxx` added to
+`TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_html.cxx` covers: `ParseFields()` extracting a
+simple `<TAG>value</TAG>` pair as a field; not indexing a tag on
+`IgnoreHTMLTag()`'s list (`<P>`); correctly handling a minimized
+`<DD>` list with no matching `</DD>` via the "look for the next
+`<DT>`/`</DL>`" fallback, without crashing; and `Present()`'s `"B"`
+element set not crashing (full field-lookup behavior needs a live
+`IDBOBJ::GetFieldData()`, out of scope for this DOCTYPE's own test —
+`Present()` itself is a thin wrapper around inherited
+`SGMLNORM::Present()`).
 
