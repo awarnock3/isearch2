@@ -5875,3 +5875,56 @@ in uppercase per the established
 while writing this file's tests — all three of the first draft's
 `FindField()` calls failed before this was caught and fixed).
 
+## doctype/oneline.cxx
+
+`ONELINE : public DOCTYPE` indexes one record per newline-terminated
+line (e.g. a phonebook-style file). `ParseFields()`/`Present()` are
+inherited unchanged from `DOCTYPE`; only `ParseRecords()` is
+overridden.
+
+1. **Phantom `Position` increment on EOF corrupted the "is there a
+   record" check (`BUGFIX #1`)** — the line-scanning `for` loop's
+   increment clause runs `ci=fgetc(Fp), Position=Position+1` together,
+   so the read that finally returns `EOF` still bumps `Position` once
+   even though it consumed no real byte. `Position` therefore ends up
+   one past the true count of bytes read whenever the scan ends via
+   `EOF` rather than a real `'\n'`. `GPTYPE` is unsigned (`UINT4`,
+   `src/defs.hxx`), and this over-count corrupted two different checks
+   built on it:
+   - For a genuinely empty file, `Start (0) != Position` became
+     wrongly true (`Position` went from `0` to a phantom `1`), and the
+     pre-existing `Pos = Position - 2` compensation for the `EOF`
+     branch then underflowed (`1 - 2`) to `UINT_MAX`, adding a bogus
+     record ending ~4 billion bytes past the real, zero-byte file.
+   - Far more commonly: for *any* file whose very last byte is `'\n'`
+     (the normal case for real text files), the same over-count meant
+     one extra pass through the outer loop found `Start != Position`
+     true again after the real last line had already been correctly
+     recorded, adding a spurious trailing record with `RecordEnd <
+     RecordStart`.
+   Confirmed via a before/after test-revert: reverting to the original
+   `Pos = Position - 1`/`Position - 2` branching (without correcting
+   `Position` first) reproduced both symptoms — an empty file gaining a
+   bogus record and a newline-terminated file gaining a third,
+   3rd-record, extra one where only two lines exist. Fixed by
+   correcting the phantom increment immediately (`if (ci == EOF)
+   Position = Position - 1;`) right after the scan loop, before either
+   check runs — this also let the two now-redundant `Pos` branches
+   collapse into one uniform `Pos = Position - 1`, since `Position`
+   accurately reflects real bytes read either way once corrected.
+   `BUGFIX #1` in source.
+
+Added class-level doc comment to the header and a `ParseRecords()` doc
+comment in the source, including the file's existing "`RecordEnd` lands
+on the newline itself" convention (pre-existing, unrelated to the fix,
+documented as-is). `doctype/oneline.cxx` added to
+`TEST_ENGINE_DOCTYPE_SRCS`. No `NULL`/`sprintf` to modernize; file
+already compiled clean under `-Wall -Wextra`.
+
+`tests/doctype/test_oneline.cxx` covers: splitting a two-line file into
+two records with exact byte offsets; indexing a final line with no
+trailing newline; no bogus record for an empty file (`BUGFIX #1`'s
+underflow path); no spurious trailing record when the file ends in a
+newline (`BUGFIX #1`'s more commonly-hit path); and consecutive blank
+lines each getting their own minimal record.
+

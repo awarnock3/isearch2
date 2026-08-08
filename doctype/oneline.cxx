@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*
 
 File:        oneline.cxx
@@ -13,6 +16,11 @@ Author:      Erik Scott, Scott Technologies, Inc.
 ONELINE::ONELINE(PIDBOBJ DbParent) : DOCTYPE(DbParent) {
 }
 
+// Splits FileRecord's underlying file into one RECORD per
+// newline-terminated line (RecordEnd lands on the newline itself, so
+// a line's record includes its trailing '\n'), and adds each to Db via
+// DocTypeAddRecord(). A file that doesn't end in '\n' still gets its
+// final, unterminated line indexed.
 void ONELINE::ParseRecords(const RECORD& FileRecord) {
 
   GPTYPE Start = 0;
@@ -45,12 +53,26 @@ void ONELINE::ParseRecords(const RECORD& FileRecord) {
   int ci = 0;
   while (ci != EOF) {
     for (; (ci != '\n') && (ci != EOF); ci=fgetc(Fp), Position = Position + 1) ;
+    // BUGFIX #1 (docs/BUG_CATALOG.md#doctypeonelinecxx): the for-loop's
+    // increment clause runs fgetc()+Position++ together, so the read
+    // that finally returns EOF still bumps Position once even though
+    // it consumed no real byte -- Position ends up one past the true
+    // count of bytes read whenever the scan ends via EOF rather than a
+    // real '\n'. Left uncorrected, this GPTYPE (unsigned UINT4,
+    // src/defs.hxx) over-count made `Start != Position` wrongly true
+    // for an empty file (Position went from 0 to a phantom 1), adding
+    // a bogus record whose RecordEnd = Position - 2 underflowed to
+    // UINT_MAX -- and, more commonly, made it wrongly true again for
+    // *any* file whose very last byte is a newline (Position ends up
+    // one past the real EOF-adjacent line-start, not equal to it),
+    // adding a spurious trailing record with RecordEnd < RecordStart.
+    // Undoing the phantom increment here, before it can corrupt either
+    // check below, lets both work correctly with no special-casing.
+    if (ci == EOF)
+      Position = Position - 1;
     if (Start != Position) {
       Record.SetRecordStart(Start);
-      if (ci != EOF) 
-         Pos = Position-1;
-      else
-         Pos = Position-2;
+      Pos = Position-1;
       Record.SetRecordEnd(Pos);
       Db->DocTypeAddRecord(Record);
       }
