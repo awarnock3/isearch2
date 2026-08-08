@@ -3057,3 +3057,73 @@ few of the aggregated types (`STRING`, `STRLIST`, `RECORD`, `GSTACK`)
 to confirm the full set of ~30 includes is mutually coherent (no
 missing includes, no redefinition/ambiguity conflicts) when combined,
 not just individually self-contained.
+
+## src/idb.hxx
+
+`class IDB` is the concrete, on-disk-filesystem database: owns
+`MainIndex`/`MainMdt`/`MainDfdt`/`MainRegistry`/`DocTypeReg` and
+coordinates them for indexing and search. 1832-line `.cxx`; reviewed
+the constructors/`Initialize()`/destructor in full plus a representative,
+not-exhaustive sample of the largest/most-central methods
+(`SetWrongEndian`, `IsSystemFile`, `DfdtGetFileName`, `KeyLookup`,
+`GetRecordDfdt`, the `GetFieldData` overloads, `Index()`, `KillAll()`,
+`CleanupDb()`, `DeleteByKey`/`UndeleteByKey`, `MakeDbGilsRec`) --
+same "thorough but not exhaustive" scope as `src/index.cxx` earlier
+this batch.
+
+1. **`MakeDbGilsRec()` leaked its date buffer** — `date` was a
+   `malloc(9)`'d buffer used to hold `strftime()`'s `"YYYYMMDD"` output
+   and then `Cat()`'d into the output buffer, but never `free()`'d.
+   Reachable via this function's one live caller (`src/Iutil.cxx`).
+   Also, if the (9-byte, essentially-never-fails) allocation *did*
+   fail, `date` stayed `nullptr` and was passed unchecked to
+   `buffer->Cat(date)`. Fixed by using a fixed-size stack array
+   (`CHR date[9]`) instead of `malloc`, which needs neither a `free()`
+   nor a null check. `BUGFIX #1` in source.
+
+**Not fixed (needs a header change):** like `GSTACK`/`GLIST` earlier
+this batch, `IDB` has several raw owning pointer members
+(`MainIndex`/`MainMdt`/`MainDfdt`/`MainRegistry`/`DocTypeReg`) and a
+destructor that `delete`s all of them, but no declared copy
+constructor/`operator=` -- the same "double-free on copy" shape that's
+triggered blocking for other files this session. Checked reachability
+the same way as those: grepped the whole tree for any place `IDB` is
+copied, sliced, or passed/returned by value. Found none -- every real
+use is via pointer (`IDB*`/`PIDB`) or as a base class (`VIDB`,
+`Isearch-cgi/*.cxx`'s `IDBC`), never by value. Since there's no
+confirmed-reachable copy site, this turn documented the risk rather
+than proposing a header change for it, consistent with how
+`src/glist.hxx`'s missing destructor and `src/gstack.hxx`'s vestigial
+inheritance were handled earlier this batch.
+
+**Deferred: no live-`IDB` integration test this turn.** Every method
+on `IDB` (and the free function `MakeDbGilsRec()`) needs a constructed
+`IDB`, and `IDB::Initialize()` unconditionally does
+`DocTypeReg = new DTREG(this);`. `DTREG`'s own `.cxx`
+(`src/dtreg.cxx`) directly references (behind runtime `if` branches,
+but still present as calls in one function body) essentially every
+`doctype/*.cxx` parser -- confirmed via `dtreg.hxx`'s ~37 `#include`s,
+one per doctype class. Actually linking a test binary that constructs
+a live `IDB` would mean pulling the *entire*, still almost entirely
+`pending`, `doctype/` tree into `TEST_ENGINE_SRCS` in one turn -- tried
+it in a scratch build to see how bad it really was rather than just
+assuming, and a single-invocation compile of all ~40 files together
+didn't finish inside a 90-second budget. That's a disproportionate,
+slow, one-file dependency jump compared to every other turn this batch
+(the largest prior pull, for `src/index.cxx`, was ~10 files), so this
+turn left it deferred rather than forcing it through. `idb.hxx` itself
+was confirmed self-contained (compiles standalone as the sole
+`#include`) and `idb.cxx` was confirmed to compile cleanly under
+`-Wall -Wextra` (`g++ -c`) with the `BUGFIX #1` fix applied; the fix
+itself was validated by manual trace (allocate-once/use-twice/never-
+freed, confirmed via `grep` across the whole function) rather than a
+sanitizer repro, the same standard applied to other found-but-
+not-repro'd issues earlier this batch.
+
+Modernization: all code-level `NULL` uses converted to `nullptr`
+(2 sites: `time(nullptr)`, plus the `date` buffer above), the one live
+`sprintf` converted to `snprintf` (a second, in a `/* ... */`-commented
+out and never-compiled old `IsSystemFile()` implementation, was left
+alone). Added class-level and per-function doc comments to `IDB`,
+`Initialize()`, the destructor, `Index()`, `KillAll()`, `CleanupDb()`,
+and `MakeDbGilsRec()`.

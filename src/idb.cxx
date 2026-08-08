@@ -42,6 +42,9 @@ Description:	Class IDB
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifdef UNIX
 #include <stdlib.h>
 #endif
@@ -66,7 +69,13 @@ IDB::IDB(const STRING& NewPathName, const STRING& NewFileName,
 }
 
 
-void 
+// Opens (creating on first use) the on-disk database rooted at
+// NewPathName/NewFileName: loads DbInfo (MainRegistry), constructs
+// MainIndex/MainMdt/MainDfdt against that stem, builds the FieldTypes
+// lookup from the DFDT, and merges NewDocTypeOptions into whatever
+// DocTypeOptions were already persisted. Called by both constructors;
+// every member is set here, none rely on default-initialization.
+void
 IDB::Initialize(const STRING& NewPathName, const STRING& NewFileName,
 		const STRLIST& NewDocTypeOptions) {
   DebugMode = 0;
@@ -343,7 +352,7 @@ IDB::GetDocTypePtr(const STRING& DocType) const {
 
 GDT_BOOLEAN 
 IDB::ValidateDocType(const STRING& DocType) const {
-  return (DocTypeReg->GetDocTypePtr(DocType) != NULL)? GDT_TRUE : GDT_FALSE;
+  return (DocTypeReg->GetDocTypePtr(DocType) != nullptr)? GDT_TRUE : GDT_FALSE;
 }
 
 
@@ -446,7 +455,7 @@ IDB::DfdtGetFileName(const STRING& FieldName, STRING *StringBuffer) const
     if (FileNumber > 999) {
       FileNumber = 0;
     }
-    sprintf(s, "%d", FileNumber);
+    snprintf(s, sizeof(s), "%d", FileNumber);
     y = 3 - strlen(s);
     for (x=1; x<=y; x++) {
       StringBuffer->Cat("0");
@@ -941,7 +950,14 @@ IDB::GetDbState() {
 }
 
 
-void 
+// Drains the two indexing queues written by AddRecord()/
+// DocTypeAddRecord(): queue 1 (DbExtIndexQueue1) holds records that
+// still need ParseRecords()/ParseFields() to break them into MDT
+// entries + field data; queue 2 (DbExtIndexQueue2) holds the resulting
+// GP stream that MainIndex::AddRecordList() tokenizes into the actual
+// inverted index. Establishes the database's GlobalDocType from the
+// first queued record if one hasn't been set yet.
+void
 IDB::Index() {
   if (!IsDbCompatible()) {
     return;
@@ -1168,7 +1184,12 @@ IDB::IsSystemFile(const STRING& FileName) {
   return 0;
 }
 
-void 
+// Unlinks every on-disk file belonging to this database (index, MDT,
+// DFDT, field data files, temp/queue files, DbInfo) and re-initializes
+// MainIndex/MainMdt/MainDfdt/DocTypeReg/MainRegistry from scratch --
+// leaves the IDB usable afterward (e.g. to start reindexing), unlike
+// simply deleting the files out from under a live IDB.
+void
 IDB::KillAll() {
   // Delete files
   STRING s;
@@ -1341,7 +1362,13 @@ IDB::UndeleteByKey(const STRING& Key) {
 }
 
 
-SIZE_T 
+// Reclaims space from records deleted via DeleteByKey(): computes each
+// remaining record's GP offset shift, rewrites the index and every
+// field-data file with deleted records' GPs dropped and survivors'
+// GPs shifted down to close the gaps, then updates the MDT's own GP
+// bookkeeping and drops the deleted MDT entries via
+// MDT::RemoveDeleted(). Returns whatever RemoveDeleted() returns.
+SIZE_T
 IDB::CleanupDb() {
   // Compute offset GP changes for each MDTREC
   INT MdtTotalEntries = MainMdt->GetTotalEntries();
@@ -1373,14 +1400,14 @@ IDB::CleanupDb() {
       Dfd.GetFieldName(&S);
       DfdtGetFileName(S, &Fn);
     }
-    if ( (Fpo = fopen(Fn, "rb")) == NULL) {
+    if ( (Fpo = fopen(Fn, "rb")) == nullptr) {
       if (FileNum == 0) // *.inx may or may not exist...
 	{ continue; } 
       perror(Fn);
       //      EXIT_ERROR;
       exit(1);
     }
-    if ( (Fpn = fopen(TempFn, "wb")) == NULL) {
+    if ( (Fpn = fopen(TempFn, "wb")) == nullptr) {
       perror(TempFn);
       //      EXIT_ERROR;
       exit(1);
@@ -1498,6 +1525,10 @@ IDB::WriteCentroid(FILE* fp) {
 }
 
 
+// Frees MainIndex/MainMdt/MainDfdt/DocTypeReg/MainRegistry. Does NOT
+// flush pending changes to disk first (see FlushFiles(), not called
+// here) -- callers are expected to have already called FlushFiles()
+// if they want changes persisted.
 IDB::~IDB() {
   if (DebugMode) {
     MainMdt->Dump();
@@ -1718,22 +1749,32 @@ IDB::FlushFiles() {
   }
 */
 
+// Appends a GILS-profile XML `<Locator>` record (minus its closing
+// tag, per the caller's own comment -- "Has to be written later") for
+// IdbPtr's database to *buffer, including today's date as
+// Date-of-Last-Modification. PathName/FileName are accepted but unused
+// (matches the file's own commented-out `buffer->Cat(FileName);`
+// below).
 void
 MakeDbGilsRec(IDB *IdbPtr, STRING& PathName, STRING& FileName, STRING* buffer)
 {
   /* Get today''s date */
   time_t today;
   struct tm    *t;
-  CHR *date=(CHR*)NULL;
+  // BUGFIX #1: date used to be a malloc(9)'d buffer that was never
+  // free()'d (a real leak in this function's only live caller,
+  // src/Iutil.cxx) and, if the (9-byte, always-succeeds-in-practice)
+  // allocation ever did fail, left `date` null for the unchecked
+  // buffer->Cat(date) below. A fixed-size stack buffer sized for
+  // "YYYYMMDD\0" needs neither. See docs/BUG_CATALOG.md#srcidbhxx.
+  CHR date[9] = "";
   STRING DbName;
 
   IdbPtr->GetDbFileStem(&DbName);
 
-  today = time((time_t *)NULL);
+  today = time(nullptr);
   t = localtime(&today);
-  if ((date = (CHR *)malloc(9))) {
-      strftime(date,9,"%Y%m%d",t);
-  }
+  strftime(date, sizeof(date), "%Y%m%d", t);
 
   /* Put out the header */
   buffer->Cat("<?XML VERSION=\"1.0\" ENCODING=\"UTF-8\" ?>\n");

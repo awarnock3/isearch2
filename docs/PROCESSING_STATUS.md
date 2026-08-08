@@ -65,7 +65,7 @@
 | 61 | doctype/mailfolder.hxx | done | 2026-08-07 | [doctype/mailfolder.cxx](BUG_CATALOG.md#doctypemailfoldercxx) |
 | 62 | src/gstack.hxx | done | 2026-08-07 | [src/gstack.hxx](BUG_CATALOG.md#srcgstackhxx) |
 | 63 | src/isearch.hxx | done | 2026-08-08 | [src/isearch.hxx](BUG_CATALOG.md#srcisearchhxx) |
-| 64 | src/idb.hxx | pending | | |
+| 64 | src/idb.hxx | done | 2026-08-08 | [src/idb.hxx](BUG_CATALOG.md#srcidbhxx) |
 | 65 | src/vidb.hxx | pending | | |
 | 66 | Isearch-cgi/cgi-util.hxx | pending | | |
 | 67 | src/marc.hxx | pending | | |
@@ -137,7 +137,7 @@
 | 133 | src/glist.cxx | done | 2026-08-07 | [src/glist.hxx](BUG_CATALOG.md#srcglisthxx) |
 | 134 | src/gstack.cxx | done | 2026-08-07 | [src/gstack.hxx](BUG_CATALOG.md#srcgstackhxx) |
 | 135 | src/hash.cxx | pending | | |
-| 136 | src/idb.cxx | pending | | |
+| 136 | src/idb.cxx | done | 2026-08-08 | [src/idb.hxx](BUG_CATALOG.md#srcidbhxx) |
 | 137 | src/index.cxx | done | 2026-08-07 | [src/index.cxx](BUG_CATALOG.md#srcindexcxx) |
 | 138 | src/infix2rpn.cxx | done | 2026-08-07 | [src/infix2rpn.cxx](BUG_CATALOG.md#srcinfix2rpncxx) |
 | 139 | src/intfield.cxx | done | 2026-08-07 | [src/intfield.cxx](BUG_CATALOG.md#srcintfieldcxx) |
