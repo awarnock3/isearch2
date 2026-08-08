@@ -5551,3 +5551,52 @@ live `IDBOBJ::GetFieldData()`, out of scope here, matching
 uppercase (`"TITLE"`/`"XAUTHOR"`) per the established
 `DF::SetFieldName()`-uppercases-internally gotcha.
 
+## doctype/maildigest.cxx
+
+`MAILDIGEST : public MAILFOLDER` is a byte-for-byte structural
+duplicate of its sibling `doctype/listdigest.cxx`, differing only in
+the magic separator string (`"------------------------------"`, 30
+dashes, vs. `listdigest.cxx`'s 40 equals signs) and the class/file
+names. `ParseFields()` is inherited unchanged from `MAILFOLDER`.
+
+1. **`ParseRecords()`'s post-loop `RecordEnd` underflow for an empty
+   file (`BUGFIX #1`)** — `GPTYPE` is `UINT4` (`src/defs.hxx`,
+   unsigned); for a genuinely empty file (`fgets()` never succeeds even
+   once), `Position` stays `0`, and the post-loop `RecordEnd = Position
+   - 1;` underflowed to `UINT_MAX` (`4294967295`), which then passed
+   the `RecordEnd > Start` (0) guard and added a bogus record ending
+   ~4 billion bytes past the real (zero-byte) file. Exact same
+   underflow shape as `doctype/listdigest.cxx`'s own `BUGFIX #1`,
+   `doctype/irlist.cxx`'s `BUGFIX #2`, and the already-fixed
+   `doctype/mailfolder.cxx::ParseRecords()`. Fixed identically:
+   `RecordEnd = (Position == 0) ? 0 : Position - 1;`. Confirmed via a
+   real before/after test-revert (reverting to plain `Position - 1`
+   reproduced a `REQUIRE` failure with a bogus out-of-range record,
+   exactly as predicted, before the fix was restored). `BUGFIX #1` in
+   source.
+
+   The mid-loop `RecordEnd = SavePosition - 1;` site does **not** need
+   the same guard — by the same reachability argument already proven
+   for `listdigest.cxx` (see its `BUGFIX #1` entry above): `Position`
+   is incremented by the *current* line's length, which must exceed
+   `magic_len` (30, for the 30-dash separator here) to enter that
+   `if`-block at all, so `SavePosition` is always `>= 31` whenever that
+   assignment runs. Not independently re-derived from scratch via a
+   fresh standalone trace program (as was done for `listdigest.cxx`),
+   since the logic shape and reasoning are identical byte-for-byte;
+   cross-referenced instead. Left unguarded, matching "don't add
+   validation for scenarios that can't happen."
+
+`NULL` converted to `nullptr` at the one live call site (`fgets(...)
+!= nullptr` loop condition). Added class-level doc comment to the
+header and a `ParseRecords()` doc comment in the source, both
+cross-referencing `listdigest.cxx` given the structural identity.
+`doctype/maildigest.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_maildigest.cxx` covers: correct splitting at a
+`"----...----"` magic separator line with exact byte offsets; no
+bogus record when the magic separator is the literal first line (an
+empirical re-confirmation of the mid-loop-site reachability argument
+above, mirroring `listdigest.cxx`'s equivalent test); and no bogus
+record for an empty file (`BUGFIX #1`'s direct regression test).
+
