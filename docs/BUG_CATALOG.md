@@ -4033,3 +4033,65 @@ overlapping tags (`BUGFIX #4`); and `LoadFieldTable` not crashing on
 an empty FIELDTYPE file (`BUGFIX #5`) while still loading real entries
 correctly.
 
+## doctype/cipp.cxx
+
+`class CIPP` (`: public SGMLNORM`) is the NASA/CIP Product metadata
+DOCTYPE — `doctype/cipc.cxx`'s sibling (product-level instead of
+collection-level metadata), and essentially a byte-for-byte duplicate
+of it apart from class/variable naming (`CIPC`→`CIPP`,
+`CIPC_Element`→`CIP_Element`). Every bug found in `cipc.cxx` this
+batch turned out to be duplicated here too, with the same fixes; see
+`docs/BUG_CATALOG.md#doctypecipccxx` for the full reasoning behind
+each one, cross-referenced below rather than repeated in full.
+
+1. **`ParseDate()`'s `<StartDate>`/`<EndDate>` interval parsing was
+   unreachable dead code**, plus the same missing-`return` on a
+   missing `</StartDate>` — identical shape to `cipc.cxx`'s
+   `BUGFIX #1`, fixed the same way (uppercase the search needles;
+   `strlen()` on the mixed-case literal is unaffected). One difference
+   from `cipc.cxx`: this file's `ParseDate()` has its `<CALDATE>` block
+   entirely commented out, so `Hold.UpperCase()` served *no purpose at
+   all* before this fix — it existed only to accidentally break the
+   very next search. `BUGFIX #1` in source.
+2. **Same two bugs, duplicated in `ParseDateRange()`** — same as
+   `cipc.cxx`'s `BUGFIX #2` (this function's own `<CALDATE>` block is
+   active, unlike `ParseDate()`'s, and was already using the correct
+   uppercase needle — only the `<StartDate>`/`<EndDate>` searches were
+   broken). `BUGFIX #2` in source.
+3. **Unguarded `Nested.Top()` — the same null-pointer-dereference
+   shape as `cipc.cxx`'s `BUGFIX #3`**, in the identical spot in
+   `ParseFields()`'s closing-tag handling. Not re-confirmed with a
+   separate standalone SEGV repro here — `cipc.cxx`'s repro (see that
+   entry) exercises the identical code shape byte-for-byte; this file's
+   regression test (the same `</foo>`-as-first-tag input) passes clean
+   under `make tests-asan` after the fix. `BUGFIX #3` in source.
+4. **Leaked `CIP_Element` on overlapping (non-LIFO) tags** — same as
+   `cipc.cxx`'s `BUGFIX #4`, same `<A><B></A></B>` repro, same fix
+   (drain `Nested` before `ParseFields()` returns). Confirmed
+   leak-free under `make tests-asan`. `BUGFIX #4` in source.
+5. **`LoadFieldTable()` could crash on an empty FIELDTYPE file** — same
+   as `cipc.cxx`'s `BUGFIX #5`, same fix (`do`-`while` → `while`,
+   checking `pBuf` before the first iteration too). `BUGFIX #5` in
+   source.
+
+Also fixed while bringing this file to a clean `-Wall -Wextra` build
+for the first time: the identical `DOUBLE Left;` (in `ParseGPoly()`)
+and `INT n;` (in `Present()`) unused-variable warnings, the identical
+dead `Nested.Top()`/`LastEnd`-comparison block in `ParseFields()`
+(removed, along with the now-unused `LastEnd` variable itself), and
+the identical unused `RecordSyntax` parameter in `Present()`. `NULL`
+converted to `nullptr` at every live call site. Also documented, not
+changed: `store_attributes()` is declared as a `CIPP` member in the
+header but never defined in this file, exactly like `cipc.cxx`'s
+`store_attributes()`.
+
+`tests/doctype/test_cipp.cxx` mirrors `test_cipc.cxx`'s coverage:
+`ParseDate`/`ParseDateRange` successfully parsing a well-formed
+interval (`ParseDate()` here uses `ParseIsoDate()` rather than
+`GetFloat()`, so the regression test asserts the parse didn't error
+out rather than an exact value) and correctly erroring on a missing
+closing tag; `ParseFields` not crashing on a stray unmatched closing
+tag and not leaking on overlapping tags; and `LoadFieldTable` not
+crashing on an empty FIELDTYPE file while still loading real entries
+correctly.
+

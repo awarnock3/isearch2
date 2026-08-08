@@ -78,7 +78,7 @@
 | 74 | doctype/anzmeta.hxx | done | 2026-08-08 | [doctype/anzmeta.hxx](BUG_CATALOG.md#doctypeanzmeta-1) |
 | 75 | doctype/bibtex.hxx | done | 2026-08-08 | [doctype/bibtex.hxx](BUG_CATALOG.md#doctypebibtexcxx) |
 | 76 | doctype/cipc.hxx | done | 2026-08-08 | [doctype/cipc.hxx](BUG_CATALOG.md#doctypecipccxx) |
-| 77 | doctype/cipp.hxx | pending | | |
+| 77 | doctype/cipp.hxx | done | 2026-08-08 | [doctype/cipp.hxx](BUG_CATALOG.md#doctypecippcxx) |
 | 78 | doctype/dif.hxx | pending | | |
 | 79 | doctype/doc_conf.hxx | done | 2026-08-08 | [doctype/doc_conf.hxx](BUG_CATALOG.md#doctypedoc_confhxx) |
 | 80 | doctype/emacsinfo.hxx | pending | | |
@@ -191,7 +191,7 @@
 | 187 | doctype/anzmeta.cxx | done | 2026-08-08 | [doctype/anzmeta.cxx](BUG_CATALOG.md#doctypeanzmeta-1) |
 | 188 | doctype/bibtex.cxx | done | 2026-08-08 | [doctype/bibtex.cxx](BUG_CATALOG.md#doctypebibtexcxx) |
 | 189 | doctype/cipc.cxx | done | 2026-08-08 | [doctype/cipc.cxx](BUG_CATALOG.md#doctypecipccxx) |
-| 190 | doctype/cipp.cxx | pending | | |
+| 190 | doctype/cipp.cxx | done | 2026-08-08 | [doctype/cipp.cxx](BUG_CATALOG.md#doctypecippcxx) |
 | 191 | doctype/colondoc.cxx | done | 2026-08-07 | [doctype/colondoc.cxx](BUG_CATALOG.md#doctypecolondoccxx) |
 | 192 | doctype/dif.cxx | pending | | |
 | 193 | doctype/doctype.cxx | done | 2026-08-07 | [doctype/doctype.cxx](BUG_CATALOG.md#doctypedoctypecxx) |
