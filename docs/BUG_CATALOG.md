@@ -5705,3 +5705,49 @@ about what is and isn't ASan-confirmed there). Field names are
 asserted in uppercase per the established
 `DF::SetFieldName()`-uppercases-internally gotcha.
 
+## doctype/markdown.cxx
+
+**No bugs found.** A small, modern addition (authored "Copilot", not
+part of the original CNIDR/BSn codebase) — already compiled clean
+under `-Wall -Wextra` and had no `NULL`/`sprintf` to modernize.
+`MARKDOWN : public DOCTYPE` inherits `ParseRecords()`/`ParseFields()`
+unchanged; only `Present()`'s `"B"` (brief) element set is overridden,
+via the file-local `ExtractMarkdownBrief()`: returns the document's
+first ATX heading (`#`/`##`/... line, stripped of the leading `#` run
+and surrounding whitespace) if one exists anywhere in the text,
+otherwise its first non-empty line, otherwise an empty string. Traced
+by hand for memory safety (every exit path frees the `NewCString()`
+buffer; `STRING::Set()` copies by explicit length, not relying on
+null-termination at the substring's end, confirmed by reading
+`STRING::Set()`/`Copy()` in `src/string.cxx`) and for logic (an
+empty/all-blank record, a lone `"#"` with no heading text, a heading
+appearing after an earlier plain line) — no crash, leak, or incorrect
+result found in any case. The heading match is deliberately lenient
+(doesn't require a space after the `#` run, unlike strict CommonMark)
+-- a heuristic design choice with no bug report or spec to check it
+against, not something to "fix" without inventing new behavior.
+
+Added file-level and class-level doc comments to the header, and
+function-level doc comments on `ExtractMarkdownBrief()` and
+`Present()` in the source. `doctype/markdown.cxx` added to
+`TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_markdown.cxx` covers: extracting a heading
+(stripped of leading `##` and whitespace); falling back to the first
+non-empty line when there's no heading; preferring a heading that
+appears *after* an earlier plain line (confirms the "keep scanning,
+don't stop at the first line" behavior); an all-blank record leaving
+the brief empty; and a non-`"B"` element set deferring to
+`DOCTYPE::Present()` without crashing. Unlike
+`tests/doctype/test_emacsinfo.cxx`/`test_bibtex.cxx` (which left
+`Present()` untested because `RESULT::GetRecordData()` crashes on a
+default-constructed `RESULT`), this file's entire logic lives behind
+`Present()` -- `ExtractMarkdownBrief()` is `static`, unreachable from
+outside the translation unit -- so skipping it would leave no real
+coverage at all. Built a real, file-backed `RESULT` instead (temp
+file + `SetPathName()`/`SetFileName()`/`SetRecordStart()`/
+`SetRecordEnd()`, mirroring the `RECORD` fixtures used elsewhere, with
+`RecordEnd` set to `content.size() - 1` per `RESULT::GetRecordSize()`'s
+documented inclusive-end convention), the same technique available to
+those earlier files but not attempted there.
+
