@@ -3817,3 +3817,96 @@ the single (post-`BUGFIX #2`) `USE_UNIFIED_NAMES` definition.
 No live `NULL`/`sprintf` to modernize (pure macros, no code). Added a
 file-level doc comment; no functions to comment individually.
 
+## doctype/bibtex.cxx
+
+`class BIBTEX` splits a file into `"}"`-terminated BibTeX entries
+(`ParseRecords()`) and extracts each entry's `title = "..."` value as
+its sole indexed field (`ParseFields()`). Found and fixed five real
+bugs — three leaks (one severe: the whole file, every call), a
+functional bug that added a bogus field to every title-less record, and
+a field-boundary bug that included the delimiting quote characters in
+the indexed text.
+
+1. **`ParseRecords()` leaked the entire file buffer on every successful
+   call** — `RecBuffer` (sized to the whole file) was allocated near
+   the top of the function and freed on every early-return error path,
+   but the function's normal/success path (after splitting the file
+   into records) just fell off the end without ever freeing it. Since
+   `ParseRecords()` runs once per file during indexing, this leaked a
+   whole file's worth of memory per file indexed — the most severe leak
+   in this file. Confirmed leak-free after the fix via `make
+   tests-asan`. Fixed by adding `delete [] RecBuffer;` at the end of
+   the function. `BUGFIX #1` in source.
+2. **`ParseFields()` leaked a `STRING::NewCString()` buffer on every
+   call** — `file = fn.NewCString();` was allocated purely to pass to
+   two `perror(file)` diagnostic calls, and never freed on any path
+   (including success). `fopen(fn, "rb")` two lines above it already
+   relies on `STRING`'s non-allocating `operator const char*()`
+   conversion, so the allocation wasn't even necessary — fixed by
+   deleting the `file` variable entirely and calling `perror(fn)`
+   directly, the same pattern already used for `fopen`. `BUGFIX #2` in
+   source.
+3. **Two early-return paths inside the title-parsing state machine
+   leaked both `RecBuffer` and the heap-allocated `DFT`** — "Cannot
+   find quote mark after title." and "couldn't find ending quote."
+   both `return`ed without freeing `RecBuffer` or `delete`ing `pdft`
+   (allocated via `new DFT()` earlier in the function). Fixed by adding
+   `delete pdft; delete [] RecBuffer;` before each of the two
+   `return`s. `BUGFIX #3` in source.
+4. **A malformed/absent title added a bogus zero-length "title" field
+   to every record** — `val_start` only stays at its `0` initializer
+   when "title" is never found anywhere in the record at all (both
+   malformed-title failure paths above already `return` before
+   reaching the field-adding code, and a legitimately parsed title's
+   quote position is always `>= 5`, never `0`). The field-adding block
+   used to run unconditionally regardless, so every title-less BibTeX
+   record got a spurious "title" DF entry with `FieldStart=0,
+   FieldEnd=0` — corrupting title-based search/display for any record
+   without one. Fixed by only adding the field when `val_start != 0`.
+   `BUGFIX #4` in source.
+5. **The stored title field included its own delimiting quote
+   characters** — `val_start`/`val_end` are the positions of the
+   opening and closing `"` characters themselves (that's what the
+   quote-searching loops set them to), but `fc.SetFieldStart(val_start);
+   fc.SetFieldEnd(val_end);` used them directly, so a real callback
+   reading the field back via its `FC` coordinates got
+   `"A Great Title"` — quote marks included — instead of `A Great
+   Title`. Confirmed via a regression test asserting the exact
+   extracted substring. Fixed by excluding both quotes:
+   `fc.SetFieldStart(val_start + 1); fc.SetFieldEnd(val_end - 1);`.
+   `BUGFIX #5` in source. Noted, not pursued: a literal `title = ""`
+   (empty title) is a pre-existing, unhandled degenerate case either
+   way — `val_end` would equal `val_start+1`, producing an inverted
+   (not just empty) `[start, end]` range — but this is vanishingly rare
+   input not worth guessing a convention for.
+
+Also fixed (compile warnings, not correctness bugs, surfaced because
+this was this file's first turn through `-Wall -Wextra`): a handful of
+signed/unsigned comparison warnings (`ParseRecords()`'s `int lastBrace`
+compared against `GPTYPE i`, cast at the comparison site;
+`ParseFields()`'s loop counter retyped from `int` to `GPTYPE` to match
+`ActualLength`, both variables always non-negative in practice), and a
+`-Wdangling-else` warning in the nested `if` cascade that searches for
+`"title"`, resolved with explicit braces without changing which `if`
+the `else` binds to.
+
+`tests/doctype/test_bibtex.cxx` covers: `ParseRecords()` splitting a
+two-entry file into two records with correct boundaries, including the
+last-record-extended-to-EOF behavior (`BUGFIX #1`'s regression
+coverage, verified leak-free under `make tests-asan`); `ParseFields()`
+extracting a real title's exact text (`BUGFIX #5`); adding no field at
+all for a title-less record (`BUGFIX #4`); and not crashing or leaking
+on both malformed-title shapes (missing opening quote, missing closing
+quote — `BUGFIX #3`, via `DocTypeAddRecord()` and `TESTIDBOBJ` from the
+same pattern used by `test_colondoc.cxx`/`test_medline.cxx`).
+`Present()` itself isn't exercised directly — its `"F"` path delegates
+to `RESULT::GetRecordData()` (crashes on a default-constructed
+`RESULT`, for reasons unrelated to `BIBTEX`), and its non-`"F"` path's
+first check always short-circuits via `IDBOBJ`'s own
+`DfdtGetTotalEntries()` default (`TESTIDBOBJ` doesn't override it);
+building a real, exercisable `RESULT`/`IDBOBJ` pair was judged out of
+scope for this file's own turn.
+
+No live `NULL`/`sprintf` to modernize. Added class-level and
+per-function doc comments.
+

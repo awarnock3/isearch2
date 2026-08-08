@@ -76,7 +76,7 @@
 | 72 | src/sw.hxx | done | 2026-08-08 | [src/sw.hxx](BUG_CATALOG.md#srcswhxx) |
 | 73 | doctype/anzlic.hxx | done | 2026-08-08 | [doctype/anzlic.hxx](BUG_CATALOG.md#doctypeanzlichxx) |
 | 74 | doctype/anzmeta.hxx | done | 2026-08-08 | [doctype/anzmeta.hxx](BUG_CATALOG.md#doctypeanzmeta-1) |
-| 75 | doctype/bibtex.hxx | pending | | |
+| 75 | doctype/bibtex.hxx | done | 2026-08-08 | [doctype/bibtex.hxx](BUG_CATALOG.md#doctypebibtexcxx) |
 | 76 | doctype/cipc.hxx | pending | | |
 | 77 | doctype/cipp.hxx | pending | | |
 | 78 | doctype/dif.hxx | pending | | |
@@ -189,7 +189,7 @@
 | 185 | doctype/Unified/unified.h | pending | | |
 | 186 | doctype/anzlic.cxx | done | 2026-08-08 | [doctype/anzlic.cxx](BUG_CATALOG.md#doctypeanzlichxx) |
 | 187 | doctype/anzmeta.cxx | done | 2026-08-08 | [doctype/anzmeta.cxx](BUG_CATALOG.md#doctypeanzmeta-1) |
-| 188 | doctype/bibtex.cxx | pending | | |
+| 188 | doctype/bibtex.cxx | done | 2026-08-08 | [doctype/bibtex.cxx](BUG_CATALOG.md#doctypebibtexcxx) |
 | 189 | doctype/cipc.cxx | pending | | |
 | 190 | doctype/cipp.cxx | pending | | |
 | 191 | doctype/colondoc.cxx | done | 2026-08-07 | [doctype/colondoc.cxx](BUG_CATALOG.md#doctypecolondoccxx) |
