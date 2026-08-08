@@ -5751,3 +5751,127 @@ file + `SetPathName()`/`SetFileName()`/`SetRecordStart()`/
 documented inclusive-end convention), the same technique available to
 those earlier files but not attempted there.
 
+## doctype/memodoc.cxx
+
+`MEMODOC : public DOCTYPE` parses "TAG: value" memo documents (see the
+file-local `parse_tags()`'s own header comment for the grammar,
+including the `"____"`/`"----"`/`"++++"`/`"===="` 4-char run marking
+the end of the tagged header and the start of a free-text
+`"Memo-Body"`). Shares clear code lineage with the already-processed
+`doctype/colondoc.cxx` (same "TAG: value" shape, same value-extraction
+arithmetic almost verbatim) and picked up the same cluster of
+authoring bugs as a result. Seven bugs found, all fixed; four
+confirmed via before/after test-reverts (two of them under ASan), the
+other three fixed by direct cross-reference to `colondoc.cxx`'s
+already-confirmed identical fixes (impractical to independently
+revert-test here for the reasons noted per bug below, same as there).
+
+1. **`ParseFields()`'s "whole file as one record" fallback dropped the
+   last byte (`BUGFIX #1`)** — `RecEnd = ftell(fp) - 1;`, the same
+   off-by-one already fixed in `colondoc.cxx`'s `BUGFIX #1` and
+   `marcdump.cxx`'s `BUGFIX #2`. Confirmed via a before/after
+   test-revert: a record's only field ("Jane Doe") came back one
+   character short ("Jane Do"). Fixed identically: `RecEnd =
+   ftell(fp);`. `BUGFIX #1` in source.
+
+2. **`parse_tags()`'s scan loop underflowed for any record under 4
+   bytes (`BUGFIX #2`, most severe)** — `for (GPTYPE i = 0; i < len -
+   4; i++)`; `len` is `GPTYPE` (unsigned `UINT4`), so for a record
+   shorter than 4 bytes (trivially reached via `BUGFIX #1`'s fallback
+   once it stops truncating first — a genuinely empty file gives
+   `len == 0`), `len - 4` underflowed to just under `UINT_MAX`, and the
+   loop body's `b[i+1]`/`b[i+2]`/`b[i+3]` reads ran past `RecBuffer`'s
+   real allocation on its very first iteration. Confirmed via a
+   before/after test-revert under ASan: a genuine heap-buffer-overflow,
+   `AddressSanitizer: heap-buffer-overflow`, aborting the process.
+   Rewritten as `i + 4 < len`, an exactly equivalent comparison for
+   every `len` that doesn't underflow, since it never subtracts from
+   the unsigned `len` at all. `BUGFIX #2` in source.
+
+3. **`parse_tags()`'s 4-char separator check had a copy-paste typo
+   (`BUGFIX #3`)** — the last disjunct checked `b[i+2] == '-'` instead
+   of `b[i+3] == '-'`, unlike the three lines above it (each
+   consistently checks `b[i+N]` against all four separator characters
+   for its own `N`). Whenever the 3rd character of a would-be 4-char
+   run was specifically `'-'`, the whole disjunct was satisfied
+   regardless of the 4th character's real value, so a run like
+   `"__-X"` (`X` being anything at all) wrongly matched as a section
+   break — ending tag-hunting right there and silently dropping every
+   tag after it. Confirmed via a before/after test-revert: a field
+   placed after such a run went from found to not-found. Fixed by
+   correcting the typo. `BUGFIX #3` in source.
+
+4. **Value-extraction's end-of-buffer fallback used the wrong length
+   (`BUGFIX #4`)** — `p = &RecBuffer[RecLength]` (the buffer's
+   *allocated capacity*) for the last tag's value, not
+   `&RecBuffer[ActualLength]` (how much `fread()` actually returned) —
+   same fix as `colondoc.cxx`'s `BUGFIX #3`, for the same reason:
+   harmless whenever the two are equal (the normal case, and the only
+   case reachable from this file's own tests, same caveat noted in
+   `colondoc.cxx`'s own entry), but wrong in principle for a short
+   read. Fixed to match `ActualLength`. Not independently revert-tested
+   for the same reason `colondoc.cxx`'s wasn't: no test in this file's
+   suite can force `fread()` to under-read a real, fully-available
+   file. `BUGFIX #4` in source.
+
+5. **Value length unconditionally excluded a trailing newline that
+   might not exist (`BUGFIX #5`)** — `INT val_len = (p - *tags_ptr) -
+   off - 1;`, the trailing `- 1` assuming a real `'\n'` always sits
+   just before `p`. True for every interior field (the format
+   guarantees exactly one `'\n'` before the next `"Tag:"` line), but
+   not for the *last* field's end-of-buffer fallback when the file
+   doesn't end with `'\n'` — same fix as `colondoc.cxx`'s `BUGFIX #1b`.
+   Confirmed via a before/after test-revert, independently of
+   `BUGFIX #1` (reverting *only* this fix, with `BUGFIX #1` still
+   applied and the file fully, correctly read): the same "Jane Doe" →
+   "Jane Do" symptom, proving both bugs were independently necessary,
+   not just two ways of describing the same defect. Fixed by only
+   excluding the `'\n'` when `p[-1]` actually is one. `BUGFIX #5` in
+   source.
+
+6. **Trailing-whitespace trim checked one byte past the value's real
+   end (`BUGFIX #6`)** — `isspace(RecBuffer[val_len + val_start])`
+   instead of `RecBuffer[val_start + val_len - 1]` — same off-by-one
+   already fixed in `colondoc.cxx`'s `BUGFIX #2`. Per that entry, this
+   forms a pair with `BUGFIX #7` below that silently canceled out in
+   the common case (trimming one byte too early, then storing one byte
+   too many, netting out to the *apparently* correct span whenever
+   there actually was trailing whitespace to trim) — which is almost
+   certainly why neither was ever noticed by hand-testing. Not
+   independently revert-tested here for that reason (same as
+   `colondoc.cxx`): a test that happens to exercise both at once can't
+   distinguish them, and this file's own `BUGFIX #1`/`BUGFIX #5` tests
+   don't have trailing whitespace to trim in the first place, so this
+   fix's effect is covered only jointly with `BUGFIX #7`, not in
+   isolation. `BUGFIX #6` in source.
+
+7. **`FC::SetFieldEnd()` stored one byte past the correct inclusive end
+   (`BUGFIX #7`)** — `fc.SetFieldEnd(val_start + val_len)`, one past
+   `val_start + val_len - 1` — same fix as `colondoc.cxx`'s `BUGFIX #4`
+   for the same reason (matches `sgmlnorm.cxx`'s/`sgmltag.cxx`'s own
+   `val_start + val_len - 1`, and `src/index.cxx` derives a field's
+   length as `GetFieldEnd() - GetFieldStart() + 1`, which only works
+   for an inclusive end). Together with `BUGFIX #6`, this changes
+   `tests/doctype/test_memodoc.cxx`'s `ExtractField()` helper from an
+   exclusive-end convention (matching `marcdump.cxx`'s FC convention,
+   copied from that file's own test as a starting point) to an
+   inclusive one (`+ 1`) — the fully-fixed test suite passing with that
+   adjustment is the closest thing to a joint confirmation these two
+   paired fixes get. `BUGFIX #7` in source.
+
+`NULL` converted to `nullptr` at all 5 call sites. Added class-level
+doc comment to the header and a `ParseFields()` doc comment in the
+source. `doctype/memodoc.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_memodoc.cxx` covers: extracting a tagged field with
+no trailing byte lost (`BUGFIX #1`/`BUGFIX #5`, confirmed independently
+of each other); not crashing on an empty file and on a short non-empty
+record (`BUGFIX #2`'s heap-overflow path, reached two different ways);
+not treating a run ending in a non-separator character as a section
+break (`BUGFIX #3`); and correctly treating a genuine 4-char run as a
+section break, starting a `"Memo-Body"` field. Field names are asserted
+in uppercase per the established
+`DF::SetFieldName()`-uppercases-internally gotcha (initially missed
+while writing this file's tests — all three of the first draft's
+`FindField()` calls failed before this was caught and fixed).
+
