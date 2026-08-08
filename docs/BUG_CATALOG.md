@@ -6073,3 +6073,51 @@ before it was ever run). Field names are asserted in uppercase per the
 established `DF::SetFieldName()`-uppercases-internally gotcha (applied
 proactively this time, not caught after a failing run).
 
+## doctype/simple.cxx
+
+`SIMPLE : public DOCTYPE` presents a document's leading text as a
+headline (element set `"B"`): the first `NumLines` lines, `NumLines`
+read once at construction from the doctype's `"LINES"` option (default/
+minimum 1). Record splitting and field parsing are entirely inherited
+from `DOCTYPE`'s own defaults; only `Present()`/`BeforeRset()`/
+`AfterRset()` are overridden.
+
+1. **Multi-line headlines silently dropped every line after the first
+   (`BUGFIX #1`)** — the inner `while` loop scanning each line stops
+   as soon as it sees `'\n'`, but its condition fails *before* the
+   loop body's `z++` runs for that character, so `z` is left pointing
+   *at* the newline, not past it. The outer `for (y=1; y<=NumLines;
+   y++)` loop had nothing that advanced `z` past this point between
+   iterations, so for `NumLines > 1` — the entire reason the `"LINES"`
+   option exists — every iteration after the first re-tested the exact
+   same `'\n'`, found its condition false immediately, and appended
+   nothing. Confirmed via a before/after test-revert: with the fix
+   reverted, a `LINES=2` request for a two-line file came back with
+   only the first line's text instead of both concatenated. Fixed by
+   skipping past the newline once the inner loop stops on one: `if (c
+   == '\n') z++;`. `BUGFIX #1` in source.
+
+`STRING::GetChr()`'s documented "returns 0 for an out-of-range index"
+contract (`src/string.hxx`) means the leading-whitespace-skip loop
+(`while (isspace(StringBuffer->GetChr(x))) x++;`) is already safe for
+an all-whitespace or empty record — traced, not assumed, and confirmed
+by a dedicated test. `UCHR` is already `unsigned char`
+(`src/gdt.h`), so the `isspace()` calls need no signedness cast. No
+`NULL`/`sprintf` to modernize. Added class-level doc comment to the
+header and a `Present()` doc comment in the source.
+`doctype/simple.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_simple.cxx` covers: the default `LINES=1` case
+returning just the first line; skipping leading whitespace before the
+headline; `LINES=2` correctly including the second line
+(`BUGFIX #1`'s direct regression); `LINES` exceeding the file's real
+line count not crashing (the inner loop's `GetChr()` past-EOF `0`
+return stops it safely); and a non-`"B"` element set deferring to
+`DOCTYPE::Present()`. `Present()`'s `"B"` path calls
+`RESULT::GetRecordData()` directly (same as
+`doctype/markdown.cxx`), so these tests build a real, file-backed
+`RESULT`, and a `TESTIDBOBJ::GetDocTypeOptions()` override returns a
+`"LINES=<n>"` STRLIST entry (matching the `"KEY=VALUE"` format
+`STRLIST::GetValue()` parses, confirmed by reading
+`src/strlist.cxx`) so each test can control `NumLines` at construction.
+

@@ -33,6 +33,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:		simple.hxx
 Version:	1.00
@@ -46,6 +49,12 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "defs.hxx"
 #include "doctype.hxx"
 
+// A DOCTYPE that presents a document's leading text as a headline: the
+// "B" (brief) element set returns the first NumLines non-blank-leading
+// lines of the record (NumLines from the doctype's "LINES" option,
+// default/minimum 1). Record splitting and field parsing are entirely
+// inherited from DOCTYPE's own defaults; only Present()/BeforeRset()/
+// AfterRset() are overridden.
 class SIMPLE : public DOCTYPE {
 public:
 	SIMPLE(PIDBOBJ DbParent);
