@@ -33,6 +33,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:		gils.hxx
 Version:	1.00
@@ -59,6 +62,13 @@ Author:		Archie Warnock, warnock@clark.net
 #define GILS_TEXT_EXTENSION "sut"
 #define GILS_XML_EXTENSION  "xml"
 
+// A GILS (Government Information Locator Service) SGML DOCTYPE.
+// Record splitting and field parsing are entirely inherited from
+// SGMLNORM; GILS only customizes Present(): ElementSet "B" returns
+// just the "title" field, and anything else reads a pre-rendered
+// static output file (one of GILS_HTML_EXTENSION/GILS_TEXT_EXTENSION/
+// GILS_SGML_EXTENSION/GILS_XML_EXTENSION, chosen by RecordSyntax)
+// straight off disk rather than composing output from parsed fields.
 class GILS : public SGMLNORM {
 public:
 	GILS(PIDBOBJ DbParent);

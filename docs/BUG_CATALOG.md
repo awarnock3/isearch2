@@ -4769,3 +4769,59 @@ line with no trailing newline (`BUGFIX #1`'s direct regression); `"F"`
 returning everything after the first line; and not crashing when the
 file has no newline at all.
 
+## doctype/gils.cxx
+
+`class GILS` (`: public SGMLNORM`) is a GILS (Government Information
+Locator Service) SGML DOCTYPE. Record splitting and field parsing are
+entirely inherited from `SGMLNORM`; `GILS` only customizes `Present()`:
+`ElementSet` `"B"` returns just the `"title"` field, and anything else
+reads a pre-rendered static output file straight off disk (its
+extension chosen by `RecordSyntax`) rather than composing output from
+parsed fields. One real bug (resource leaks), plus dead-code cleanup
+that turned out to be harmless rather than a second bug.
+
+1. **`Present()` leaked the open file handle on two early-return
+   paths** — after `fopen()` succeeds, both `if (fseek(...) != 0)
+   return;` checks (bounding the file to find its length, then
+   rewinding) returned without ever calling `fclose(fp)` — only the
+   success path further down did. Same leaked-resource-on-early-return
+   shape as `doctype/bibtex.cxx`'s `BUGFIX #3`. Fixed by adding
+   `fclose(fp);` immediately before each of those two returns. Not
+   forced via a real repro (would need a non-seekable stream, e.g. a
+   FIFO, to make `fseek()` actually fail on a freshly `fopen()`'d
+   handle — impractical to construct for a plain "present this file"
+   code path, and `LeakSanitizer` doesn't track file descriptors the
+   way it tracks heap memory, so `make tests-asan` couldn't confirm it
+   either way even if reproduced). `BUGFIX #1` in source.
+
+Also investigated and found NOT to be a functional bug, despite the
+shape looking identical to `doctype/fgdcsite.cxx`'s `BUGFIX #1`: the
+extension-guessing `if`/`else if` chain checked `HtmlRecordSyntax` and
+`SgmlRecordSyntax` twice each in a row (`if (...Html...) ... else if
+(...Html...) ... else if (...Sutrs...) ... else if (...Sgml...) else
+if (...Sgml...) else ...`). Unlike `fgdcsite.cxx` (where the
+duplicated condition made the *only* path to a real syntax check
+unreachable, silently falling through to the wrong extension),
+`gils.cxx`'s first (non-duplicate) `Html`/`Sgml` branches already
+correctly handle those two syntaxes — the second copies are 100% dead,
+unreachable `else if`s with no observable effect, and `XmlRecordSyntax`
+was never explicitly checked at all (there's no such branch, duplicate
+or otherwise) yet already produces the correct `GILS_XML_EXTENSION`
+via the unconditional final `else`. No test can distinguish "before"
+from "after" here — every `RecordSyntax` value already produced the
+correct extension either way. Removed the two dead branches as
+cleanup, not cataloged as a numbered `BUGFIX`.
+
+No live `NULL`/`sprintf` usage. Added class-level and per-function doc
+comments. `doctype/gils.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_gils.cxx` covers: the header's extension
+`#define`s; `Present()`'s `"B"` element set returning the title field
+(and returning empty when there is none); `Present()` correctly
+finding the HTML/SGML/XML variant of a record via
+`HtmlRecordSyntax`/`SgmlRecordSyntax`/`XmlRecordSyntax` (the SGML and
+XML cases doubling as the dead-code-removal regression, confirming the
+first live `Sgml` branch and the catch-all `else`-based `Xml` handling
+both still work correctly with the duplicate branches gone); and
+`Present()` reporting a missing file gracefully instead of crashing.
+
