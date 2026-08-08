@@ -97,7 +97,7 @@
 | 93 | doctype/iafadoc.hxx | done | 2026-08-08 | [doctype/iafadoc.hxx](BUG_CATALOG.md#doctypeiafadoccxx) |
 | 94 | doctype/iknowdoc.hxx | done | 2026-08-08 | [doctype/iknowdoc.hxx](BUG_CATALOG.md#doctypeiknowdoccxx) |
 | 95 | doctype/incoming/sgmlgils.hxx | done | 2026-08-08 | [doctype/incoming/sgmlgils.hxx](BUG_CATALOG.md#doctypeincomingsgmlgilscxx) |
-| 96 | doctype/irlist.hxx | pending | | |
+| 96 | doctype/irlist.hxx | done | 2026-08-08 | [doctype/irlist.hxx](BUG_CATALOG.md#doctypeirlistcxx) |
 | 97 | doctype/listdigest.hxx | pending | | |
 | 98 | doctype/litmed.hxx | pending | | |
 | 99 | doctype/maildigest.hxx | pending | | |
@@ -212,7 +212,7 @@
 | 208 | doctype/iafadoc.cxx | done | 2026-08-08 | [doctype/iafadoc.cxx](BUG_CATALOG.md#doctypeiafadoccxx) |
 | 209 | doctype/iknowdoc.cxx | done | 2026-08-08 | [doctype/iknowdoc.cxx](BUG_CATALOG.md#doctypeiknowdoccxx) |
 | 210 | doctype/incoming/sgmlgils.cxx | done | 2026-08-08 | [doctype/incoming/sgmlgils.cxx](BUG_CATALOG.md#doctypeincomingsgmlgilscxx) |
-| 211 | doctype/irlist.cxx | pending | | |
+| 211 | doctype/irlist.cxx | done | 2026-08-08 | [doctype/irlist.cxx](BUG_CATALOG.md#doctypeirlistcxx) |
 | 212 | doctype/listdigest.cxx | pending | | |
 | 213 | doctype/litmed.cxx | pending | | |
 | 214 | doctype/maildigest.cxx | pending | | |

@@ -5367,3 +5367,70 @@ definition, not the empty stub), its `"F"` placeholder, its `"HTML
 HTML 0"` branch actually reading a real sibling `.htm` file, and its
 fallback message for an unrecognized element set.
 
+## doctype/irlist.cxx
+
+`class IRLIST` (`: public MAILFOLDER`) is a mail-digest DOCTYPE:
+`ParseRecords()` overrides the inherited `MAILFOLDER::ParseRecords()`
+to also split at a `"*********"` magic separator line, in addition to
+the base class's own blank-line-preceded mbox `"From "` splitting.
+Both bugs found here were confirmed by direct comparison against
+`doctype/mailfolder.cxx`'s own `ParseRecords()` — already processed,
+already fixed — whose protections this override never picked up when
+it was originally forked from (or written alongside) the base class.
+
+1. **A "From " line anywhere in a digest message's body could
+   spuriously fragment the record** — `IsMailFollowLine()` matches any
+   well-formed Unix mbox envelope header (`"From <addr> <date>..."`),
+   which is common *inside* quoted/forwarded mail — exactly what a
+   digest is made of. `doctype/mailfolder.cxx`'s own `ParseRecords()`
+   guards this exact check with a `Look` flag, true only when the
+   *previous* line was blank (the real mbox convention: a blank line
+   always precedes a new message's `"From "` line) — this override
+   dropped that guard entirely, checking `IsMailFromLine(buf)`
+   unconditionally on every line. Confirmed via a regression test: a
+   `"From "`-formatted line embedded mid-message with no preceding
+   blank line, followed by a genuinely blank-line-preceded `"From "`
+   for the next real message, produces exactly 2 records (not 3) after
+   the fix. The magic separator doesn't need this guard (9 asterisks
+   is already distinctive on its own), so only the `IsMailFromLine()`
+   branch is gated. `BUGFIX #1` in source.
+2. **Unsigned integer underflow added a record ending ~4 billion bytes
+   past the real file** — `GPTYPE` is `UINT4` (`src/defs.hxx`);
+   whenever the triggering line was the very first line of the file
+   (`SavePosition == 0` — e.g. a standard mbox-format file, which
+   conventionally *starts* with a `"From "` line), `RecordEnd =
+   SavePosition - 1` underflowed to `UINT_MAX`, and `RecordEnd > Start`
+   (0) then passed, handing `Db->DocTypeAddRecord()` a record whose end
+   is nowhere near the actual file. `doctype/mailfolder.cxx`'s own
+   `ParseRecords()` already guards against exactly this
+   (`RecordEnd = (SavePosition == 0) ? 0 : SavePosition - 1;`); this
+   override never had the equivalent guard, at either of the two sites
+   sharing the same `X - 1` pattern (the main loop's trigger handling,
+   and the post-loop final-record logic, the latter reachable via a
+   genuinely empty/zero-byte file). Confirmed via a real before/after
+   test-revert:
+   ```
+   REQUIRE( r.second < content.size() )
+   with expansion:
+     4294967295 (0xffffffff) < 81
+   ```
+   restoring the fix cleared it. Fixed by mirroring
+   `mailfolder.cxx`'s `(X == 0) ? 0 : X - 1` guard at both call sites.
+   `BUGFIX #2` in source.
+
+`NULL` converted to `nullptr` at the one live call site. No `sprintf`
+usage. Added class-level and per-function doc comments.
+`doctype/irlist.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`
+(`doctype/mailfolder.cxx`, its base class, was already linked in from
+an earlier turn).
+
+`tests/doctype/test_irlist.cxx` covers: no bogus oversized record when
+the first line of the file is a `"From "` line (`BUGFIX #2`'s direct
+regression, confirmed via the real before/after test-revert described
+above); an embedded, non-blank-line-preceded `"From "` line inside a
+message body not fragmenting the record, verified against exact
+byte-offset boundaries (`BUGFIX #1`'s direct regression); splitting
+correctly at a magic separator line, also verified against exact
+byte-offset boundaries; and no bogus record for a genuinely empty
+file (`BUGFIX #2`'s other guarded call site).
+

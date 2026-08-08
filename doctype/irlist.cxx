@@ -105,6 +105,9 @@ ________________________________________________________________________________
 (*)Basis Systeme netzwerk, Brecherspitzstr. 8, 81541 Muenchen, Germany 
 
 ************************************************************************/
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		irlist.cxx
 Version:	$Revision: 1.3 $
@@ -128,6 +131,11 @@ IRLIST::IRLIST (PIDBOBJ DbParent): MAILFOLDER (DbParent)
 {
 }
 
+// Splits FileRecord's underlying digest file into one RECORD per
+// message, at each "*********" magic separator line or each blank-
+// line-preceded mbox "From " line, and adds each to Db via
+// DocTypeAddRecord() (each later gets its own ParseFields() call, via
+// the inherited MAILFOLDER::ParseFields()).
 void IRLIST::ParseRecords (const RECORD& FileRecord)
 {
   // Break up the document into Mail message records
@@ -164,18 +172,41 @@ void IRLIST::ParseRecords (const RECORD& FileRecord)
   const char magic[] = "*********";
   const size_t magic_len = sizeof(magic)/sizeof(char)-1;
 
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypeirlistcxx): IsMailFromLine()
+  // matches any line starting with a legal Unix mbox "From " envelope
+  // header -- extremely common *inside* a mail digest's quoted/forwarded
+  // message bodies, not just at genuine message boundaries. The already-
+  // processed base class, doctype/mailfolder.cxx's own ParseRecords(),
+  // guards this exact same check with a `Look` flag that's only true
+  // when the *previous* line was blank (the real mbox convention: a
+  // blank line always precedes a new message's "From " line) -- this
+  // override dropped that guard entirely, so any "From " text anywhere
+  // in a digest's body would spuriously fragment it into bogus records.
+  // The magic separator doesn't need this guard (9 asterisks is already
+  // distinctive), so only the IsMailFromLine() branch is gated.
+  GDT_BOOLEAN Look = GDT_TRUE;
+
   // Read lines from file and search for record seperation
-  while (fgets(buf, sizeof(buf)/sizeof(char)-1, Fp) != NULL)
+  while (fgets(buf, sizeof(buf)/sizeof(char)-1, Fp) != nullptr)
     {
       // Search for "magic" line type or mail "from "
       size_t line_len = strlen(buf);
       if ((line_len > magic_len && strncmp(buf, magic, magic_len) == 0)
-	|| IsMailFromLine(buf) )
+	|| (Look && IsMailFromLine(buf)) )
 	{
 	  if (buf[0] == magic[0]) Position += line_len;
 	  SavePosition = Position;
 	  Record.SetRecordStart (Start);
-	  RecordEnd = SavePosition - 1;
+	  // BUGFIX #2 (docs/BUG_CATALOG.md#doctypeirlistcxx): GPTYPE is
+	  // UINT4 (src/defs.hxx) -- when SavePosition is 0 (the trigger
+	  // line is the very first line of the file, e.g. a standard
+	  // mbox file's leading "From " line), `SavePosition - 1`
+	  // underflows to UINT_MAX, and `RecordEnd > Start` (0) then
+	  // passes, adding a record whose end is ~4 billion bytes past
+	  // the real file. Same underflow doctype/mailfolder.cxx's own
+	  // ParseRecords() already guards against; this override never
+	  // picked up the same fix. Guarded the same way here.
+	  RecordEnd = (SavePosition == 0) ? 0 : SavePosition - 1;
 
 	  if (RecordEnd > Start)
 	    {
@@ -187,12 +218,17 @@ void IRLIST::ParseRecords (const RECORD& FileRecord)
 	}
       else
        Position += line_len;
+      Look = (buf[0] == '\n' || buf[0] == '\r') ? GDT_TRUE : GDT_FALSE;
     }
 
   fclose (Fp);
 
   Record.SetRecordStart (Start);
-  RecordEnd = Position - 1;
+  // BUGFIX #2 (continued): same underflow guard as above -- Position
+  // is 0 here for a genuinely empty file (fgets() never succeeded even
+  // once), which would otherwise add a bogus ~4-billion-byte record
+  // for a zero-byte file.
+  RecordEnd = (Position == 0) ? 0 : Position - 1;
 
   if (RecordEnd > Start)
     {
