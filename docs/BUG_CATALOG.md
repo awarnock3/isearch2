@@ -5133,3 +5133,87 @@ the way through to `Newsgroup-Name`; falling back to a
 newline-truncated, ellipsis-suffixed `Description` when no name field
 exists at all; and not crashing when nothing is found anywhere.
 
+## doctype/iknowdoc.cxx
+
+`class IKNOWDOC` (`: public COLONDOC`) is an "IKNOW"-flavored
+colon-tagged DOCTYPE: every record must open with a `"Template:"`
+field followed immediately by a `"Handle:"` field, and every tagged
+value is additionally duplicated into a catch-all `"Value-only"`
+field. The set of distinct template types seen across every record is
+accumulated in a `TemplateTypes` member and written to a `"<db>.tpt"`
+sidecar file when the object is destroyed. Four real bugs — the first
+severe enough to abort an entire indexing run over a single malformed
+record.
+
+1. **A single malformed record aborted the entire process** —
+   `ParseFields()` called `EXIT_ERROR` (`{fflush(stdout);
+   fflush(stderr); exit(1);}`, `src/defs.hxx`) whenever a record's
+   first field wasn't `"Template"` or its second wasn't `"Handle"` —
+   terminating the *whole* indexing run, discarding all progress
+   already made on every other file, over one bad record. No other
+   doctype in this tree aborts the entire process this way; every
+   sibling warns and skips just the offending record/field instead.
+   Confirmed via a real before/after repro: reverting just this fix
+   and running the full test suite made the process exit(1) mid-run,
+   silently truncated with no final summary at all —
+   ```
+   $ tests/run_tests
+   ...
+   Record in "..." does not begin with a Template type!
+   $ echo $?
+   1
+   ```
+   (588 test cases across the *entire tree*, not just this file, never
+   got to report a result). Fixed by keeping the existing diagnostic
+   but cleaning up (`pdft`/`RecBuffer`/`tags`) and `return`ing —
+   skipping just this record — instead of exiting. `BUGFIX #1` in
+   source.
+2. **A `"Template"` field's temporary buffer was never freed** — `PCHR
+   pstr = new CHR[val_len+2]; ...; STRING foo = pstr;` never
+   `delete []`'d `pstr` — `STRING::operator=(const CHR*)` copies into
+   `foo`'s own buffer, so `pstr` leaked on every `"Template"` field.
+   Same leak-on-every-call shape as `doctype/bibtex.cxx`'s `BUGFIX
+   #1`/`#2`. Confirmed leak-free under `make tests-asan` after adding
+   `delete [] pstr;`. `BUGFIX #2` in source.
+3. **The whole-file-as-one-record fallback truncated the file's last
+   byte** — `RecEnd = ftell(fp) - 1;` (unlike every sibling doctype's
+   identical fallback, e.g. `doctype/cipc.cxx`/`doctype/html.cxx`,
+   which use plain `ftell(fp)`) made `RecLength` one byte short of the
+   real file size, so the final byte was never `fread()`'d into
+   `RecBuffer` — and since the last tag's value is bounded by
+   `RecLength` when there's no next tag to bound it instead, a final
+   line with no trailing newline lost its last character. Confirmed
+   via an exact-substring regression test against a file whose last
+   line has no trailing `\n`. `BUGFIX #3` in source.
+4. **An unnecessary, unsafe downcast in the destructor** —
+   `((IDB*)Db)->GetDbFileStem(&temp);` reinterpret-cast `Db` (an
+   `IDBOBJ*`) to `IDB*` before calling a method that's already declared
+   `virtual` on `IDBOBJ` itself (`src/idbobj.hxx`) — the cast was
+   entirely redundant (ordinary virtual dispatch through the original
+   `IDBOBJ*` reaches the exact same override for any real, `IDB`-backed
+   `Db`) and unsafe (calling a member through a pointer reinterpreted
+   to a type the pointee isn't actually an instance of is undefined
+   behavior for any `Db` that isn't an `IDB`). Fixed by dropping the
+   cast. This also made `"rcache.hxx"`/`"dtreg.hxx"`/`"fprec.hxx"`/
+   `"fpt.hxx"`/`"index.hxx"`/`"registry.hxx"`/`"idb.hxx"` entirely
+   unused (they existed solely to support `IDB`'s full class
+   definition for that one cast) — removed. `BUGFIX #4` in source.
+
+`NULL` converted to `nullptr` at all 6 live call sites. No `sprintf`
+usage. Added class-level and per-function doc comments.
+`doctype/iknowdoc.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`
+(`doctype/colondoc.cxx`, its base class, was already linked in from an
+earlier turn).
+
+`tests/doctype/test_iknowdoc.cxx` covers: extracting a well-formed
+record's fields, including the `"Value-only"` duplicate; tracking
+distinct `"Template"` values into `TemplateTypes`; not truncating a
+record's last byte when it has no trailing newline (`BUGFIX #3`'s
+direct regression); and — critically — not aborting the process on a
+record with the wrong first or second field (`BUGFIX #1`'s direct
+regression: every `TEST_CASE` in this file, and every other test file
+sharing the same binary, only gets to run *because* this fix works).
+Every test implicitly exercises `~IKNOWDOC()`'s now-safe
+`Db->GetDbFileStem()` call too (`BUGFIX #4`), confirmed leak/UB-free
+under `make tests-asan`.
+

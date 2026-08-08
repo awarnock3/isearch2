@@ -34,6 +34,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:           iknowdoc.hxx
 Version:        1.0
@@ -56,6 +59,15 @@ Author:         Tim Gemma, stone@cnidr.org
 
 #include "colondoc.hxx"
 
+// An "IKNOW"-flavored colon-tagged DOCTYPE: like COLONDOC, but every
+// record must open with a "Template:" field (naming the record's
+// template type) followed immediately by a "Handle:" field, and every
+// tagged value is additionally duplicated into a catch-all
+// "Value-only" field (so a search can match any field's value without
+// naming the field). The set of distinct template types seen across
+// every record processed by this object is accumulated in
+// TemplateTypes and written out to a "<db>.tpt" sidecar file when the
+// object is destroyed.
 class IKNOWDOC :  public COLONDOC {
 public:
         IKNOWDOC(PIDBOBJ DbParent);

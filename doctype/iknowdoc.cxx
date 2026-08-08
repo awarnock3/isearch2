@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /* $Id: iknowdoc.cxx,v 1.7 1998/11/04 04:50:12 cnidr Exp $ */
 /************************************************************************
 Copyright (c) 1994,1995 Basis Systeme netzwerk, Munich
@@ -160,13 +163,11 @@ Modification:   Tim Gemma, stone@cnidr.org
 #include <errno.h>
 #include <ctype.h>
 #include "iknowdoc.hxx"
-#include "rcache.hxx"
-#include "dtreg.hxx"
-#include "fprec.hxx"
-#include "fpt.hxx"
-#include "index.hxx"
-#include "registry.hxx"
-#include "idb.hxx"
+// Removed here: "rcache.hxx"/"dtreg.hxx"/"fprec.hxx"/"fpt.hxx"/
+// "index.hxx"/"registry.hxx"/"idb.hxx" -- pulled in solely for IDB's
+// full class definition, needed only by the now-removed (IDB*) cast
+// in ~IKNOWDOC() (see BUGFIX #4). Nothing else in this file uses any
+// of those types.
 
 IKNOWDOC::IKNOWDOC (PIDBOBJ DbParent) : COLONDOC (DbParent)
 {
@@ -174,6 +175,13 @@ IKNOWDOC::IKNOWDOC (PIDBOBJ DbParent) : COLONDOC (DbParent)
 
 static PCHR *parse_tags (PCHR b, GPTYPE len);
 
+// Reads the whole record into memory, tokenizes it into "Tag:" lines
+// via parse_tags(), and adds one DF field per tag/value pair -- both
+// under its own unified field name and, redundantly, under a
+// catch-all "Value-only" field. The first field must be "Template"
+// and the second must be "Handle"; anything else warns and skips the
+// record entirely (see BUGFIX #1). Also tracks every distinct
+// "Template" value seen across all records into TemplateTypes.
 void IKNOWDOC::ParseFields (PRECORD NewRecord)
 {
   STRING fn;
@@ -190,7 +198,17 @@ void IKNOWDOC::ParseFields (PRECORD NewRecord)
     {
       fseek (fp, 0L, SEEK_END);
       RecStart = 0;
-      RecEnd = ftell (fp) - 1;
+      // BUGFIX #3 (docs/BUG_CATALOG.md#doctypeiknowdoccxx): the `- 1`
+      // here made RecLength (below) one byte short of the real file
+      // size, so the last byte of the file was never fread() into
+      // RecBuffer -- and since the last tag's value is bounded by
+      // RecLength when there's no next tag to bound it instead (see
+      // `p = &RecBuffer[RecLength];` below), a final line with no
+      // trailing newline lost its last character. Every sibling
+      // doctype's identical whole-file-as-one-record fallback (e.g.
+      // doctype/cipc.cxx, doctype/html.cxx) uses plain `ftell(fp)`
+      // here, with no `- 1`.
+      RecEnd = ftell (fp);
     }
   fseek (fp, (long)RecStart, SEEK_SET);
   GPTYPE RecLength = RecEnd - RecStart;
@@ -200,7 +218,7 @@ void IKNOWDOC::ParseFields (PRECORD NewRecord)
   RecBuffer[ActualLength] = '\0';
  
   PCHR *tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL || tags[0] == NULL)
+  if (tags == nullptr || tags[0] == nullptr)
     {
       STRING doctype;
       NewRecord->GetDocumentType(&doctype);
@@ -229,7 +247,7 @@ void IKNOWDOC::ParseFields (PRECORD NewRecord)
     {
       cnt++;
       PCHR p = tags_ptr[1]; // end of field
-      if (p == NULL) // If no end of field
+      if (p == nullptr) // If no end of field
         p = &RecBuffer[RecLength]; // use end of buffer
       // eg "Author:"
       size_t off = strlen (*tags_ptr) + 1;
@@ -251,29 +269,51 @@ void IKNOWDOC::ParseFields (PRECORD NewRecord)
       FieldName = unified_name ? unified_name: "Misc";
 #else
       // Ignore "unclassified" fields
-      if (unified_name == NULL) continue; // ignore these
+      if (unified_name == nullptr) continue; // ignore these
       FieldName = unified_name;
 #endif
       dfd.SetFieldName (FieldName);
 // Addition (TG) - Keeps track of the list of template-types for later storage.
       if (FieldName.CaseEquals("Template")) {
+        // BUGFIX #2 (docs/BUG_CATALOG.md#doctypeiknowdoccxx): pstr was
+        // never delete[]'d -- STRING::operator=(const CHR*) (foo=pstr)
+        // copies the bytes into foo's own buffer, so pstr itself leaked
+        // on every "Template" field. Same leak-on-every-call shape as
+        // doctype/bibtex.cxx's BUGFIX #1/#2.
         PCHR pstr=new CHR[val_len+2];
         memcpy(pstr,RecBuffer+val_start,val_len+1);
         pstr[val_len+1]='\0';
         STRING foo=pstr;
+        delete [] pstr;
         if (!TemplateTypes.SearchCase(foo)) {
           TemplateTypes.AddEntry(foo);
         }
       }
+      // BUGFIX #1 (docs/BUG_CATALOG.md#doctypeiknowdoccxx): EXIT_ERROR
+      // expands to `{fflush(stdout); fflush(stderr); exit(1);}`
+      // (src/defs.hxx) -- a single malformed record (wrong first/
+      // second field) used to terminate the *entire* indexing
+      // process, discarding all progress on every other file already
+      // indexed in this run. No other doctype in this tree aborts the
+      // whole process over one bad record; every sibling instead
+      // warns and skips just that record. Fixed by keeping the
+      // existing diagnostic but cleaning up and returning (skipping
+      // this record only) instead of exiting.
       if ((cnt==1) && (FieldName!="Template")) {
-	 cerr << "Record in \"" << fn 
+	 cerr << "Record in \"" << fn
 	 << "\" does not begin with a Template type!\n";
-          EXIT_ERROR;
+	  delete pdft;
+	  delete [] RecBuffer;
+	  delete [] tags;
+	  return;
       }
       if ((cnt==2) && (FieldName!="Handle")) {
-	 cerr << "Record in \"" << fn 
+	 cerr << "Record in \"" << fn
          << "\" does not have a Handle as its second field!\n";
-          EXIT_ERROR;
+	  delete pdft;
+	  delete [] RecBuffer;
+	  delete [] tags;
+	  return;
       }
 // End Addition
       Db->DfdtAddEntry (dfd);
@@ -305,6 +345,10 @@ void IKNOWDOC::ParseFields (PRECORD NewRecord)
   delete [] tags;
 }
 
+// Scans b for "Tag:" lines (a run of non-space characters at the
+// start of a line, up to a ':'), NUL-terminating each tag in place
+// and returning an array of pointers to each tag's first character,
+// nullptr-terminated. Returns nullptr on allocation failure.
 static PCHR *parse_tags (PCHR b, GPTYPE len)
 {
   PCHR *t;                      // array of pointers to first char of tags
@@ -338,10 +382,10 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
               // allocate more space
               max_num_tags += TAG_GROW_SIZE;
               PCHR *New = new PCHR [max_num_tags];
-              if (New == NULL)
+              if (New == nullptr)
                 {
                   delete [] t;
-                  return NULL; // NO MORE CORE!
+                  return nullptr; // NO MORE CORE!
                 }
               memcpy(New, t, tc*sizeof(PCHR));
               delete [] t;
@@ -360,16 +404,26 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
         State = CONTINUING;
 #endif
     }
-  t[tc] = (PCHR) NULL;
+  t[tc] = (PCHR) nullptr;
   return t;
 }
 
 
+// Writes every distinct "Template" value accumulated across all
+// records this object parsed to "<db>.tpt", one per line.
 IKNOWDOC::~IKNOWDOC ()
 {
 // Addition (TG) - Store list of template-types in file extension .tpt
+  // BUGFIX #4 (docs/BUG_CATALOG.md#doctypeiknowdoccxx): the (IDB*) cast
+  // here was unnecessary and unsafe -- GetDbFileStem() is already
+  // declared virtual on IDBOBJ itself (src/idbobj.hxx), so it's
+  // reachable directly through Db (an IDBOBJ*) via ordinary virtual
+  // dispatch, with identical behavior for any real (IDB-backed) Db.
+  // The cast only added risk: calling a member through a pointer
+  // reinterpreted to a type the pointee isn't actually an instance of
+  // is undefined behavior for any Db that isn't an IDB.
   STRING temp;
-  ((IDB*)Db)->GetDbFileStem(&temp);
+  Db->GetDbFileStem(&temp);
   temp.Cat(".tpt");
   PCHR filename=temp.NewCString();
   ofstream out(filename);

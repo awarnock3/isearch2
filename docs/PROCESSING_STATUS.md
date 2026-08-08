@@ -95,7 +95,7 @@
 | 91 | doctype/html.hxx | done | 2026-08-08 | [doctype/html.hxx](BUG_CATALOG.md#doctypehtmlcxx) |
 | 92 | doctype/htmltag.hxx | done | 2026-08-08 | [doctype/htmltag.hxx](BUG_CATALOG.md#doctypehtmltagcxx) |
 | 93 | doctype/iafadoc.hxx | done | 2026-08-08 | [doctype/iafadoc.hxx](BUG_CATALOG.md#doctypeiafadoccxx) |
-| 94 | doctype/iknowdoc.hxx | pending | | |
+| 94 | doctype/iknowdoc.hxx | done | 2026-08-08 | [doctype/iknowdoc.hxx](BUG_CATALOG.md#doctypeiknowdoccxx) |
 | 95 | doctype/incoming/sgmlgils.hxx | pending | | |
 | 96 | doctype/irlist.hxx | pending | | |
 | 97 | doctype/listdigest.hxx | pending | | |
@@ -210,7 +210,7 @@
 | 206 | doctype/html.cxx | done | 2026-08-08 | [doctype/html.cxx](BUG_CATALOG.md#doctypehtmlcxx) |
 | 207 | doctype/htmltag.cxx | done | 2026-08-08 | [doctype/htmltag.cxx](BUG_CATALOG.md#doctypehtmltagcxx) |
 | 208 | doctype/iafadoc.cxx | done | 2026-08-08 | [doctype/iafadoc.cxx](BUG_CATALOG.md#doctypeiafadoccxx) |
-| 209 | doctype/iknowdoc.cxx | pending | | |
+| 209 | doctype/iknowdoc.cxx | done | 2026-08-08 | [doctype/iknowdoc.cxx](BUG_CATALOG.md#doctypeiknowdoccxx) |
 | 210 | doctype/incoming/sgmlgils.cxx | pending | | |
 | 211 | doctype/irlist.cxx | pending | | |
 | 212 | doctype/listdigest.cxx | pending | | |
