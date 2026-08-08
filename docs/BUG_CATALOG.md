@@ -4410,3 +4410,70 @@ correctly erroring on a missing closing tag (`BUGFIX #1`/`#2`);
 `LoadFieldTable` not crashing on an empty FIELDTYPE file (`BUGFIX #5`)
 while still loading real entries correctly.
 
+## doctype/fgdcsite.cxx
+
+`class FGDCSITE` (`: public SGMLTAG`) is a locator/directory record for
+an FGDC clearinghouse node — site metadata (hostname, port, database
+name, contact info, bounding coordinates), not the geospatial metadata
+itself (that's `doctype/fgdc.cxx`). A much smaller, differently-shaped
+file than its `doctype/fgdc*.cxx` neighbors (record splitting and field
+parsing are entirely inherited from `SGMLTAG`; `FGDCSITE` only
+customizes `LoadFieldTable()`, `UsefulSearchField()`, and `Present()`).
+Two real bugs found, one of them a confirmed-dead feature: SGML output
+had silently never worked at all.
+
+1. **`Present()`'s SGML-variant lookup was permanently unreachable —
+   requesting a record's SGML rendering silently used the wrong
+   file** — in each of `Present()`'s four filename-extension-guessing
+   fallback tiers (plain, short, uppercase, short-uppercase), the
+   `RecordSyntax` check meant to recognize `SgmlRecordSyntax` was
+   instead an exact, verbatim duplicate of the `HtmlRecordSyntax` check
+   directly above it: `if (RecordSyntax.Equals(HtmlRecordSyntax)) ...
+   else if (RecordSyntax.Equals(HtmlRecordSyntax)) ...`. Since the
+   second condition is identical to the first, it can only ever be
+   reached when the first already matched — meaning it's dead, and any
+   genuinely-SGML request fell through past both `Html`/duplicate
+   branches and the `Sutrs` branch to the final `else`, which just uses
+   the record's filename unmodified rather than trying an
+   `FGDC_SGML_EXTENSION`-suffixed sibling file. Corroborating evidence:
+   `FGDC_SGML_EXTENSION`/`SHORT_FGDC_SGML_EXTENSION`/their two
+   uppercase siblings are all defined in `fgdcsite.hxx` but were,
+   before this fix, referenced *nowhere* in `fgdcsite.cxx` — dead
+   constants defined for a feature that could never run. Fixed by
+   changing all four duplicated conditions to check `SgmlRecordSyntax`
+   (declared in `src/defs.hxx`, alongside `HtmlRecordSyntax`/
+   `SutrsRecordSyntax` already used correctly here) and `Cat()` the
+   matching SGML extension constant instead of the HTML one. Confirmed
+   via a real regression test: writes a `.sgml` sibling file next to a
+   fake record path with an unrelated extension, calls `Present()` with
+   `RecordSyntax="SGML"`, and asserts the *real* `.sgml` file's content
+   comes back — this would have silently failed (returned the wrong,
+   nonexistent-file "Requested file not found" message) before the fix.
+   `BUGFIX #1` in source.
+2. **`LoadFieldTable()` could crash on an empty FIELDTYPE file** — same
+   bug as, and fixed the same way as, `doctype/cipc.cxx`'s `BUGFIX #5`
+   (`do`-`while` → `while`, checking `pBuf` before the first iteration
+   too, not just between iterations). `BUGFIX #2` in source.
+
+Modernization: the one live `NULL` (in the `LoadFieldTable()` fix
+above) converted to `nullptr`. No `sprintf` usage. Added class-level
+and per-function doc comments. `doctype/fgdcsite.cxx` added to
+`TEST_ENGINE_DOCTYPE_SRCS` (`doctype/sgmltag.cxx`, its base class, was
+already linked in from an earlier turn).
+
+`tests/doctype/test_fgdcsite.cxx` covers: the header's extension
+`#define`s; `LoadFieldTable` not crashing on an empty FIELDTYPE file
+(`BUGFIX #2`) while still loading real entries correctly; `Present()`'s
+`"B"` element set falling back to a placeholder when
+`IDBOBJ::GetFieldData()` finds nothing (safe against a
+default-constructed `RESULT` since the default `GetFieldData()`
+override never touches it, unlike `GetRecordData()` — see the other
+`doctype/` tests' notes on that crash); and `Present()` actually
+finding and returning a real `.sgml` sibling file's contents via
+`SgmlRecordSyntax` (`BUGFIX #1`'s direct regression). Not tested:
+`UsefulSearchField()` is `private` (same as its `cipc.cxx`/`cipp.cxx`/
+`fgdc.cxx` equivalents, none of which are tested directly either), so
+it isn't reachable from an external test without a friend/subclass
+workaround, which wasn't judged worth adding for a straightforward
+linear name-search function.
+

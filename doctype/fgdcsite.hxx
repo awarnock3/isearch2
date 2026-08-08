@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 // $Id: fgdcsite.hxx,v 1.4 1998/06/20 00:06:14 cnidr Exp $
 /************************************************************************
 Copyright Notice
@@ -69,8 +72,15 @@ Changes:
 #define SHORT_FGDC_TEXT_EXTENSION_UC "TXT"
 
 
-class FGDCSITE 
-  : public SGMLTAG 
+// A locator/directory record for an FGDC clearinghouse node (site
+// metadata -- hostname, port, database name, contact info, bounding
+// coordinates -- not the geospatial metadata itself; see
+// doctype/fgdc.hxx for that). Record parsing is entirely inherited
+// from SGMLTAG; FGDCSITE only customizes LoadFieldTable(),
+// UsefulSearchField(), and Present() (which serves the record's raw
+// file contents, trying several filename-extension variants in turn).
+class FGDCSITE
+  : public SGMLTAG
 {
 public:
   FGDCSITE(PIDBOBJ DbParent);

@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 // $Id: fgdcsite.cxx,v 1.4 1998/11/04 04:50:53 cnidr Exp $
 /************************************************************************
 Copyright Notice
@@ -57,7 +60,10 @@ FGDCSITE::FGDCSITE(PIDBOBJ DbParent)
 }
 
 
-void 
+// Reads the file named by the "-o fieldtype=<filename>" doctype
+// option (prompting interactively if missing) and loads one
+// "FIELDNAME TYPE" entry per line into Db->FieldTypes.
+void
 FGDCSITE::LoadFieldTable() {
   STRLIST StrList;
   STRING  FieldTypeFilename;
@@ -89,11 +95,22 @@ FGDCSITE::LoadFieldTable() {
 
   pBuf = strtok(b,"\n");
 
-  do {
+  // BUGFIX #2 (docs/BUG_CATALOG.md#doctypefgdcsitecxx): same bug as,
+  // and fixed the same way as, doctype/cipc.cxx's BUGFIX #5 -- this
+  // was a do-while, unconditionally running the body (and thus
+  // `Field_and_Type = pBuf;`) once before ever checking pBuf. If the
+  // FIELDTYPE file exists but is empty (IsFile() above only checks
+  // existence, not content), strtok() returns nullptr on the very
+  // first call, and STRING::operator=(const CHR*) calls strlen() on
+  // it unconditionally -- a null-pointer-dereference crash. Checking
+  // pBuf before the first iteration too, not just between iterations,
+  // fixes it.
+  while (pBuf) {
     Field_and_Type = pBuf;
     Field_and_Type.UpperCase();
     Db->FieldTypes.AddEntry(Field_and_Type);
-  } while ( (pBuf = strtok((CHR*)NULL,"\n")) );
+    pBuf = strtok((CHR*)nullptr,"\n");
+  }
 
   delete [] b;
 }
@@ -104,7 +121,10 @@ FGDCSITE::~FGDCSITE()
 }
 
 
-GDT_BOOLEAN 
+// True for the fixed set of site-locator field names (TITLE, HOSTNAME,
+// bounding coordinates, contact info, etc.) that are worth indexing as
+// search fields; false for anything else.
+GDT_BOOLEAN
 FGDCSITE::UsefulSearchField(const STRING& Field)
 {
   STRING FieldName;
@@ -166,7 +186,12 @@ FGDCSITE::UsefulSearchField(const STRING& Field)
 }
 
 
-void 
+// ElementSet "B" returns just the TITLE field; anything else returns
+// the raw contents of the record's underlying file, trying several
+// filename-extension variants in turn (RecordSyntax's own extension,
+// then its short form, then uppercase long/short forms) before giving
+// up and reporting the file as not found.
+void
 FGDCSITE::Present (const RESULT& ResultRecord, const STRING& ElementSet,
 	       const STRING& RecordSyntax, STRING *StringBuffer)
 {
@@ -200,8 +225,20 @@ FGDCSITE::Present (const RESULT& ResultRecord, const STRING& ElementSet,
 
     if (RecordSyntax.Equals(HtmlRecordSyntax))
       FullFilename.Cat(FGDC_HTML_EXTENSION);  // extension=".html"
-    else if (RecordSyntax.Equals(HtmlRecordSyntax))
-      FullFilename.Cat(FGDC_HTML_EXTENSION);  // extension=".html"
+    // BUGFIX #1 (docs/BUG_CATALOG.md#doctypefgdcsitecxx): this branch's
+    // condition used to duplicate the HtmlRecordSyntax check above
+    // verbatim, making it permanently unreachable (if the first branch
+    // didn't match, neither could this identical one) -- an SGML
+    // request always fell through to the final `else`, silently using
+    // the unmodified filename instead of appending FGDC_SGML_EXTENSION.
+    // That constant (and its short/uppercase siblings, all defined in
+    // fgdcsite.hxx) was otherwise unused anywhere in this file --
+    // strong evidence this SGML branch was intended but the condition
+    // was copy-pasted wrong. Fixed by checking SgmlRecordSyntax instead
+    // (declared in src/defs.hxx, alongside HtmlRecordSyntax/
+    // SutrsRecordSyntax already used correctly here).
+    else if (RecordSyntax.Equals(SgmlRecordSyntax))
+      FullFilename.Cat(FGDC_SGML_EXTENSION);  // extension=".sgml"
     else if (RecordSyntax.Equals(SutrsRecordSyntax))
       FullFilename.Cat(FGDC_TEXT_EXTENSION);  // extension=".text"
     else
@@ -219,8 +256,11 @@ FGDCSITE::Present (const RESULT& ResultRecord, const STRING& ElementSet,
 
       if (RecordSyntax.Equals(HtmlRecordSyntax))
 	FullFilename.Cat(SHORT_FGDC_HTML_EXTENSION);  // extension=".htm"
-      else if (RecordSyntax.Equals(HtmlRecordSyntax))
-	FullFilename.Cat(SHORT_FGDC_HTML_EXTENSION);  // extension=".htm"
+      // BUGFIX #1 (docs/BUG_CATALOG.md#doctypefgdcsitecxx): same
+      // duplicated-condition bug as above, in the short-extension
+      // fallback.
+      else if (RecordSyntax.Equals(SgmlRecordSyntax))
+	FullFilename.Cat(SHORT_FGDC_SGML_EXTENSION);  // extension=".sgm"
       else if (RecordSyntax.Equals(SutrsRecordSyntax))
 	FullFilename.Cat(SHORT_FGDC_TEXT_EXTENSION);  // extension=".txt"
       else
@@ -237,8 +277,11 @@ FGDCSITE::Present (const RESULT& ResultRecord, const STRING& ElementSet,
 
 	if (RecordSyntax.Equals(HtmlRecordSyntax))
 	  FullFilename.Cat(FGDC_HTML_EXTENSION_UC);  // extension=".HTML"
-	else if (RecordSyntax.Equals(HtmlRecordSyntax))
-	  FullFilename.Cat(FGDC_HTML_EXTENSION_UC);  // extension=".HTML"
+	// BUGFIX #1 (docs/BUG_CATALOG.md#doctypefgdcsitecxx): same
+	// duplicated-condition bug as above, in the uppercase-extension
+	// fallback.
+	else if (RecordSyntax.Equals(SgmlRecordSyntax))
+	  FullFilename.Cat(FGDC_SGML_EXTENSION_UC);  // extension=".SGML"
 	else if (RecordSyntax.Equals(SutrsRecordSyntax))
 	  FullFilename.Cat(FGDC_TEXT_EXTENSION_UC);  // extension=".TEXT"
 	else
@@ -254,8 +297,11 @@ FGDCSITE::Present (const RESULT& ResultRecord, const STRING& ElementSet,
 
 	  if (RecordSyntax.Equals(HtmlRecordSyntax))
 	    FullFilename.Cat(SHORT_FGDC_HTML_EXTENSION_UC); // extension=".HTM"
-	  else if (RecordSyntax.Equals(HtmlRecordSyntax))
-	    FullFilename.Cat(SHORT_FGDC_HTML_EXTENSION_UC); // extension=".HTM"
+	  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypefgdcsitecxx): same
+	  // duplicated-condition bug as above, in the short-uppercase-
+	  // extension fallback.
+	  else if (RecordSyntax.Equals(SgmlRecordSyntax))
+	    FullFilename.Cat(SHORT_FGDC_SGML_EXTENSION_UC); // extension=".SGM"
 	  else if (RecordSyntax.Equals(SutrsRecordSyntax))
 	    FullFilename.Cat(SHORT_FGDC_TEXT_EXTENSION_UC); // extension=".TXT"
 	  else
