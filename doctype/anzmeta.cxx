@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 // $Id: anzmeta.cxx,v 1.2 2000/10/11 14:02:15 cnidr Exp $
 /************************************************************************
 Copyright (c) 1994,1995 Basis Systeme netzwerk, Munich
@@ -196,7 +199,7 @@ ANZMETA::LoadFieldTable() {
 	}
 #endif
     Db->FieldTypes.AddEntry(Field_and_Type);
-  } while ( (pBuf = strtok((CHR*)NULL,"\n")) );
+  } while ( (pBuf = strtok((CHR*)nullptr,"\n")) );
 
   delete [] b;
 }
@@ -343,8 +346,8 @@ ANZMETA::ParseDate(const CHR *Buffer, DOUBLE* fStart,
 
     Hold.GetCString(Date,256);   // get a copy of the string
     Year  = strtok(Date,Delimiters);
-    Month = strtok(NULL,Delimiters);
-    Day   = strtok(NULL,Delimiters);
+    Month = strtok(nullptr,Delimiters);
+    Day   = strtok(nullptr,Delimiters);
 
 //    #ifdef ANZDEBUG
 //      cout << "Year=" << Year << "###" << endl;
@@ -360,11 +363,11 @@ ANZMETA::ParseDate(const CHR *Buffer, DOUBLE* fStart,
         cerr << "1998-01-29 or 1998-01 or 1998" << endl;
       }
     }
-    if ((Month != NULL) && (strlen(Month) != 2)) {
+    if ((Month != nullptr) && (strlen(Month) != 2)) {
       cerr << "[ANZMETA::ParseDate] Invalid Date: Month (" << Month;
       cerr << ") must be 2 digits" << endl;
     }
-    if ((Day != NULL) && (strlen(Day) != 2)) {
+    if ((Day != nullptr) && (strlen(Day) != 2)) {
       cerr << "[ANZMETA::ParseDate] Invalid Date: Day (" << Day;
       cerr << ") must be 2 digits" << endl;
     }
@@ -372,9 +375,9 @@ ANZMETA::ParseDate(const CHR *Buffer, DOUBLE* fStart,
     // rebuild the date
     CHR NewDate[9];
     strcpy(NewDate,Year);
-    if (Month != NULL) 
+    if (Month != nullptr) 
       strcat(NewDate,Month);
-    if (Day != NULL) 
+    if (Day != nullptr) 
       strcat(NewDate,Day);
 
     Hold = (STRING) NewDate;
@@ -496,8 +499,8 @@ ANZMETA::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
 
     Hold.GetCString(Date,256);   // get a copy of the string
     Year  = strtok(Date,Delimiters);
-    Month = strtok(NULL,Delimiters);
-    Day   = strtok(NULL,Delimiters);
+    Month = strtok(nullptr,Delimiters);
+    Day   = strtok(nullptr,Delimiters);
 
 //    #ifdef ANZDEBUG
 //      cout << "Year=" << Year << "###" << endl;
@@ -508,9 +511,9 @@ ANZMETA::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
     // rebuild the date
     CHR NewDate[9];
     strcpy(NewDate,Year);
-    if (Month != NULL) 
+    if (Month != nullptr) 
       strcat(NewDate,Month);
-    if (Day != NULL) 
+    if (Day != nullptr) 
       strcat(NewDate,Day);
 
     Hold = (STRING) NewDate;
@@ -605,8 +608,8 @@ ANZMETA::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
 
     Hold.GetCString(Date,256);   // get a copy of the string
     Year  = strtok(Date,Delimiters);
-    Month = strtok(NULL,Delimiters);
-    Day   = strtok(NULL,Delimiters);
+    Month = strtok(nullptr,Delimiters);
+    Day   = strtok(nullptr,Delimiters);
 
 //    #ifdef ANZDEBUG
 //      cout << "Year=" << Year << "###" << endl;
@@ -617,9 +620,9 @@ ANZMETA::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
     // rebuild the date
     CHR NewDate[9];
     strcpy(NewDate,Year);
-    if (Month != NULL) 
+    if (Month != nullptr) 
       strcat(NewDate,Month);
-    if (Day != NULL) 
+    if (Day != nullptr) 
       strcat(NewDate,Day);
 
     Hold = (STRING) NewDate;
@@ -821,7 +824,7 @@ ANZMETA::ParseFields (RECORD *NewRecord)
   PFILE fp;
   STRING fn;
 
-  if (NewRecord == (RECORD*)NULL) 
+  if (NewRecord == (RECORD*)nullptr) 
     return;                      // ERROR
 
   // Open the file
@@ -861,7 +864,7 @@ ANZMETA::ParseFields (RECORD *NewRecord)
   NewRecord->GetDocumentType(&doctype);
 
   CHR **tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL) {
+  if (tags == nullptr) {
     cout << "Unable to parse `" << doctype << "' tags in file " << fn << "\n";
     // Clean up
     delete [] RecBuffer;
@@ -881,7 +884,8 @@ ANZMETA::ParseFields (RECORD *NewRecord)
   for (CHR **tags_ptr = tags; *tags_ptr; tags_ptr++) {
     if ((*tags_ptr)[0] == '/') {
       PZMD_Element pTmp;
-      if (strcmp(*tags_ptr,"/custom")) {
+      // BUGFIX #1: was `strcmp(*tags_ptr,"/custom")` without negation - always true (non-zero result)
+      if (!strcmp(*tags_ptr,"/custom")) {
 
 	STRING Tag;
 	STRINGINDEX x;
@@ -915,9 +919,9 @@ ANZMETA::ParseFields (RECORD *NewRecord)
 
     const CHR *p = find_end_tag (tags_ptr, *tags_ptr);
     size_t tag_len = strlen (*tags_ptr);
-    int have_attribute_val = (NULL != strchr (*tags_ptr, '='));
+    int have_attribute_val = (nullptr != strchr (*tags_ptr, '='));
 
-    if (p != NULL) {
+    if (p != nullptr) {
       // We have a tag pair
       val_start = (*tags_ptr + tag_len + 1) - RecBuffer;
       val_len = (p - *tags_ptr) - tag_len - 2;
@@ -946,7 +950,7 @@ ANZMETA::ParseFields (RECORD *NewRecord)
 
 	const CHR *unified_name = UnifiedName(*tags_ptr);
 	// Ignore "unclassified" fields
-	if (unified_name == NULL) 
+	if (unified_name == nullptr) 
 	  continue; // ignore these
 	FieldName = unified_name;
 	if (!(FieldName.IsPrint())) {
@@ -1059,7 +1063,7 @@ ANZMETA::ParseFields (RECORD *NewRecord)
     }
     if (have_attribute_val) {
       SGMLNORM::store_attributes (pdft, RecBuffer, *tags_ptr);
-    } else if (p == NULL) {
+    } else if (p == nullptr) {
 #if 1
       // Give some information
       cout << doctype << " Warning: \""
@@ -1507,7 +1511,7 @@ ANZMETA::~ANZMETA ()
    
    Post: tags is filled with char pointers to first character of every sgml 
    tag (first character after the '<').  The tags array is 
-   terminated by a NULL.
+   terminated by a nullptr.
    Returns the total number of tags found or -1 if out of memory
    */
 CHR**
@@ -1561,10 +1565,10 @@ ANZMETA::parse_tags (CHR *b, GPTYPE len) const
 		  // allocate more space
 		  max_num_tags += grow_size;
 		  PCHR *New = new PCHR[max_num_tags];
-		  if (New == NULL)
+		  if (New == nullptr)
 		    {
 		      delete[]t;
-		      return NULL;		// NO MORE CORE!
+		      return nullptr;		// NO MORE CORE!
 		    }
 		  memcpy (New, t, tc * sizeof (CHR*));
 		  delete[]t;
@@ -1623,10 +1627,10 @@ ANZMETA::parse_tags (CHR *b, GPTYPE len) const
   if (State != OK)
     {
       delete[]t;
-      return NULL;		// Parse ERROR
+      return nullptr;		// Parse ERROR
     }
   
-  t[tc] = (CHR*) NULL;	// Mark end of list
+  t[tc] = (CHR*) nullptr;	// Mark end of list
   return t;
 }
 
@@ -1635,10 +1639,10 @@ ANZMETA::parse_tags (CHR *b, GPTYPE len) const
    Searches through string list t look for "/" followed by tag, e.g. if
    tag = "TITLE REL=XXX", looks for "/TITLE" or a empty end tag (</>).
    
-   Pre: t is is list of string pointers each NULL-terminated.  The list
-   should be terminated with a NULL character pointer.
+   Pre: t is is list of string pointers each nullptr-terminated.  The list
+   should be terminated with a nullptr character pointer.
    
-   Post: Returns a pointer to found string or NULL.
+   Post: Returns a pointer to found string or nullptr.
    */
 
 
@@ -1647,11 +1651,11 @@ const CHR*
 ANZMETA::find_end_tag (char **t, const char *tag) const
 {
   size_t len;
-  if (t == NULL || *t == NULL)
-    return NULL;		// Error
+  if (t == nullptr || *t == nullptr)
+    return nullptr;		// Error
   
   if (*t[0] == '/')
-    return NULL;		// I'am confused!
+    return nullptr;		// I'am confused!
   
   // Look for "real" tag name
   for (len = 0; tag[len]; len++)
@@ -1679,7 +1683,7 @@ ANZMETA::find_end_tag (char **t, const char *tag) const
 	  
 	}
     }
-  while ((tt = t[++i]) != NULL);
+  while ((tt = t[++i]) != nullptr);
   
 #if 0
   // No end tag, assume that the document was valid
@@ -1687,7 +1691,7 @@ ANZMETA::find_end_tag (char **t, const char *tag) const
   // next tag
   return t[1];
 #else
-  return NULL;		// No end tag found
+  return nullptr;		// No end tag found
 #endif
 }
 

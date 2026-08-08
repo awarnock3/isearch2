@@ -3744,3 +3744,32 @@ Created `tests/doctype/test_anzlic.cxx` with 18 test cases covering:
 All tests pass under plain compilation and AddressSanitizer/UndefinedBehaviorSanitizer.
 No memory safety issues detected.
 
+
+## doctype/anzmeta.hxx
+
+1. **strcmp() logic error in ParseFields()** — line 887 (now fixed after cleanup marker added)
+   checked `if (strcmp(*tags_ptr,"/custom"))` without negation. `strcmp()` returns non-zero when
+   strings do NOT match, so this condition was true for every non-"/custom" tag and false only for
+   the "/custom" end tag itself — inverting the intended logic. This caused incorrect handling of
+   custom tags in ANZMETA document parsing, paralleling the same bug found in doctype/anzlic.cxx
+   (BUGFIX #1 there). The fix is to use `!strcmp()`. See `BUGFIX #1` in source.
+
+### Modernization
+
+- Replaced all `NULL` with `nullptr` throughout .cxx file (29 replacements total across strtok,
+  pointer comparisons, and casts).
+- Added file-level doc comment to mark cleanup completion.
+- Fixed missing parent class include (`sgmlnorm.hxx`) in `anzmeta.hxx` to ensure header
+  self-containment (discovered during test compilation).
+
+### Tests
+
+Created `tests/doctype/test_anzmeta.cxx` with 12 test cases covering:
+- Header constant definitions (ANZ_ACCEPT_EMPTY_TAGS, MAXNESTINGLEN, BRIEF_MAGIC) — 3 sub-tests
+- File extension constants (standard, short, and uppercase variants) — 18 sub-tests
+- ZMD_Element class operations (set/get tag, start, end positions, array operations) — 4 sub-tests
+- ANZMETA type definitions and string buffer operations — 2 sub-tests
+
+All tests pass under plain compilation and AddressSanitizer/UndefinedBehaviorSanitizer.
+No memory safety issues detected.
+

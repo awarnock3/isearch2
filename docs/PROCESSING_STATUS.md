@@ -75,7 +75,7 @@
 | 71 | src/stopword.hxx | done | 2026-08-08 | [src/stopword.hxx](BUG_CATALOG.md#srcstopwordcxx) |
 | 72 | src/sw.hxx | done | 2026-08-08 | [src/sw.hxx](BUG_CATALOG.md#srcswhxx) |
 | 73 | doctype/anzlic.hxx | done | 2026-08-08 | [doctype/anzlic.hxx](BUG_CATALOG.md#doctypeanzlichxx) |
-| 74 | doctype/anzmeta.hxx | pending | | |
+| 74 | doctype/anzmeta.hxx | done | 2026-08-08 | [doctype/anzmeta.hxx](BUG_CATALOG.md#doctypeanzmeta-1) |
 | 75 | doctype/bibtex.hxx | pending | | |
 | 76 | doctype/cipc.hxx | pending | | |
 | 77 | doctype/cipp.hxx | pending | | |
@@ -188,7 +188,7 @@
 | 184 | doctype/Unified/unified.c | pending | | |
 | 185 | doctype/Unified/unified.h | pending | | |
 | 186 | doctype/anzlic.cxx | done | 2026-08-08 | [doctype/anzlic.cxx](BUG_CATALOG.md#doctypeanzlichxx) |
-| 187 | doctype/anzmeta.cxx | pending | | |
+| 187 | doctype/anzmeta.cxx | done | 2026-08-08 | [doctype/anzmeta.cxx](BUG_CATALOG.md#doctypeanzmeta-1) |
 | 188 | doctype/bibtex.cxx | pending | | |
 | 189 | doctype/cipc.cxx | pending | | |
 | 190 | doctype/cipp.cxx | pending | | |
