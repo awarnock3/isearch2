@@ -4728,3 +4728,44 @@ all (`BUGFIX #2`'s other half); and adding no `Headline` field for an
 empty file. Field names are asserted in uppercase (`"HEADLINE"`) per
 the established `DF::SetFieldName()`-uppercases-internally gotcha.
 
+## doctype/ftp.cxx
+
+`class FTP` (`: public DOCTYPE`) splits a record on its first `\n`:
+`Present()`'s `"B"` element set returns just the first line (the
+headline); `"F"` returns everything after it (the body). Record
+splitting/field parsing are inherited unchanged from `DOCTYPE` — only
+`Present()` is customized. One bug, plus a stray copy-paste in the
+file's own header comment.
+
+1. **`Present()`'s `"B"` element set included the trailing newline in
+   the "headline"** — `STRING::Search()` is 1-based and returns the
+   `'\n'` character's own position; `EraseAfter(N)` keeps `N`
+   characters inclusive. So `myBuff.EraseAfter(firstNL)` kept the
+   newline itself as part of the returned headline, unlike its `"F"`
+   sibling branch (`EraseBefore(firstNL+1)`), which correctly skips
+   past it. Confirmed via a real before/after regression test:
+   ```
+   REQUIRE( out == "Headline text" )
+   with expansion:
+     Headline text
+
+   ==
+     "Headline text"
+   ```
+   (the `\n` after "Headline text" on the actual side is the giveaway).
+   Fixed by changing to `EraseAfter(firstNL-1)`, keeping everything up
+   to but not including the newline. `BUGFIX #1` in source.
+
+Also fixed: `ftp.cxx`'s own file-header comment described the class as
+`"index files based on their filename"` — a verbatim copy-paste from
+`doctype/filename.cxx`'s header comment (processed earlier this batch),
+not a description of what `FTP` actually does. Corrected to match
+`ftp.hxx`'s own (correct) description, `"first line is headline, rest
+is real body"`. No live `NULL`/`sprintf` usage. `doctype/ftp.cxx` added
+to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_ftp.cxx` covers: `"B"` returning exactly the first
+line with no trailing newline (`BUGFIX #1`'s direct regression); `"F"`
+returning everything after the first line; and not crashing when the
+file has no newline at all.
+
