@@ -3910,3 +3910,126 @@ scope for this file's own turn.
 No live `NULL`/`sprintf` to modernize. Added class-level and
 per-function doc comments.
 
+## doctype/cipc.cxx
+
+`class CIPC` (`: public SGMLNORM`) is the NASA/CIP Collection metadata
+DOCTYPE. This turn found five real bugs, including the most severe
+find of this batch: a case-mismatch that made an entire parsing branch
+permanently unreachable, and a confirmed null-pointer-dereference
+crash (verified with a real before/after SEGV repro, not just reasoned
+about).
+
+1. **`ParseDate()`'s `<StartDate>`/`<EndDate>` interval parsing was
+   unreachable dead code** — `Hold.UpperCase()` runs unconditionally
+   before the `<StartDate>` search, and is never reset to mixed case
+   before it; searching an all-uppercase string for the mixed-case
+   needle `"<StartDate>"` (and `"<EndDate>"`) can never match via
+   `strstr()`. Every call that reached this point silently fell
+   through to the final `else` branch and returned `DATE_ERROR` for
+   both `*fStart` and `*fEnd` — even for a perfectly well-formed
+   `<StartDate>2020</StartDate><EndDate>2021</EndDate>` input. This
+   means interval-date parsing has never worked. Confirmed via a
+   regression test asserting an actual successful parse (not just "no
+   crash"). Fixed by uppercasing the search needles instead
+   (`"<STARTDATE>"`/`"</STARTDATE"`/`"<ENDDATE>"`/`"</ENDDATE"`,
+   matching the sibling `<CALDATE>` branch's already-correct
+   convention; `strlen()` calls using the mixed-case literal are
+   unaffected since the length is identical either way). Bundled with
+   a second, smaller fix in the same branch: unlike the `<CALDATE>`
+   branch above and the `<EndDate>` branch below (both of which
+   `return` immediately on a missing closing tag), the `<StartDate>`
+   branch used to fall through into `Hold.EraseAfter(End-1)` with
+   `End==0` (a `STRINGINDEX` underflow to `SIZE_MAX` — harmless only
+   because `EraseAfter()` itself already bounds-checks and no-ops) and
+   then kept going, searching for `<EndDate>` despite already having
+   flagged the record malformed, leaving `*fEnd` unset on that path.
+   `BUGFIX #1` in source.
+2. **Same two bugs, duplicated in `ParseDateRange()`** — a
+   near-duplicate function with the identical `Hold.UpperCase()`-then-
+   mixed-case-search shape and the identical missing-`return`.
+   `BUGFIX #2` in source.
+3. **Unguarded `Nested.Top()` — a real, confirmed null-pointer-
+   dereference crash** — `ParseFields()`'s closing-tag handling called
+   `Nested.Top()` and immediately dereferenced the result
+   (`pTmp->get_tag()`) with no `Nested.GetSize() != 0` guard, unlike
+   its two sibling call sites in the very same function. A closing tag
+   with nothing open on the stack (e.g. a document whose first real
+   tag is an unmatched `</foo>`) makes `GSTACK::Top()` return `nullptr`
+   (per its own already-fixed, already-safe behavior — see
+   `docs/BUG_CATALOG.md#srcgstackhxx`), and this call dereferenced it.
+   That earlier fix's comment claimed every real caller in the tree,
+   including this file, "only reach[es] Top()/Pop() after confirming
+   GetSize() != 0 first" — true for two of this function's three call
+   sites, but not this one; this finding corrects that claim. Confirmed
+   with a real before/after SEGV repro:
+   ```
+   AddressSanitizer: SEGV ... READ memory access
+       #0 STRING::Equals(STRING const&) const src/string.cxx:492
+       #2 CIPC::ParseFields(RECORD*) doctype/cipc.cxx:982
+   ```
+   reverting the fix and running just this file's stray-closing-tag
+   regression test reproduced it exactly; restoring the fix cleared it.
+   Fixed by wrapping the match-and-pop logic in the same
+   `Nested.GetSize() != 0` guard its siblings already use — a stray
+   closing tag with nothing to match is simply ignored. `BUGFIX #3` in
+   source.
+4. **Leaked `CIPC_Element` on overlapping (non-LIFO) tags** — a
+   `CIPC_Element` is only `Pop()`'d and `delete`'d when a closing tag
+   matches whatever's currently on *top* of `Nested`. Input like
+   `<A><B></A></B>` pairs `A` with a real `</A>` and `B` with a real
+   `</B>` (`find_end_tag()` matches both, so both get `Nested.Push()`'d),
+   but they close in the wrong order relative to each other: when
+   `</A>` is processed, `B` is on top, not `A`, so nothing pops and
+   `A`'s element is stuck on `Nested` for the rest of the function —
+   and since `Nested` is a local `GSTACK` with no destructor-side
+   cleanup of the opaque element pointers it holds, that leaks. Fixed
+   by draining and `delete`ing whatever's left on `Nested` before
+   `ParseFields()` returns. Confirmed leak-free under `make
+   tests-asan` with this exact overlapping-tag input. `BUGFIX #4` in
+   source.
+5. **`LoadFieldTable()` could crash on an empty FIELDTYPE file** —
+   `IsFile()` only checks that the configured `-o fieldtype=<filename>`
+   file exists, not that it has content. The original `do`-`while`
+   loop unconditionally ran `Field_and_Type = pBuf;` once before ever
+   checking `pBuf`; if the file is empty (or has no non-newline
+   content), `strtok()` returns `nullptr` on the very first call, and
+   `STRING::operator=(const CHR*)` calls `strlen()` on it
+   unconditionally — a null-pointer-dereference crash. Fixed by
+   converting to a `while (pBuf)` loop that checks before every
+   iteration, including the first. `BUGFIX #5` in source.
+
+Also fixed while bringing this file to a clean `-Wall -Wextra` build
+for the first time (its first turn through this pipeline): removed an
+unused `DOUBLE Left;` in `ParseGPoly()`, an unused `INT n;` in
+`Present()`, and a genuinely dead block in `ParseFields()` (computed
+`Nested.Top()` into `pTmp` and a `LastEnd` comparison, then never used
+either) whose removal surfaced a follow-on `LastEnd` unused-variable
+warning, so `LastEnd` was removed too since that dead block was its
+only reader; cast `int lastBrace`-style comparisons were not needed
+here, but a nested `if (RecBuffer[i+3]=='l')`-shape dangling-else
+risk was avoided by construction. `NULL` converted to `nullptr` at
+every live call site (comment-only mentions left alone). Also
+documented, not changed: `store_attributes()` is declared as a CIPC
+member in the header but never defined in this file — `ParseFields()`
+always calls `SGMLNORM::store_attributes()` explicitly instead, so the
+declaration is inert (never ODR-used).
+
+`fgdc.cxx` was added to `TEST_ENGINE_DOCTYPE_SRCS` alongside
+`cipc.cxx` purely to satisfy `GetNumericValue()` at link time —
+`cipc.cxx` (like `cipp.cxx`) has its own copy of that function
+commented out, relying on `fgdc.cxx`'s live definition instead;
+`fgdc.cxx` itself is not otherwise exercised or processed by this
+turn. (`fgdc.cxx`'s own `ParseFields()`, seen only in passing while
+confirming it compiles, appears to share several of these same bug
+shapes — worth a close look whenever its own turn comes up.)
+
+`tests/doctype/test_cipc.cxx` covers: `ParseDate`/`ParseDateRange`
+successfully parsing a well-formed interval (the direct `BUGFIX #1`/
+`#2` regression, since before the fix this could never succeed at
+all) and correctly erroring out on a missing closing tag; `ParseFields`
+not crashing on a stray unmatched closing tag (`BUGFIX #3`, confirmed
+via the real before/after SEGV repro above) and not leaking on
+overlapping tags (`BUGFIX #4`); and `LoadFieldTable` not crashing on
+an empty FIELDTYPE file (`BUGFIX #5`) while still loading real entries
+correctly.
+
