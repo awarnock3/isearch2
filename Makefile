@@ -154,7 +154,8 @@ done:
 
 clean:
 	$(RM) *~ $(BIN_DIR)/Iindex $(BIN_DIR)/Isearch $(BIN_DIR)/Iutil \
-		$(BIN_DIR)/Iget $(BIN_DIR)/libIsearch.a $(BIN_DIR)/core
+		$(BIN_DIR)/Iget $(BIN_DIR)/libIsearch.a $(BIN_DIR)/core \
+		$(BIN_DIR)/zsearch $(BIN_DIR)/zpresent
 	+cd $(SRC_DIR); make -i clean
 	+cd $(DOCTYPE_DIR); make -i clean
 	+cd $(CGI_DIR); make -i clean
