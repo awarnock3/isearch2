@@ -91,7 +91,7 @@
 | 87 | doctype/ftp.hxx | done | 2026-08-08 | [doctype/ftp.hxx](BUG_CATALOG.md#doctypeftpcxx) |
 | 88 | doctype/gils.hxx | done | 2026-08-08 | [doctype/gils.hxx](BUG_CATALOG.md#doctypegilscxx) |
 | 89 | doctype/gilsxml.hxx | done | 2026-08-08 | [doctype/gilsxml.hxx](BUG_CATALOG.md#doctypegilsxmlcxx) |
-| 90 | doctype/gopher.hxx | pending | | |
+| 90 | doctype/gopher.hxx | done | 2026-08-08 | [doctype/gopher.hxx](BUG_CATALOG.md#doctypegophercxx) |
 | 91 | doctype/html.hxx | pending | | |
 | 92 | doctype/htmltag.hxx | pending | | |
 | 93 | doctype/iafadoc.hxx | pending | | |
@@ -206,7 +206,7 @@
 | 202 | doctype/ftp.cxx | done | 2026-08-08 | [doctype/ftp.cxx](BUG_CATALOG.md#doctypeftpcxx) |
 | 203 | doctype/gils.cxx | done | 2026-08-08 | [doctype/gils.cxx](BUG_CATALOG.md#doctypegilscxx) |
 | 204 | doctype/gilsxml.cxx | done | 2026-08-08 | [doctype/gilsxml.cxx](BUG_CATALOG.md#doctypegilsxmlcxx) |
-| 205 | doctype/gopher.cxx | pending | | |
+| 205 | doctype/gopher.cxx | done | 2026-08-08 | [doctype/gopher.cxx](BUG_CATALOG.md#doctypegophercxx) |
 | 206 | doctype/html.cxx | pending | | |
 | 207 | doctype/htmltag.cxx | pending | | |
 | 208 | doctype/iafadoc.cxx | pending | | |

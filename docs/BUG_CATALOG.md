@@ -4908,3 +4908,34 @@ like its `HTML`/`SGML` siblings (`BUGFIX #2`'s direct regression); and
 included, confirming the `BUGFIX #2` fix didn't disturb the
 already-correct `"F"` path.
 
+## doctype/gopher.cxx
+
+`class GOPHER` (`: public DOCTYPE`) presents gopher-style records:
+`ElementSet` `"F"` returns the raw record data; anything else (`"B"`)
+looks for a `".cap/<filename>"` sidecar next to the record and, if
+found, returns the value of its `"Name="` line, otherwise falls back
+to the record's own filename. One bug — a resource leak, but an
+always-reachable one rather than an error-path-only one.
+
+1. **The `.cap` sidecar's file handle was never closed** — `nameFile =
+   fopen(pathName, "rb");` was only ever matched by an `fclose()` on
+   nothing — there's no `fclose(nameFile)` anywhere in the
+   successfully-opened branch, not even after the `while
+   (linebuff.FGet(nameFile, 1024))` loop finishes. Unlike
+   `doctype/gils.cxx`'s `BUGFIX #1` (which only leaked on a rare
+   `fseek()`-failure error path), this leaks on the *success* path —
+   every single `"B"` present of a record that actually has a `.cap`
+   file. Fixed by adding `fclose(nameFile);` right after the loop.
+   `BUGFIX #1` in source.
+
+Modernization: `(FILE *)0` converted to `nullptr`. No `sprintf` usage.
+Added class-level and per-function doc comments.
+`doctype/gopher.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_gopher.cxx` covers: `"B"` emitting the `.cap`
+file's `Name=` value when one exists (`BUGFIX #1`'s code path,
+though the leak itself isn't independently observable via a `REQUIRE`
+since `LeakSanitizer` doesn't track file descriptors); `"B"` falling
+back to the record's filename when there is no `.cap` file; and `"F"`
+returning the raw record data.
+
