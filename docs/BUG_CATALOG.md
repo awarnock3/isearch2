@@ -5039,3 +5039,66 @@ element set not crashing (full field-lookup behavior needs a live
 `Present()` itself is a thin wrapper around inherited
 `SGMLNORM::Present()`).
 
+## doctype/htmltag.cxx
+
+`class HTMLTAG` (`: public DOCTYPE`) is an HTML DOCTYPE that only ever
+looks inside `<HEAD>...</HEAD>`, indexing the `<TITLE>` text and every
+`<META NAME="..." CONTENT="...">` as its own field — a character-at-a-
+time `fgetc()` tokenizer, structurally similar to
+`doctype/eos_guide.cxx` though not derived from it (different author,
+independently written). Three bugs, the first shared verbatim with
+`eos_guide.cxx`.
+
+1. **`(char)fgetc(fp)` collided the real byte `0xFF` with `EOF`** —
+   identical bug to `doctype/eos_guide.cxx`'s `BUGFIX #1`: `fgetc()`
+   returns either a byte value (0-255) or the sentinel `EOF` (typically
+   `-1`) as an `int`; narrowing to `char` before ever comparing to
+   `EOF` collides the real byte `0xFF` with `EOF` on a signed-`char`
+   platform, so parsing silently stopped the instant that byte
+   appeared anywhere in the `<HEAD>` section — including in ordinary
+   title text, not just malformed input. Confirmed via a real
+   before/after test-revert (reverting just the `int ch;`/`ch =
+   fgetc(fp);` change and rerunning the 0xFF regression test reproduced
+   the exact failure — the `TITLE` field silently vanished — restoring
+   the fix cleared it). Fixed the same way as `eos_guide.cxx`: keep
+   `ch` as `int` throughout. `BUGFIX #1` in source.
+2. **`isalnum()`/`toupper()` called on plain (possibly signed) `char`
+   values from file content** — both are undefined behavior for an
+   argument not representable as `unsigned char` (or `EOF`); a `META`
+   tag's `NAME` value containing a byte `>= 0x80` (e.g. Latin-1/UTF-8
+   content) would pass a negative value to `isalnum()` in the
+   `NAME=`-value-length loop, and `TagMatch()`'s two `toupper()` calls
+   plus its trailing `isalnum()` had the same exposure on `tag[]`
+   (raw file content) — `tagType[]` is always one of this file's own
+   ASCII string literals, so that half of the cast is defensive rather
+   than fixing an observed bug. Same UB class as `src/nlatlon.cxx`'s
+   earlier fix. Fixed by casting to `(unsigned char)` at all four call
+   sites. Verified via `make tests-asan`
+   (UndefinedBehaviorSanitizer) with a `META` tag containing a `0x80`
+   byte in its `NAME` value — passes clean after the fix; would abort
+   under UBSan without it. `BUGFIX #2` in source.
+3. **`titlePosition` could be read uninitialized** — the
+   `</TITLE>`-handling branch read `titlePosition` unconditionally,
+   even if a matching `<TITLE>` had never actually been seen (e.g. a
+   stray/malformed `</TITLE>` with no opener) — reading an
+   uninitialized `long` local. Fixed by adding a `sawTitleOpen` guard,
+   set only when `<TITLE>` is actually matched, and gating the
+   `</TITLE>` branch on it. Not confirmed via a before/after crash
+   repro (reading uninitialized stack memory is nondeterministic, not
+   reliably reproducible), but the "after" behavior — a stray
+   `</TITLE>` produces no `TITLE` field — is deterministically tested.
+   `BUGFIX #3` in source.
+
+No live `NULL`/`sprintf` usage. Added class-level and per-function doc
+comments. `doctype/htmltag.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_htmltag.cxx` covers: extracting the `TITLE` field
+and `META` `NAME`/`CONTENT` fields correctly by exact substring; not
+stopping early on a `0xFF` byte in the title text (`BUGFIX #1`'s direct
+regression, confirmed via the real before/after test-revert described
+above); not triggering `UndefinedBehaviorSanitizer` on a `META` `NAME`
+value containing a `0x80` byte (`BUGFIX #2`'s regression, checked under
+`make tests-asan`); ignoring a stray `</TITLE>` with no matching
+`<TITLE>` (`BUGFIX #3`'s regression); and adding no `TITLE` field when
+there is none.
+
