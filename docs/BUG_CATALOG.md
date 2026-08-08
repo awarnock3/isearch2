@@ -4825,3 +4825,86 @@ first live `Sgml` branch and the catch-all `else`-based `Xml` handling
 both still work correctly with the duplicate branches gone); and
 `Present()` reporting a missing file gracefully instead of crashing.
 
+## doctype/gilsxml.cxx
+
+`class GILSXML` (`: public SGMLTAG`) is a GILS DOCTYPE for XML-tagged
+records. Record splitting and field parsing are entirely inherited
+from `SGMLTAG`; `GILSXML` only customizes `Present()`, which dispatches
+by `ElementSet` (`"B"`/`"G"`/`"S"`/`"F"`) and then by `RecordSyntax`
+(HTML/SGML/SUTRS) to one of nine `Present_<SYNTAX>_<SET>()` helpers —
+`"G"` is the brief primitive element set, `"S"` is the full record with
+its `<CENTROID>` section stripped, and `"F"` is the full record
+unabridged. Two real bugs, both confirmed via real before/after tests
+(one via an actual revert-and-rerun, matching the memory-safety-bug
+repro discipline applied to a logic bug instead).
+
+1. **`Present_HTML_S()` duplicated its own header into the body,
+   HTML-escaped** — after building the `<!DOCTYPE HTML>...<H1>Title</H1>`
+   header into `Hold` and transferring it into `ESN_F` via
+   `ESN_F.Cat(Hold)`, the function reused the *same* `Hold` variable as
+   the accumulator for the file's non-`<CENTROID>` lines
+   (`Hold.Cat(ptr)` in a loop) — without ever resetting it. `Hold`
+   still held the stale header text, so the loop appended the real
+   body onto the end of it, and the subsequent `Hold.Replace("<",
+   "&lt;")` / `Replace(">", "&gt;")` (meant to escape the file content
+   for safe display inside `<pre>`) escaped the leftover header text
+   right along with it — producing a second, garbled, HTML-escaped copy
+   of the header inside the visible body. Sibling functions avoid this
+   two different ways: `Present_HTML_F()` uses `Hold.ReadFile(FileName)`
+   (which replaces `Hold`'s content outright, per `STRING::ReadFile()`'s
+   `if (Buffer) delete [] Buffer;` reallocation) instead of `Cat()` in a
+   loop; `Present_SGML_S()` uses a `Hold` that was never assigned
+   anything beforehand, so accumulating into it via `Cat()` was always
+   safe there. Confirmed via a real before/after test: temporarily
+   reverting just the `Hold = "";` reset and rerunning the regression
+   test reproduced the exact escaped duplicate,
+   ```
+   REQUIRE( out.Search("&lt;H1&gt;") == 0 )
+   with expansion:
+     351 (0x15f) == 0
+   ```
+   restoring the fix cleared it. Fixed by resetting `Hold = "";`
+   immediately before it's reused as the body accumulator. `BUGFIX #1`
+   in source.
+2. **`Present_SUTRS_S()` delegated to the wrong sibling, including the
+   `<CENTROID>` section its own element set is supposed to omit** — it
+   called `Present_SGML_F()` (the *full* record) instead of
+   `Present_SGML_S()` (the *short* record, centroid stripped) — a
+   one-line copy-paste from `Present_SUTRS_F()` immediately below it,
+   whose identical delegation is correct there (since `"F"` is
+   *supposed* to include everything). `Present()`'s own comment
+   explains the intent: `"S"` stands for "short"/"summary" and exists
+   specifically "to send full records without the centroid" — so for
+   SUTRS `RecordSyntax`, the `"S"` element set silently returned
+   identical output to `"F"`, unlike its `HTML`/`SGML` siblings (both
+   of which correctly strip the centroid for `"S"`). Fixed by changing
+   the delegation target to `Present_SGML_S()`. Confirmed via a
+   regression test asserting the centroid marker is absent. `BUGFIX #2`
+   in source.
+
+Also fixed while bringing this file to a clean `-Wall -Wextra` build
+for the first time: an unused `Field` parameter in
+`UsefulSearchField()` (unnamed in the `.cxx`, matching
+`doctype/cipc.cxx`'s established convention for a required-but-unused
+override parameter); an unused `GDT_BOOLEAN Status;` in the main
+`Present()` dispatcher, plus four further genuinely-unused `STRING`
+locals in that same function (`ESN_G`, `FieldValue`, `FieldType`,
+`Hold`) that GCC didn't flag (`-Wunused-variable` doesn't fire for
+class-typed locals with non-trivial constructors) but were equally
+dead — each `Present_*_*()` helper already declares its own local of
+the same name. `NULL` converted to `nullptr` at both live call sites
+(`strtok(NULL, ...)` in `Present_HTML_S()` and `Present_SGML_S()`).
+Added class-level and per-function doc comments.
+`doctype/gilsxml.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_gilsxml.cxx` covers: `Present()`'s `"B"` element
+set returning the title when present and falling back to the filename
+when absent; `Present_HTML_S()` not duplicating the header into the
+body (`BUGFIX #1`'s direct regression, confirmed via the real
+before/after revert-and-rerun described above) and correctly stripping
+the `<CENTROID>` section; `Present_SUTRS_S()` stripping the centroid
+like its `HTML`/`SGML` siblings (`BUGFIX #2`'s direct regression); and
+`Present_SUTRS_F()` still returning the full record with the centroid
+included, confirming the `BUGFIX #2` fix didn't disturb the
+already-correct `"F"` path.
+

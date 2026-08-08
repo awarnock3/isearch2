@@ -34,6 +34,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:		gilsxml.cxx
 Version:	$Revision: 1.4 $
@@ -58,8 +61,9 @@ GILSXML::GILSXML(IDBOBJ *DbParent)
   : SGMLTAG(DbParent) {
 }
 
-GDT_BOOLEAN 
-GILSXML::UsefulSearchField(const STRING& Field)
+// Every field is searchable for GILSXML.
+GDT_BOOLEAN
+GILSXML::UsefulSearchField(const STRING& /* Field */)
 {
   return GDT_TRUE;
 }
@@ -74,12 +78,22 @@ GILSXML::Present (const RESULT& ResultRecord, const STRING& ElementSet,
 }
 
 
-void 
+// Dispatches by ElementSet, then by RecordSyntax: "B" returns just the
+// title (falling back to the filename); "G"/"S"/"F" each pick one of
+// Present_<HTML|SGML|SUTRS>_<G|S|F>() below, where "G" is the brief
+// primitive set, "S" is the full record minus its <CENTROID> section,
+// and "F" is the full record unabridged. Anything else is treated as
+// a literal field name to look up.
+void
 GILSXML::Present (const RESULT& ResultRecord, const STRING& ElementSet,
 		  const STRING& RecordSyntax, STRING *StringBuffer) {
-  STRING ESN_G,FieldName,FieldValue,Hold;
-  STRING FieldType="TEXT";
-  GDT_BOOLEAN Status;
+  // Removed here: ESN_G, FieldValue, FieldType, Hold, and Status were
+  // all declared but never used anywhere in this function (only
+  // FieldName is) -- each Present_*_*() helper below has its own local
+  // of the same name. GCC's -Wunused-variable only flagged `Status`
+  // (a plain GDT_BOOLEAN); the STRING locals went unflagged since
+  // STRING has a non-trivial constructor.
+  STRING FieldName;
 
   //
   // If we get asked for B, ignore RecordSyntax and send back the 
@@ -492,6 +506,19 @@ GILSXML::Present_HTML_S(const RESULT& ResultRecord, STRING *StringBuffer)
 
   ResultRecord.GetFullFileName(&FileName);
 
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypegilsxmlcxx): Hold still held
+  // the header text just transferred into ESN_F above (it was never
+  // reset), so accumulating the file's non-centroid lines into it via
+  // Cat() appended them onto that stale header instead of starting
+  // fresh -- the header text then got duplicated into the output a
+  // second time (this time HTML-escaped) by the Replace()+Cat() below.
+  // doctype/gilsxml.cxx's own Present_HTML_F() avoids this by using
+  // Hold.ReadFile() (which replaces Hold's content) instead of Cat()
+  // in a loop; Present_SGML_S() avoids it by using a Hold that was
+  // never assigned anything beforehand. Fixed by resetting Hold here,
+  // right before it's reused as the body accumulator.
+  Hold = "";
+
   // Grotesque hack to skip <centroid> listing
   CHR *cHold,*ptr;
   STRING FileBuffer;
@@ -511,7 +538,7 @@ GILSXML::Present_HTML_S(const RESULT& ResultRecord, STRING *StringBuffer)
       Hold.Cat(ptr);
       Hold.Cat("\n");
     }
-    ptr = strtok(NULL,"\n");
+    ptr = strtok(nullptr,"\n");
   }
 
   delete [] cHold;
@@ -553,7 +580,7 @@ GILSXML::Present_SGML_S(const RESULT& ResultRecord, STRING *StringBuffer)
       Hold.Cat(ptr);
       Hold.Cat("\n");
     }
-    ptr = strtok(NULL,"\n");
+    ptr = strtok(nullptr,"\n");
   }
 
   delete [] cHold;
@@ -562,11 +589,20 @@ GILSXML::Present_SGML_S(const RESULT& ResultRecord, STRING *StringBuffer)
 }
 
 
-void 
+void
 GILSXML::Present_SUTRS_S(const RESULT& ResultRecord, STRING *StringBuffer)
 {
-  // Do the obvious
-  Present_SGML_F(ResultRecord, StringBuffer);
+  // BUGFIX #2 (docs/BUG_CATALOG.md#doctypegilsxmlcxx): this delegated
+  // to Present_SGML_F() (the *full* record, centroid included) instead
+  // of Present_SGML_S() (the *short* record, centroid stripped) --
+  // "S" stands for "short"/"summary" per Present()'s own comment
+  // ("We invented the S element set to send full records without the
+  // centroid"), so the SUTRS "S" element set was silently returning
+  // the same content as its "F" sibling instead of omitting the
+  // centroid like Present_HTML_S()/Present_SGML_S() both correctly do.
+  // A plain copy-paste from Present_SUTRS_F() just below, whose
+  // identical delegation is correct there.
+  Present_SGML_S(ResultRecord, StringBuffer);
 }
 
 
