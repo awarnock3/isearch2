@@ -5600,3 +5600,108 @@ empirical re-confirmation of the mid-loop-site reachability argument
 above, mirroring `listdigest.cxx`'s equivalent test); and no bogus
 record for an empty file (`BUGFIX #1`'s direct regression test).
 
+## doctype/marcdump.cxx
+
+`MARCDUMP : public DOCTYPE` parses MARC records dumped by the Yaz
+`marcdump` utility: `ParseRecords()` splits a file into one record per
+run of lines starting at a line whose 3-character tag is `"001"`, and
+`ParseFields()` splits each record's bytes into tag/value pairs. Four
+bugs found, all fixed and confirmed via before/after test-reverts.
+
+1. **`ParseRecords()` never flushed the last record (`BUGFIX #1`,
+   most severe)** — the loop only calls `Db->DocTypeAddRecord()` when
+   it finds the *next* record's `"001"` tag (per the file's own
+   design: "indicate the previous range as a record" upon seeing the
+   next one's marker), so the very last record in any file — for a
+   single-record file, the *only* record — never had a following
+   `"001"` to trigger that, and was silently never indexed at all.
+   Traced by hand through the loop's byte-offset bookkeeping for both
+   a one-record and a two-record file, then confirmed via a real
+   before/after test-revert: with the post-loop flush removed, a
+   single-record file produced zero calls to `DocTypeAddRecord()`, and
+   a two-record file produced only one. Fixed by flushing the final
+   accumulated `RS`/`marcLength` after the loop, the same way the loop
+   itself flushes every earlier record. `BUGFIX #1` in source.
+
+2. **`ParseFields()`'s "whole file as one record" fallback dropped the
+   last byte (`BUGFIX #2`)** — when `NewRecord`'s `RecordEnd` is unset
+   (0), `ParseFields()` falls back to treating the entire file as a
+   single record, the same fallback shape already fixed in
+   `doctype/colondoc.cxx`'s `BUGFIX #1`. This copy still had the old
+   `RecEnd = ftell(fp) - 1;`, silently dropping the record's last byte
+   — confirmed via a before/after test-revert: a record's last field
+   ("Jane Doe") came back one character short ("Jane Do") with the fix
+   reverted. Fixed identically to `colondoc.cxx`: `RecEnd = ftell(fp);`.
+   `GPTYPE` is also unsigned (`UINT4`, `src/defs.hxx`), so for a
+   genuinely empty file the old `- 1` underflowed `RecEnd` to
+   `UINT_MAX` — investigated further with a standalone repro, since the
+   obvious expectation was a confirmable ASan heap-buffer-overflow (the
+   same shape as the digest-family bugs elsewhere in this catalog): the
+   underflowed `RecLength` then gets `+ 1`'d for the `new CHR[...]`
+   call, and *that* addition wraps back to 0 too (`UINT_MAX + 1` inside
+   a 32-bit `GPTYPE` is 0), so the buggy code actually allocated a
+   genuine 0-byte buffer rather than attempting a multi-gigabyte one.
+   Writing `RecBuffer[0] = '\0'` immediately afterward is undefined
+   behavior (one byte past a 0-byte allocation) either way, but a
+   standalone repro confirmed this specific build's allocator/ASan
+   combination doesn't flag it in practice (likely allocator slack
+   around a 0-byte `new[]`) — so, unlike the digest-family bugs, this
+   half of the fix is **not** ASan-confirmed, and the source/test
+   comments say so explicitly rather than overclaiming. Fixed
+   regardless, since UB not currently observed isn't UB relied upon.
+   `BUGFIX #2` in source.
+
+3. **`StartTag` read uninitialized when `sscanf()` fails to parse
+   (`BUGFIX #3`)** — reachable via `BUGFIX #2`'s fallback once it stops
+   crashing/allocating garbage first: for an empty `RecBuffer`, `tag`
+   is an empty string, and `sscanf(tag, "%d", &StartTag)` returns
+   immediately without ever writing to `StartTag` (confirmed with a
+   standalone repro using a sentinel value, which came back completely
+   untouched). The following `if (StartTag != 1)` check then read
+   indeterminate stack memory. Fixed by initializing `StartTag = 0`,
+   which deterministically fails that check and takes the existing
+   "bogus first tag" error path — matching the file's own established
+   convention for a malformed/empty record. `BUGFIX #3` in source.
+
+4. **`ParseFields()`'s "bogus first tag" early return leaked
+   `RecBuffer` (`BUGFIX #4`)** — found incidentally while testing
+   `BUGFIX #3`: `make tests-asan` reported a real 1-byte leak (matching
+   exactly the `new CHR[1]` allocated for the empty-file test case) from
+   this exact path. `delete [] RecBuffer;` was present on the sibling
+   "no tags found" early-return branch just below, but missing here.
+   Confirmed via a before/after test-revert: removing the `delete []`
+   reproduced the identical ASan leak report. `BUGFIX #4` in source.
+
+Also applied: `GPTYPE bytePos`/`marcLength`/`RS` (was `int`), removing
+a `-Wsign-compare` warning against `FileLength` (`GPTYPE`) without any
+behavior change, since all three are always non-negative in practice.
+Removed the entirely-unused `RE` local. Removed several other
+`-Wunused-variable`/`-Wunused-but-set-variable` locals not otherwise
+touched (`Status` captures in `Present()`/`PresentSutrs()`/
+`PresentHtml()` where the return value was never used, `nSubFields` in
+`PresentHtml()`, `i` in `parse_tags()`, `here` in `HasSubfieldTag()`/
+`GetSubfield()`) by simply not capturing values nothing read — same
+call sites, same behavior. Left the remaining `-Wunused-parameter`
+warnings (`BeforeSearching`'s `SearchQueryPtr`, `parse_tags`'s `len`,
+`usefulMarcDumpField`'s `fieldStr`) as pre-existing/acceptable,
+consistent with how the identical pattern is already left in place
+across the base-class virtual defaults this file transitively includes
+(`idbobj.hxx`, `doctype.hxx`, `opobj.hxx`). `NULL` converted to
+`nullptr` at all 7 call sites. Added class-level doc comment to the
+header and doc comments on `ParseRecords()`/`ParseFields()` in the
+source (matching `colondoc.cxx`'s doc-comment depth — not every small
+free-function helper got one, consistent with that file's own
+precedent). `doctype/marcdump.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_marcdump.cxx` covers: `UnifiedName()`'s identity
+passthrough; `ParseRecords()` correctly indexing a single-record file
+and correctly indexing the *last* of several records (both direct
+`BUGFIX #1` regressions); `ParseFields()` extracting a tag/value pair
+with no trailing byte lost (`BUGFIX #2`'s directly-confirmed half);
+`ParseFields()` adding a second alias field via
+`marcdumpFieldNumToName()`; and `ParseFields()` not crashing on an
+empty file (`BUGFIX #2`'s underflow path, with an accurate comment
+about what is and isn't ASan-confirmed there). Field names are
+asserted in uppercase per the established
+`DF::SetFieldName()`-uppercases-internally gotcha.
+

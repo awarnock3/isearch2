@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		marcdump.hxx
 Version:	$Revision: 1.1 $
@@ -14,7 +17,13 @@ Copyright:	A/WWW Enterprises, Columbia, MD
 # include "doctype.hxx"
 #endif
 
-class MARCDUMP 
+// A DOCTYPE for MARC records as dumped by the Yaz `marcdump` utility:
+// one record per run of lines starting at a line whose tag is "001",
+// continuing until the next "001" line or end of file. ParseFields()
+// then splits each record into tag/value pairs (see parse_tags() in
+// the source) and maps MARC field numbers to named fields via
+// UnifiedName()/marcdumpFieldNumToName().
+class MARCDUMP
   : public DOCTYPE {
 public:
     MARCDUMP(PIDBOBJ DbParent);

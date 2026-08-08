@@ -101,7 +101,7 @@
 | 97 | doctype/listdigest.hxx | done | 2026-08-08 | [doctype/listdigest.hxx](BUG_CATALOG.md#doctypelistdigestcxx) |
 | 98 | doctype/litmed.hxx | done | 2026-08-08 | [doctype/litmed.hxx](BUG_CATALOG.md#doctypelitmedcxx) |
 | 99 | doctype/maildigest.hxx | done | 2026-08-08 | [BUG_CATALOG.md#doctypemaildigestcxx](BUG_CATALOG.md#doctypemaildigestcxx) |
-| 100 | doctype/marcdump.hxx | pending | | |
+| 100 | doctype/marcdump.hxx | done | 2026-08-08 | [BUG_CATALOG.md#doctypemarcdumpcxx](BUG_CATALOG.md#doctypemarcdumpcxx) |
 | 101 | doctype/markdown.hxx | pending | | |
 | 102 | doctype/memodoc.hxx | pending | | |
 | 103 | doctype/oneline.hxx | pending | | |
@@ -217,7 +217,7 @@
 | 213 | doctype/litmed.cxx | done | 2026-08-08 | [doctype/litmed.cxx](BUG_CATALOG.md#doctypelitmedcxx) |
 | 214 | doctype/maildigest.cxx | done | 2026-08-08 | [BUG_CATALOG.md#doctypemaildigestcxx](BUG_CATALOG.md#doctypemaildigestcxx) |
 | 215 | doctype/mailfolder.cxx | done | 2026-08-07 | [doctype/mailfolder.cxx](BUG_CATALOG.md#doctypemailfoldercxx) |
-| 216 | doctype/marcdump.cxx | pending | | |
+| 216 | doctype/marcdump.cxx | done | 2026-08-08 | [BUG_CATALOG.md#doctypemarcdumpcxx](BUG_CATALOG.md#doctypemarcdumpcxx) |
 | 217 | doctype/markdown.cxx | pending | | |
 | 218 | doctype/medline.cxx | done | 2026-08-08 | [doctype/medline.cxx](BUG_CATALOG.md#doctypemedlinehxx) |
 | 219 | doctype/memodoc.cxx | pending | | |

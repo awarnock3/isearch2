@@ -1,4 +1,7 @@
 // $ID$
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		marcdump.cxx
 Version:	$Revision: 1.2 $
@@ -52,7 +55,11 @@ MARCDUMP::AddFieldDefs ()
 }
 
 
-void 
+// Splits FileRecord's underlying marcdump file into one RECORD per
+// MARC record, delimited by lines whose tag is "001" (see the
+// in-function comment below for the exact scan), and adds each to Db
+// via DocTypeAddRecord().
+void
 MARCDUMP::ParseRecords (const RECORD& FileRecord)
 {
 
@@ -85,8 +92,8 @@ MARCDUMP::ParseRecords (const RECORD& FileRecord)
   FileRecord.GetDocumentType(&s);
   Record.SetDocumentType ( s );
 
-  int RS, RE;  
-  
+  GPTYPE RS;
+
   if (fseek(fp, 0L, SEEK_END) == -1) {
     cout << "MARCDUMP::ParseRecords(): Seek failed - ";
     cout << fn << "\n";
@@ -111,9 +118,9 @@ MARCDUMP::ParseRecords (const RECORD& FileRecord)
 	
   FileLength = FileEnd - FileStart;
 
-  int bytePos = 0;    // we're going to start reading with bytePos = 0 so we
+  GPTYPE bytePos = 0;    // we're going to start reading with bytePos = 0 so we
                       // always know how many bytes we've read.
-  int marcLength = 0; // we keep track of the record length
+  GPTYPE marcLength = 0; // we keep track of the record length
   RS=0;               // we also know the first record will begin @ 0.
 
   STRING StartTag;
@@ -154,10 +161,29 @@ MARCDUMP::ParseRecords (const RECORD& FileRecord)
       marcLength +=4;
     }
   }
+
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypemarcdumpcxx): the loop above
+  // only calls DocTypeAddRecord() when it finds the *next* record's
+  // "001" tag, so the last record in the file -- for a single-record
+  // file, the *only* record -- never had a following "001" to trigger
+  // that, and was silently dropped, never indexed at all. Flush it here
+  // the same way the loop itself does, using the RS/marcLength already
+  // accumulated for it. Confirmed via a before/after test-revert: with
+  // this flush removed, a file with exactly one record produced zero
+  // calls to DocTypeAddRecord().
+  Record.SetRecordStart(RS);
+  Record.SetRecordEnd(RS+marcLength);
+  Db->DocTypeAddRecord(Record);
 }
 
 
-void 
+// Reads NewRecord's bytes off disk (or, if RecordEnd is unset, treats
+// the whole file as a single record -- see BUGFIX #2), splits them
+// into tag/value pairs via the file-local parse_tags(), and adds one
+// DF field (name from UnifiedName(tag), plus a second alias name from
+// marcdumpFieldNumToName() when one exists) per pair to NewRecord's
+// DFT.
+void
 MARCDUMP::ParseFields (RECORD *NewRecord)
 {
   STRING fn;
@@ -175,7 +201,21 @@ MARCDUMP::ParseFields (RECORD *NewRecord)
   if (RecEnd == 0) {
     fseek (fp, 0L, SEEK_END);
     RecStart = 0;
-    RecEnd = ftell (fp) - 1;
+    // BUGFIX #2 (docs/BUG_CATALOG.md#doctypemarcdumpcxx): this used to
+    // be `ftell(fp) - 1`, the same off-by-one truncation already fixed
+    // in doctype/colondoc.cxx's BUGFIX #1 -- confirmed via a before/
+    // after test-revert to silently drop the last byte of every record
+    // read through this fallback. GPTYPE is also unsigned (UINT4,
+    // src/defs.hxx): for a genuinely empty file, ftell(fp) is 0, so the
+    // old `- 1` underflowed to UINT_MAX, which then wrapped `RecLength
+    // + 1` back to 0 too (`new CHR[RecLength + 1]` ended up allocating
+    // 0 bytes), making the very next line (`RecBuffer[ActualLength] =
+    // '\0'`) write one byte past a 0-byte heap allocation -- undefined
+    // behavior regardless, though a standalone repro found this
+    // particular build's allocator/ASan combination doesn't actually
+    // flag it (likely allocator slack around a 0-byte `new[]`). Fixed
+    // either way, since relying on that is not something to build on.
+    RecEnd = ftell (fp);
   }
   fseek (fp, (long)RecStart, SEEK_SET);
   GPTYPE RecLength = RecEnd - RecStart;
@@ -189,18 +229,32 @@ MARCDUMP::ParseFields (RECORD *NewRecord)
   strncpy(tag,RecBuffer,3);
   tag[3]='\0';
 
-  INT StartTag;
+  // BUGFIX #3 (docs/BUG_CATALOG.md#doctypemarcdumpcxx): sscanf() leaves
+  // StartTag completely untouched (confirmed with a standalone repro)
+  // when `tag` doesn't parse as a leading integer -- e.g. an empty
+  // RecBuffer, reachable via the RecEnd==0 fallback above once
+  // BUGFIX #2 stops it from crashing first. Left uninitialized, the
+  // `StartTag != 1` check below read indeterminate memory. Initialized
+  // to 0, which safely fails that check and takes the existing "bogus
+  // first tag" error path.
+  INT StartTag = 0;
   sscanf(tag,"%d", &StartTag);  // turn the string into an int
   if (StartTag != 1) {
     cout << "MARCDUMP::ParseField(): Bogus first tag at RecStart = "
 	 << RecStart << endl;
+    // BUGFIX #4 (docs/BUG_CATALOG.md#doctypemarcdumpcxx): this early
+    // return used to skip freeing RecBuffer entirely -- a genuine
+    // heap-memory leak on every "bogus first tag" record, confirmed via
+    // ASan (`make tests-asan` caught a real 1-byte leak from this exact
+    // path, exercised by the empty-file test above).
+    delete [] RecBuffer;
     return;
   }
 
   PCHR *tags = parse_tags (RecBuffer, ActualLength);
 
   // Now we've got pairs of tags & values
-  if (tags == NULL || tags[0] == NULL) {
+  if (tags == nullptr || tags[0] == nullptr) {
     STRING doctype;
     NewRecord->GetDocumentType(&doctype);
     if (tags) {
@@ -228,7 +282,7 @@ MARCDUMP::ParseFields (RECORD *NewRecord)
     tag[3]='\0';
 
     PCHR p = tags_ptr[1]; // start of the next field value
-    if (p == NULL) // If no end of field
+    if (p == nullptr) // If no end of field
       p = &RecBuffer[RecLength]; // use end of buffer
 
     //    size_t off = strlen (*tags_ptr) + 1; // offset from tag to field start
@@ -246,7 +300,7 @@ MARCDUMP::ParseFields (RECORD *NewRecord)
     CHR* unified_name = UnifiedName(tag);
 
     // Ignore "unclassified" fields
-    if (unified_name == NULL) 
+    if (unified_name == nullptr)
       continue; // ignore these
     FieldName = unified_name;
 
@@ -317,7 +371,6 @@ MARCDUMP::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 		     const STRING& RecordSyntax, STRING* StringBufferPtr) 
 {
   STRING FieldName;
-  GDT_BOOLEAN Status;
 
   if (RecordSyntax.CaseEquals(HtmlRecordSyntax)) {
     PresentHtml(ResultRecord,ElementSet,StringBufferPtr);
@@ -329,15 +382,14 @@ MARCDUMP::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 
 
 void
-MARCDUMP::PresentSutrs(const RESULT& ResultRecord, const STRING& ElementSet, 
+MARCDUMP::PresentSutrs(const RESULT& ResultRecord, const STRING& ElementSet,
 		   STRING *StringBufferPtr)
 {
   STRING FieldName;
-  GDT_BOOLEAN Status;
 
   if (ElementSet.CaseEquals("B")) {
     FieldName = "245"; // Brief headline is "title"
-    Status = Db->GetFieldData(ResultRecord, FieldName, StringBufferPtr);
+    Db->GetFieldData(ResultRecord, FieldName, StringBufferPtr);
     StringBufferPtr->EraseBefore(7);
   } else if (ElementSet.CaseEquals("F")) {
     DOCTYPE::Present (ResultRecord, ElementSet, StringBufferPtr);
@@ -350,22 +402,21 @@ MARCDUMP::PresentSutrs(const RESULT& ResultRecord, const STRING& ElementSet,
 
 
 void
-MARCDUMP::PresentHtml(const RESULT& ResultRecord, const STRING& ElementSet, 
+MARCDUMP::PresentHtml(const RESULT& ResultRecord, const STRING& ElementSet,
 		   STRING *StringBufferPtr)
 {
   STRING FieldName;
-  GDT_BOOLEAN Status;
 
   if (ElementSet.CaseEquals("B")) {
     FieldName = "245"; // Brief headline is "title"
-    Status = Db->GetFieldData(ResultRecord, FieldName, StringBufferPtr);
+    Db->GetFieldData(ResultRecord, FieldName, StringBufferPtr);
     StringBufferPtr->EraseBefore(7);
 
   } else if (ElementSet.CaseEquals("F")) {
     STRING Buffer,Full,TheLine,URL;
     STRING Title,Contents,TheTag;
     STRLIST FullRecord, SubFields;
-    INT nLines,i,intTag,nSubFields;
+    INT nLines,i,intTag;
     STRING SubTag,SubField,ThisSubfield;
 
     // Get the whole record into a buffer
@@ -379,7 +430,7 @@ MARCDUMP::PresentHtml(const RESULT& ResultRecord, const STRING& ElementSet,
     Buffer.Cat("<HTML>\n<HEAD>\n");
 
     FieldName = "245"; // Brief headline is "title"
-    Status = Db->GetFieldData(ResultRecord, FieldName, &Title);
+    Db->GetFieldData(ResultRecord, FieldName, &Title);
     Title.EraseBefore(7);
 
     Buffer.Cat("<TITLE>");
@@ -410,7 +461,7 @@ MARCDUMP::PresentHtml(const RESULT& ResultRecord, const STRING& ElementSet,
 	  Contents = SubField;
 	}
 
-	nSubFields = GetSubfields(TheLine,&SubFields);
+	GetSubfields(TheLine,&SubFields);
 	SubFields.GetValue("$u",&ThisSubfield);
 
 	URL = "<a href=\"";
@@ -471,7 +522,6 @@ static CHR **parse_tags (CHR *b, GPTYPE len)
 {
   PCHR *t;			// array of pointers to first char of tags
   size_t tc = 0;		// tag count
-  GPTYPE i=0;
 #define TAG_GROW_SIZE 48
   size_t max_num_tags = TAG_GROW_SIZE;	// max num tags for which space is allocated
 
@@ -482,23 +532,23 @@ static CHR **parse_tags (CHR *b, GPTYPE len)
   CHR* p;
   p = strtok(b,"\n");
   t[tc++] = p;
-  while ((p=strtok(NULL,"\n"))) {
+  while ((p=strtok(nullptr,"\n"))) {
     t[tc] = p;
     // Expand memory if needed
     if (++tc == max_num_tags - 1) {
       // allocate more space
       max_num_tags += TAG_GROW_SIZE;
       CHR **New = new CHR* [max_num_tags];
-      if (New == NULL) {
+      if (New == nullptr) {
 	delete [] t;
-	return NULL; // NO MORE CORE!
+	return nullptr; // NO MORE CORE!
       }
       memcpy(New, t, tc*sizeof(CHR*));
       delete [] t;
       t = New;
     }
   }
-  t[tc] = (CHR*)NULL;
+  t[tc] = (CHR*)nullptr;
   return t;
 }
 
@@ -664,7 +714,6 @@ HasSubfield(const STRING& TheContents, STRING* tag)
 GDT_BOOLEAN
 HasSubfieldTag(const STRING& TheContents, STRING& tag)
 {
-  STRINGINDEX here;
   STRING tmp;
   CHR *pTag, *pField, *ptr;
   GDT_BOOLEAN status=GDT_FALSE;
@@ -685,7 +734,6 @@ GDT_BOOLEAN
 GetSubfield(const STRING& TheContents, const STRING& SubfieldTag,
 	    STRING* Buffer)
 {
-  STRINGINDEX here;
   STRING tmp;
   CHR *pTag, *pField, *ptr;
   GDT_BOOLEAN status=GDT_FALSE;
