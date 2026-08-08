@@ -72,7 +72,7 @@
 | 68 | doctype/medline.hxx | done | 2026-08-08 | [doctype/medline.hxx](BUG_CATALOG.md#doctypemedlinehxx) |
 | 69 | src/nfldmgr.hxx | done | 2026-08-08 | [src/nfldmgr.hxx](BUG_CATALOG.md#srcnfldmgrcxx) |
 | 70 | src/nlatlon.hxx | done | 2026-08-08 | [src/nlatlon.hxx](BUG_CATALOG.md#srcnlatloncxx) |
-| 71 | src/stopword.hxx | pending | | |
+| 71 | src/stopword.hxx | done | 2026-08-08 | [src/stopword.hxx](BUG_CATALOG.md#srcstopwordcxx) |
 | 72 | src/sw.hxx | pending | | |
 | 73 | doctype/anzlic.hxx | pending | | |
 | 74 | doctype/anzmeta.hxx | pending | | |
@@ -173,7 +173,7 @@
 | 169 | src/soundex.cxx | done | 2026-08-07 | [src/soundex.cxx](BUG_CATALOG.md#srcsoundexcxx) |
 | 170 | src/squery.cxx | pending | | |
 | 171 | src/sterm.cxx | pending | | |
-| 172 | src/stopword.cxx | pending | | |
+| 172 | src/stopword.cxx | done | 2026-08-08 | [src/stopword.cxx](BUG_CATALOG.md#srcstopwordcxx) |
 | 173 | src/string.cxx | done | 2026-08-05 | [src/string.cxx](BUG_CATALOG.md#srcstringcxx) |
 | 174 | src/strlist.cxx | done | 2026-08-07 | [src/strlist.cxx](BUG_CATALOG.md#srcstrlistcxx) |
 | 175 | src/strstack.cxx | done | 2026-08-07 | [src/strstack.hxx](BUG_CATALOG.md#srcstrstackhxx) |

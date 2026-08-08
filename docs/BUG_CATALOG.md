@@ -3573,3 +3573,86 @@ tests-asan`, `BUGFIX #1`/`#2`), and a high-bit-set byte not crashing
 
 No live `NULL`/`sprintf` usage to modernize. Added file-level and
 per-function doc comments.
+
+## src/stopword.cxx
+
+`class STOPWORD` is a stop-word list backed by a flat fixed-record
+memory block, mapped from/flushed to a file — unrelated to
+`IDBOBJ::IsStopWord()` despite the similar name. Like the previous
+three files this batch, it has no callers anywhere in the current tree
+and isn't in `src/Makefile`'s production `OBJ` list either — dead code,
+still processed per the standard pipeline. Both bugs below are in
+`ImportFromTextFile()`'s per-line trimming logic and were each
+confirmed with a real ASan report from this file's own regression
+tests, not just reasoned about.
+
+1. **Unsigned-length underflow causing an out-of-bounds read/write,
+   and an infinite loop** — the trailing-trim loop,
+   `while (!IsAlnum(WordBuffer[n=(strlen(WordBuffer)-1)])) { WordBuffer[n]
+   = '\0'; }`, computes `strlen()-1` on an unsigned `size_t`. Once
+   enough trailing non-alphanumeric characters were trimmed to make the
+   line empty (a blank line, or a line of pure punctuation), the next
+   iteration's `strlen()` is 0, so `strlen()-1` underflows and truncates
+   to `n==-1` when assigned to the `INT n` — indexing `WordBuffer[-1]`
+   out of bounds. Since that write is `'\0'`, which is never
+   alphanumeric, the loop condition stays true forever: an infinite
+   loop *and* a stack-buffer-underflow on every iteration. Confirmed
+   with a real before/after comparison: reverting the fix and running
+   just this file's blank-line regression test reproduced a clean ASan
+   report (caught before it could hang, since the redzone poisoning
+   aborts the process on the very first out-of-bounds access) —
+   ```
+   AddressSanitizer: stack-buffer-overflow ... src/stopword.cxx:97 in
+   STOPWORD::ImportFromTextFile
+   ... offset 127 ... underflows this variable [WordBuffer]
+   ```
+   restoring the fix made it disappear. Fixed by computing the length
+   once and guarding the loop on it directly:
+   ```cpp
+   n = strlen(WordBuffer);
+   while (n > 0 && !IsAlnum(WordBuffer[n-1])) {
+     WordBuffer[--n] = '\0';
+   }
+   ```
+   `BUGFIX #1` in source.
+2. **Overlapping-buffer `strcpy()`, undefined behavior** — the
+   leading-trim loop, `strcpy(WordBuffer, WordBuffer + 1)`, shifts the
+   buffer's contents left by one byte on every leading non-alphanumeric
+   character (e.g. a line like `"(hello)"`). `strcpy()`'s source and
+   destination overlap for all but the last byte moved, which the C
+   standard leaves undefined; this isn't a hypothetical concern here —
+   this exact input (already covered by this turn's punctuation-
+   stripping test, no special-casing needed) reproduced a real ASan
+   report:
+   ```
+   AddressSanitizer: strcpy-param-overlap: memory ranges
+   [...,...) and [...,...) overlap
+   ... in STOPWORD::ImportFromTextFile src/stopword.cxx:112
+   ```
+   Fixed by switching to `memmove()`, which is explicitly safe for
+   overlapping ranges: `memmove(WordBuffer, WordBuffer + 1,
+   strlen(WordBuffer))`. `BUGFIX #2` in source.
+
+Also removed a stray, misleading declaration from `stopword.hxx`:
+`static int StopwordCompareWords(const void*, const void*);` at file
+scope. Because it's declared `static`, every other translation unit
+that includes the header gets its own private, internal-linkage
+declaration that's never defined there (only `stopword.cxx` defines
+its own copy) — harmless as long as nothing calls it, but it triggered
+a `-Wunused-function` warning the moment this turn's test file became
+the second includer of the header. Not a public-API change: a `static`
+function has no external linkage, so no other translation unit could
+ever have legitimately used this declaration regardless of whether the
+header carried it. `stopword.cxx`'s own `StopwordCompareWords`
+definition already precedes all of its uses in that same file, so
+nothing needed the forward declaration in the first place.
+
+Covered by `tests/src/test_stopword.cxx`: a nonexistent backing file
+starting empty, `AddWords`/`IsStopWord` round-tripping, `AddWords`
+skipping an already-present word, `ImportFromTextFile` not hanging on
+a blank line or an all-punctuation line (`BUGFIX #1`, verified via the
+before/after ASan comparison above), and stripping leading/trailing
+punctuation from a real word (`BUGFIX #2`).
+
+No live `NULL`/`sprintf` usage to modernize. Added file-level and
+per-function/class doc comments.
