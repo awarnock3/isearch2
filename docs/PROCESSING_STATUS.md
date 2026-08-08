@@ -64,7 +64,7 @@
 | 60 | doctype/colondoc.hxx | done | 2026-08-07 | [doctype/colondoc.cxx](BUG_CATALOG.md#doctypecolondoccxx) |
 | 61 | doctype/mailfolder.hxx | done | 2026-08-07 | [doctype/mailfolder.cxx](BUG_CATALOG.md#doctypemailfoldercxx) |
 | 62 | src/gstack.hxx | done | 2026-08-07 | [src/gstack.hxx](BUG_CATALOG.md#srcgstackhxx) |
-| 63 | src/isearch.hxx | pending | | |
+| 63 | src/isearch.hxx | done | 2026-08-08 | [src/isearch.hxx](BUG_CATALOG.md#srcisearchhxx) |
 | 64 | src/idb.hxx | pending | | |
 | 65 | src/vidb.hxx | pending | | |
 | 66 | Isearch-cgi/cgi-util.hxx | pending | | |

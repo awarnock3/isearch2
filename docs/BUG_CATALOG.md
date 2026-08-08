@@ -3039,3 +3039,21 @@ No `NULL`/`sprintf` usages present. Added class-level and per-method
 doc comments, including the vestigial-inheritance note above. Tests
 (`tests/src/test_gstack.cxx`) cover empty-stack state, the
 `BUGFIX #2` regression, and LIFO Push/Top/Pop ordering.
+
+## src/isearch.hxx
+
+A pure convenience aggregator: declares nothing of its own, just
+`#include`s the ~30 core engine headers a doctype parser or CGI
+frontend typically needs (`STRING`, `RECORD`, `MDT`, `DOCTYPE`, the
+query-evaluation classes, etc.). No bugs possible to find in a file
+with no logic of its own; confirmed self-contained (compiles standalone
+as the sole `#include` in a translation unit, given the right include
+paths for both `src/` and `doctype/`). Added a file-level doc comment
+and the processed marker.
+
+Test (`tests/src/test_isearch.cxx`) is necessarily a smoke test rather
+than behavioral coverage: it includes only `isearch.hxx` and touches a
+few of the aggregated types (`STRING`, `STRLIST`, `RECORD`, `GSTACK`)
+to confirm the full set of ~30 includes is mutually coherent (no
+missing includes, no redefinition/ambiguity conflicts) when combined,
+not just individually self-contained.
