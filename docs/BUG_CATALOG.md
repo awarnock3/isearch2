@@ -3656,3 +3656,57 @@ punctuation from a real word (`BUGFIX #2`).
 
 No live `NULL`/`sprintf` usage to modernize. Added file-level and
 per-function/class doc comments.
+
+## src/sw.hxx
+
+A pure-data header: `const CHR *stoplist[]`, the English stop-word
+list. Unlike this batch's previous four files, this one is **not** dead
+code — `src/index.cxx` (already processed in an earlier turn) `#include`s
+it directly and its `INDEX::IsStopWord()` binary-searches `stoplist[]`
+by name (see the doc comment there, added when `index.cxx` was
+processed), which is what actually filters stop words out of every
+real index built through `IDB`.
+
+1. **A stray accidental array entry broke the sortedness that the
+   binary search depends on** — `"found", "",` inserted an extra empty
+   string into the list, right after `"found"`. `INDEX::IsStopWord()`'s
+   binary search assumes `stoplist[]` is fully sorted (case-
+   insensitively, via `StrCaseCmp()`/`strcasecmp()`); an empty string
+   sorts *before* every non-empty string, so placing it *after*
+   `"found"` violates that invariant. A quick simulation of the exact
+   algorithm against the array as it stood found no real word that
+   currently fails to be located because of this — the corruption
+   happened not to manifest as an observable defect in the *current*
+   399-word list — but the invariant itself was still genuinely broken,
+   the `"400 words"` comment no longer matched the real count (400
+   total entries, only 399 real words), and the entry is obviously
+   unintentional. Fixed by removing the stray `""`; the comment was
+   corrected to `399 words`. `BUGFIX #1` in source.
+
+Also documented (not changed): `stoplist` is a plain, non-`static`,
+non-`inline` array *definition* sitting in a header, so it has external
+linkage — `#include`-ing `sw.hxx` from a second `.cxx` file linked into
+the same binary would be a one-definition-rule violation (a duplicate-
+symbol link error under the `-fno-common` default most current
+compilers use). Currently only `index.cxx` includes it; two other files
+(`numsearch.cxx`, `geosearch.cxx`) have a `//#include "sw.hxx"` left
+commented out, presumably for exactly this reason. Changing this data
+definition's linkage (`static`/`inline`, or moving it to a `.cxx`)
+would be a real header-shape change and was left alone rather than
+guessed at, per GENERAL step 4; the constraint is called out explicitly
+in a new file-level comment instead, so the next person who considers
+`#include`-ing this header elsewhere doesn't rediscover it via a link
+error.
+
+`tests/src/test_sw.cxx` re-parses `src/sw.hxx`'s own source text from
+disk (rather than `#include`-ing it a second time, for exactly the
+linkage reason above) and directly checks: no empty entries and full
+case-insensitive sortedness (together the `BUGFIX #1` regression
+test — confirmed to fail against the unfixed data via a real
+before/after run, then pass once restored), plus a handful of expected
+words present. `INDEX::IsStopWord()` itself continues to be exercised
+behaviorally by the pre-existing `tests/src/test_index.cxx`.
+
+No live `NULL`/`sprintf` usage to modernize (pure data). Added a
+file-level doc comment; no functions in this file to comment
+individually.

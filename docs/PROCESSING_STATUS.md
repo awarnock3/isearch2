@@ -73,7 +73,7 @@
 | 69 | src/nfldmgr.hxx | done | 2026-08-08 | [src/nfldmgr.hxx](BUG_CATALOG.md#srcnfldmgrcxx) |
 | 70 | src/nlatlon.hxx | done | 2026-08-08 | [src/nlatlon.hxx](BUG_CATALOG.md#srcnlatloncxx) |
 | 71 | src/stopword.hxx | done | 2026-08-08 | [src/stopword.hxx](BUG_CATALOG.md#srcstopwordcxx) |
-| 72 | src/sw.hxx | pending | | |
+| 72 | src/sw.hxx | done | 2026-08-08 | [src/sw.hxx](BUG_CATALOG.md#srcswhxx) |
 | 73 | doctype/anzlic.hxx | pending | | |
 | 74 | doctype/anzmeta.hxx | pending | | |
 | 75 | doctype/bibtex.hxx | pending | | |

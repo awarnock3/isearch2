@@ -1,7 +1,17 @@
 #ifndef SW_HXX
 #define SW_HXX
 
-// 400 words
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+// The English stop-word list, sorted case-insensitively (required --
+// see below). Currently #include'd only by src/index.cxx, whose
+// INDEX::IsStopWord() binary-searches this array directly (see the doc
+// comment there). `stoplist` is a plain (non-static, non-inline, non-
+// extern) array *definition*, so it has external linkage; #include'ing
+// this header from a second .cxx file linked into the same binary
+// would be a one-definition-rule violation (a duplicate-symbol link
+// error under the -fno-common default). 399 words.
 const CHR *stoplist[] = {
   "0",
   "1",
@@ -116,7 +126,7 @@ const CHR *stoplist[] = {
   "former",
   "formerly",
   "forty",
-  "found", "",
+  "found",
   "four",
   "from",
   "further",
