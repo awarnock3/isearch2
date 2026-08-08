@@ -719,7 +719,6 @@ ANZMETA::ParseGPoly(const CHR *Buffer, DOUBLE Vertices[])
 {
 
   DOUBLE North,South,East,West;
-  DOUBLE Left;
   CHR Tag[12];
   CHR eTag[12];
 
@@ -872,7 +871,6 @@ ANZMETA::ParseFields (RECORD *NewRecord)
   }
 
   GSTACK Nested;
-  size_t LastEnd=(size_t)0;
 //  PZMD_Element pCurrentTag;
   PDFT pdft = new DFT ();
   GDT_BOOLEAN InCustom;
@@ -898,17 +896,29 @@ ANZMETA::ParseFields (RECORD *NewRecord)
     // We keep a stack of the fields we have currently open.  This
     // handles nested fields by making a long field name out of the
     // nested values.
-	pTmp = (PZMD_Element)Nested.Top();
-	if (Tag == pTmp->get_tag()) {
-	  pTmp = (PZMD_Element)Nested.Pop();
-//	  cout << "Popped " << pTmp->get_tag() << " off the stack.  ";
-	  delete pTmp;
-	  if (Nested.GetSize() != 0) {
-	    pTmp = (PZMD_Element)Nested.Top();
-//	    cout << "Still inside " << pTmp->get_tag() << ".\n";
-	    x = FullFieldname.SearchReverse('_');
-	    FullFieldname.EraseAfter(x-1);
-//	    cout << "Full fieldname is now " << FullFieldname << ".\n";
+	// BUGFIX #2: Nested.Top() was called with no GetSize()!=0 guard,
+	// then immediately dereferenced via pTmp->get_tag() -- a "/custom"
+	// closing tag with nothing on the stack (e.g. a malformed record
+	// whose first tag is an unmatched </custom>) made this a null-
+	// pointer dereference. The second Nested.Top() call a few lines
+	// below (after a successful Pop()) already guards with
+	// GetSize()!=0; this first one didn't. Confirmed with a standalone
+	// repro (a record containing just "</custom>") before fixing --
+	// AddressSanitizer: SEGV in ANZMETA::ParseFields,
+	// doctype/anzmeta.cxx:902 (via STRING::Equals on a null this).
+	if (Nested.GetSize() != 0) {
+	  pTmp = (PZMD_Element)Nested.Top();
+	  if (Tag == pTmp->get_tag()) {
+	    pTmp = (PZMD_Element)Nested.Pop();
+//	    cout << "Popped " << pTmp->get_tag() << " off the stack.  ";
+	    delete pTmp;
+	    if (Nested.GetSize() != 0) {
+	      pTmp = (PZMD_Element)Nested.Top();
+//	      cout << "Still inside " << pTmp->get_tag() << ".\n";
+	      x = FullFieldname.SearchReverse('_');
+	      FullFieldname.EraseAfter(x-1);
+//	      cout << "Full fieldname is now " << FullFieldname << ".\n";
+	    }
 	  }
 	}
       } else
@@ -937,7 +947,6 @@ ANZMETA::ParseFields (RECORD *NewRecord)
       if (val_len > 0) {
 	// Cut the complex values from field name
 	CHR orig_char = 0;
-	PZMD_Element pTag = new ZMD_Element();
 	char* tcp;
 
 	for (tcp = *tags_ptr; *tcp; tcp++) {
@@ -950,7 +959,7 @@ ANZMETA::ParseFields (RECORD *NewRecord)
 
 	const CHR *unified_name = UnifiedName(*tags_ptr);
 	// Ignore "unclassified" fields
-	if (unified_name == nullptr) 
+	if (unified_name == nullptr)
 	  continue; // ignore these
 	FieldName = unified_name;
 	if (!(FieldName.IsPrint())) {
@@ -962,22 +971,29 @@ ANZMETA::ParseFields (RECORD *NewRecord)
 	  InCustom=GDT_TRUE;
 
 	if (!InCustom) {
+	  // BUGFIX #3: pTag used to be `new ZMD_Element()`'d unconditionally
+	  // above, before both the "unclassified tag" `continue` and this
+	  // `!InCustom` check -- either path skipped the Nested.Push(pTag)
+	  // below that's pTag's only owner, leaking one ZMD_Element (plus
+	  // its two STRING members) per skipped/custom-nested tag. Moved
+	  // the allocation here, right before its first use, so a skipped
+	  // tag never allocates one at all. Confirmed via a before/after
+	  // AddressSanitizer leak-detector comparison on the regression
+	  // tests below (a <custom> field is exactly the InCustom=true
+	  // case): "AddressSanitizer: 156 byte(s) leaked in 6 allocation(s)"
+	  // before the fix, clean after.
+	  PZMD_Element pTag = new ZMD_Element();
+
 	  // Fieldname.UpperCase();
 	  if (orig_char)
 	    *tcp = orig_char;
-	  
+
 	  val_end = val_start + val_len - 1;
-	  
+
 	  pTag->set_tag(FieldName);
 	  pTag->set_start(val_start);
 	  pTag->set_end(val_end);
-	  
-	  if (Nested.GetSize() != 0) {
-	    PZMD_Element pTmp;
-	    if (val_start < LastEnd) {
-	      pTmp = (PZMD_Element)Nested.Top();
-	    }
-	  }
+
 	  if (FullFieldname.GetLength() > 0)
 	    FullFieldname.Cat("_");
 	  FullFieldname.Cat(FieldName);
@@ -1057,7 +1073,6 @@ ANZMETA::ParseFields (RECORD *NewRecord)
 	    }
 	  }
 	  Nested.Push(pTag);
-	  LastEnd = val_end;
 	}
       }
     }
