@@ -4264,3 +4264,74 @@ extracting exact `"File:"`/`"Node:"` values with no trailing comma
 for reasons unrelated to any `EMACSINFO`-specific logic, the same
 issue noted for `doctype/bibtex.cxx`'s `Present()`.
 
+## doctype/eos_guide.cxx
+
+`class EOS_GUIDE` is an HTML DOCTYPE that only ever looks inside
+`<HEAD>...</HEAD>`, indexing the `<TITLE>` text and every `<META
+NAME="..." CONTENT="...">` as its own field. A different architecture
+from this batch's other files — a character-at-a-time `fgetc()`
+tokenizer rather than an in-memory buffer scan — and it turned up two
+functional bugs severe enough that the class's core feature (title
+extraction) never worked at all, plus one that silently corrupted an
+XML output field.
+
+1. **`(char)fgetc(fp)` collided the real byte `0xFF` with `EOF`** —
+   `fgetc()` returns either a byte value (0-255) or the sentinel `EOF`
+   (typically `-1`) as an `int`; the original code narrowed that
+   result to `char` before ever comparing it to `EOF`. On a platform
+   where `char` is signed (the common case), the real byte `0xFF`
+   narrows to `-1` too — the same value as `EOF` — so parsing stopped
+   dead the instant that byte appeared anywhere in the file, including
+   in ordinary (non-tag) text content like a title, not just malformed
+   input. This is plausible, not just theoretical, for a class whose
+   own `Present()` elsewhere explicitly claims Latin-1/ISO-8859-1
+   support. Fixed by keeping the read result as an `int` throughout,
+   only narrowing to `char` when storing an already-confirmed-non-EOF
+   byte into the token buffer. Also fixed in the same spot: `toupper()`
+   given that same value is undefined behavior for anything not
+   representable as `unsigned char` (same class of bug as
+   `src/nlatlon.cxx`'s `BUGFIX #3` from earlier this session) — cast
+   explicitly. `BUGFIX #1` in source.
+2. **Title extraction could never succeed for any input, and once a
+   `</TITLE>` was seen, `<META>` tags and everything else after it in
+   the `<HEAD>` were silently discarded too** — `titlePosition` (which
+   `<TITLE>`'s handling sets to the offset just past the opening tag,
+   for `</TITLE>`'s handling to later read back) was unconditionally
+   reset to `0` at the top of *every* loop iteration, including the
+   very iteration that processes `</TITLE>` itself — since a tag and
+   its matching close are necessarily read in different iterations
+   (the title text between them is skipped character-by-character, not
+   accumulated anywhere), this reset destroyed the value before
+   `</TITLE>`'s handling ever got to read it. The guard immediately
+   below, `if (titlePosition == 0) break;`, was therefore *always*
+   true — and since that `break` sits directly in the main parsing
+   loop (not inside a `switch`), it didn't just skip adding the title
+   field, it exited the *entire* loop, silently ending the parse the
+   moment any `</TITLE>` was seen. Confirmed with a real before/after
+   test run: reverting just this fix made 3 of this file's 4
+   regression tests fail, including the unrelated META-extraction one
+   — direct evidence of the cascading effect, not just reasoned about.
+   Fixed by initializing `titlePosition` once, outside the loop,
+   instead of resetting it every iteration. `BUGFIX #2` in source.
+3. **The `"R"` (XML result) element set corrupted its `docid`
+   attribute** — `StringBufferPtr->Cat(ndb);` passed the raw `INT ndb`
+   to `STRING::Cat()`, which has no `INT` overload; it silently
+   resolved to `Cat(const UCHR Character)` via an implicit narrowing
+   conversion, appending one garbled single byte instead of the
+   intended decimal database-number string. The sibling `"B"`/
+   `ISEARCH_XML` branch a little further down does this correctly,
+   via the `ndb_string` buffer already built by `sprintf()` a few
+   lines above the bug — that's what the fix uses too. `BUGFIX #3` in
+   source.
+
+Modernization: both `sprintf(ndb_string, ...)` calls converted to
+`snprintf`. No live `NULL` usage. Added class-level and per-function
+doc comments.
+
+`tests/doctype/test_eos_guide.cxx` covers: extracting the `TITLE`
+field (`BUGFIX #2`'s direct regression, confirmed via the before/after
+test run described above) and `META` `NAME`/`CONTENT` fields correctly
+by exact substring; not stopping early on a `0xFF` byte inside the
+title text (`BUGFIX #1`); and adding no `TITLE` field when the
+document has none.
+
