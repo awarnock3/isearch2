@@ -278,7 +278,7 @@ TEST_ENGINE_CGI_OBJS_ASAN := $(patsubst Isearch-cgi/%.cxx,tests/obj-asan/cgi-%.o
 # 53, is the first file in that directory to reach TEST_ENGINE_SRCS --
 # every later doctype/*.cxx turn should add itself to
 # TEST_ENGINE_DOCTYPE_SRCS below rather than inventing a new list).
-TEST_ENGINE_DOCTYPE_SRCS := doctype/doctype.cxx doctype/sgmlnorm.cxx doctype/sgmltag.cxx doctype/colondoc.cxx doctype/mailfolder.cxx doctype/medline.cxx doctype/anzmeta.cxx doctype/bibtex.cxx doctype/cipc.cxx doctype/cipp.cxx doctype/fgdc.cxx doctype/fgdcsite.cxx doctype/dif.cxx doctype/emacsinfo.cxx doctype/eos_guide.cxx doctype/filename.cxx doctype/filmline.cxx doctype/firstline.cxx doctype/ftp.cxx doctype/gils.cxx doctype/gilsxml.cxx doctype/gopher.cxx doctype/html.cxx doctype/htmltag.cxx doctype/iafadoc.cxx doctype/iknowdoc.cxx doctype/incoming/sgmlgils.cxx
+TEST_ENGINE_DOCTYPE_SRCS := doctype/doctype.cxx doctype/sgmlnorm.cxx doctype/sgmltag.cxx doctype/colondoc.cxx doctype/mailfolder.cxx doctype/medline.cxx doctype/anzlic.cxx doctype/anzmeta.cxx doctype/bibtex.cxx doctype/cipc.cxx doctype/cipp.cxx doctype/fgdc.cxx doctype/fgdcsite.cxx doctype/dif.cxx doctype/emacsinfo.cxx doctype/eos_guide.cxx doctype/filename.cxx doctype/filmline.cxx doctype/firstline.cxx doctype/ftp.cxx doctype/gils.cxx doctype/gilsxml.cxx doctype/gopher.cxx doctype/html.cxx doctype/htmltag.cxx doctype/iafadoc.cxx doctype/iknowdoc.cxx doctype/incoming/sgmlgils.cxx
 TEST_ENGINE_DOCTYPE_OBJS      := $(patsubst doctype/%.cxx,tests/obj/doctype-%.o,$(TEST_ENGINE_DOCTYPE_SRCS))
 TEST_ENGINE_DOCTYPE_OBJS_ASAN := $(patsubst doctype/%.cxx,tests/obj-asan/doctype-%.o,$(TEST_ENGINE_DOCTYPE_SRCS))
 

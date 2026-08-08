@@ -173,11 +173,20 @@ void ANZLIC::LoadFieldTable() {
   fclose(fp);
   pBuf = strtok(b,"\n");
 
-  do {
+  // BUGFIX #5: this was a do-while, unconditionally running the body
+  // (and thus `Field_and_Type = pBuf;`) once before ever checking pBuf.
+  // An empty (but existing) FIELDTYPE file makes strtok() return
+  // nullptr on the very first call, and STRING::operator=(const CHR*)
+  // calls strlen() on it unconditionally -- a null-pointer-dereference
+  // crash. Same bug as, and fixed the same way as, doctype/cipc.cxx's
+  // BUGFIX #5 and doctype/dif.cxx's BUGFIX #5 -- already fixed
+  // elsewhere in this same batch, but not here.
+  while (pBuf) {
     Field_and_Type = pBuf;
     Field_and_Type.UpperCase();
     Db->FieldTypes.AddEntry(Field_and_Type);
-  } while ( (pBuf = strtok((CHR*)nullptr,"\n")) );
+    pBuf = strtok((CHR*)nullptr,"\n");
+  }
 
   delete [] b;
 }
@@ -255,37 +264,54 @@ DOUBLE ANZLIC::ParseDateSingle(const PCHR Buffer) {
   return fVal;
 }
 
-void ANZLIC::ParseDateRange(const PCHR Buffer, DOUBLE* fStart, 
+// BUGFIX #6: Hold.Search(...) was used with no ">0" guard before acting
+// on the result -- unlike every sibling ParseDateRange in this codebase
+// (dif.cxx, cipc.cxx, cipp.cxx, anzmeta.cxx all check it). Search()
+// returns 0 when the tag isn't found, so `Start += 9;
+// Hold.EraseBefore(Start);` ran on a computed offset of 9 into an
+// unrelated buffer instead of erroring out -- STRING's EraseBefore/
+// EraseAfter are bounds-checked so this didn't crash, but it could
+// silently produce a plausible-looking wrong date instead of a clear
+// error value. Fixed by only proceeding when the opening tag was
+// actually found, defaulting to the same -1.0/99999999 sentinels the
+// "unknown"/"present" cases already use otherwise.
+void ANZLIC::ParseDateRange(const PCHR Buffer, DOUBLE* fStart,
 			  DOUBLE* fEnd){
-  PCHR found;
-  CHR tmp[160];
   STRING Hold;
   STRINGINDEX Start, End;
 
   Hold = Buffer;
   Hold.UpperCase();
   Start = Hold.Search("<BEGDATE>");
-  Start += 9;
-  Hold.EraseBefore(Start);
-  End = Hold.Search("</BEGDATE");
-  Hold.EraseAfter(End-1);
-  if (Hold.CaseEquals("present")
-      || Hold.CaseEquals("9999")
-      || Hold.CaseEquals("999999")
-      || Hold.CaseEquals("99999999")) {
-    *fStart = -1;
-  } else if (Hold.CaseEquals("unknown")) {
-    *fStart = -1.0;
-  } else if (Hold.IsNumber()) {
-    *fStart = Hold.GetFloat();
+  if (Start > 0) {
+    Start += 9;
+    Hold.EraseBefore(Start);
+    End = Hold.Search("</BEGDATE");
+    Hold.EraseAfter(End-1);
+    if (Hold.CaseEquals("present")
+	|| Hold.CaseEquals("9999")
+	|| Hold.CaseEquals("999999")
+	|| Hold.CaseEquals("99999999")) {
+      *fStart = -1;
+    } else if (Hold.CaseEquals("unknown")) {
+      *fStart = -1.0;
+    } else if (Hold.IsNumber()) {
+      *fStart = Hold.GetFloat();
+    } else {
+      cout << "Bad Start date, value=" << Buffer << endl;
+      *fStart = -1.0;
+    }
   } else {
-    cout << "Bad Start date, value=" << Buffer << endl;
     *fStart = -1.0;
   }
 
   Hold = Buffer;
   Hold.UpperCase();
   Start = Hold.Search("<ENDDATE>");
+  if (Start == 0) {
+    *fEnd = -1.0;
+    return;
+  }
   Start += 9;
   Hold.EraseBefore(Start);
   End = Hold.Search("</ENDDATE");
@@ -354,8 +380,6 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
   }
 
   GSTACK Nested;
-  size_t LastEnd;
-  PAMD_Element pCurrentTag;
   PDFT pdft = new DFT ();
   GDT_BOOLEAN InCustom;
   size_t val_start;
@@ -377,23 +401,38 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
 
 	STRING Tag;
 	STRINGINDEX x;
-	PCHR cx;
 
 	Tag = *tags_ptr;
 	x=Tag.Search('/');
 	Tag.EraseBefore(x+1);
-      
-	pTmp = (PAMD_Element)Nested.Top();
-	if (Tag == pTmp->get_tag()) {
-	  pTmp = (PAMD_Element)Nested.Pop();
-//	  cout << "Popped " << pTmp->get_tag() << " off the stack.  ";
-	  delete pTmp;
-	  if (Nested.GetSize() != 0) {
-	    pTmp = (PAMD_Element)Nested.Top();
-//	    cout << "Still inside " << pTmp->get_tag() << ".\n";
-	    x = FullFieldname.SearchReverse('_');
-	    FullFieldname.EraseAfter(x-1);
-//	    cout << "Full fieldname is now " << FullFieldname << ".\n";
+
+	// BUGFIX #3: Nested.Top() was called with no GetSize()!=0 guard,
+	// then immediately dereferenced via pTmp->get_tag() -- a "/custom"
+	// closing tag with nothing on the stack (e.g. a malformed record
+	// whose first tag is an unmatched </custom>) made this a null-
+	// pointer dereference. Not just a malformed-input edge case: opening
+	// a <custom> field sets InCustom=GDT_TRUE *before* the !InCustom
+	// gate that would otherwise Nested.Push() it, so Nested is still
+	// empty by the time </custom> is reached even for a simple,
+	// well-formed <custom>text</custom> field -- every real use of this
+	// field crashed. Same bug, same fix, as doctype/anzmeta.cxx's
+	// BUGFIX #2. Confirmed with a standalone repro (a record containing
+	// only "</custom>") before fixing: AddressSanitizer: SEGV in
+	// ANZLIC::ParseFields, doctype/anzlic.cxx:387 (via STRING::Equals on
+	// a null this).
+	if (Nested.GetSize() != 0) {
+	  pTmp = (PAMD_Element)Nested.Top();
+	  if (Tag == pTmp->get_tag()) {
+	    pTmp = (PAMD_Element)Nested.Pop();
+//	    cout << "Popped " << pTmp->get_tag() << " off the stack.  ";
+	    delete pTmp;
+	    if (Nested.GetSize() != 0) {
+	      pTmp = (PAMD_Element)Nested.Top();
+//	      cout << "Still inside " << pTmp->get_tag() << ".\n";
+	      x = FullFieldname.SearchReverse('_');
+	      FullFieldname.EraseAfter(x-1);
+//	      cout << "Full fieldname is now " << FullFieldname << ".\n";
+	    }
 	  }
 	}
       } else
@@ -422,7 +461,6 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
       if (val_len > 0) {
 	// Cut the complex values from field name
 	CHR orig_char = 0;
-	PAMD_Element pTag = new AMD_Element();
 	char* tcp;
 
 	for (tcp = *tags_ptr; *tcp; tcp++) {
@@ -435,7 +473,7 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
 
 	const CHR *unified_name = UnifiedName(*tags_ptr);
 	// Ignore "unclassified" fields
-	if (unified_name == nullptr) 
+	if (unified_name == nullptr)
 	  continue; // ignore these
 	FieldName = unified_name;
 	if (!(FieldName.IsPrint())) {
@@ -447,22 +485,26 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
 	  InCustom=GDT_TRUE;
 
 	if (!InCustom) {
+	  // BUGFIX #4: pTag used to be `new AMD_Element()`'d unconditionally
+	  // above, before both the "unclassified tag" continue and this
+	  // !InCustom check -- either path skipped the Nested.Push(pTag)
+	  // below that's pTag's only owner, leaking one AMD_Element (plus
+	  // its STRING member) per skipped or custom-nested tag. Same bug,
+	  // same fix, as doctype/anzmeta.cxx's BUGFIX #3: moved the
+	  // allocation here, right before its first use, so a skipped tag
+	  // never allocates one at all.
+	  PAMD_Element pTag = new AMD_Element();
+
 	  // Fieldname.UpperCase();
 	  if (orig_char)
 	    *tcp = orig_char;
-	  
+
 	  val_end = val_start + val_len - 1;
-	  
+
 	  pTag->set_tag(FieldName);
 	  pTag->set_start(val_start);
 	  pTag->set_end(val_end);
-	  
-	  if (Nested.GetSize() != 0) {
-	    PAMD_Element pTmp;
-	    if (val_start < LastEnd) {
-	      pTmp = (PAMD_Element)Nested.Top();
-	    }
-	  }
+
 	  if (FullFieldname.GetLength() > 0)
 	    FullFieldname.Cat("_");
 	  FullFieldname.Cat(FieldName);
@@ -517,7 +559,6 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
 	    delete pfct1;
 	  }
 	  Nested.Push(pTag);
-	  LastEnd = val_end;
 	}
       }
     }

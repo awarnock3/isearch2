@@ -3713,36 +3713,110 @@ individually.
 
 ## doctype/anzlic.hxx
 
-1. **strcmp() logic error in ParseFields()** — line 372 (now fixed to line 375 after cleanup marker added)
-   checked `if (strcmp(*tags_ptr,"/custom"))` without negation. `strcmp()` returns non-zero when
-   strings do NOT match, so this condition was true for every non-"/custom" tag and false only for
-   the "/custom" end tag itself — inverting the intended logic. The fix is to use `!strcmp()` or
-   equivalently `(strcmp(...) == 0)`. This caused incorrect handling of custom tags in ANZLIC
-   document parsing. See `BUGFIX #1` in source.
+`class ANZLIC` (`: public SGMLNORM`) is the ANZLIC-profile metadata
+DOCTYPE — near-identical architecture to `doctype/anzmeta.cxx` (same
+SGML-tag scanner, same `Nested`-stack approach to `<custom>` field
+handling), and it shares that file's lineage closely enough that its own
+`BUGFIX #1` note already cross-references this file. Reprocessed after
+its original turn's tests turned out not to actually link against this
+file at all (see the `Makefile` note below) — a fresh read surfaced four
+more real bugs beyond the two already fixed.
 
-2. **Missing null-pointer check in find_end_tag()** — the function accepted `tag` (second
-   parameter) without verifying it was not a null pointer before dereferencing it. While the
-   function already checked `t` and `*t`, a null `tag` pointer would cause undefined behavior when
-   passed to `strlen()` and subsequent operations. Added safety check at the start of the function.
-   See `BUGFIX #2` in source.
+1. **`strcmp()` logic error in `ParseFields()`'s closing-tag handling** —
+   `if (strcmp(*tags_ptr,"/custom"))` was missing the negation: `strcmp()`
+   returns non-zero when strings do *not* match, so this ran the
+   Nested-popping logic for every closing tag *except* "/custom", and ran
+   `InCustom=GDT_FALSE` only for "/custom" itself — both backwards. Same
+   defect class as `doctype/anzmeta.cxx`'s `BUGFIX #1`. Fixed by using
+   `!strcmp()`. `BUGFIX #1` in source.
+2. **Missing null-pointer guard in `find_end_tag()`** — `tag` (the second
+   parameter) was dereferenced without checking it for null first. In
+   practice every real call site passes `*tags_ptr` for both `t[0]` and
+   `tag`, and `*t`'s nullness is already checked just above, so this
+   specific path was never reachable as a live bug — but a defensive
+   guard either way. `BUGFIX #2` in source.
+3. **`Nested.Top()` called with no `GetSize()!=0` guard, then immediately
+   dereferenced** — reached whenever a "/custom" closing tag is seen.
+   Not just a malformed-input edge case: opening a `<custom>` field sets
+   `InCustom=GDT_TRUE` *before* the `!InCustom` check that would
+   otherwise `Nested.Push()` it (custom content is deliberately excluded
+   from indexing), so `Nested` is still empty by the time `</custom>` is
+   reached even for a simple, well-formed `<custom>text</custom>` field —
+   every real use of this field crashed, not just malformed records.
+   Same bug, same fix, as `doctype/anzmeta.cxx`'s `BUGFIX #2`. Confirmed
+   with a standalone repro (a record containing only `</custom>`) before
+   fixing: `AddressSanitizer: SEGV ... in ANZLIC::ParseFields,
+   doctype/anzlic.cxx:387` (a null-pointer dereference via
+   `STRING::Equals` on a null `this`). Fixed by guarding with
+   `Nested.GetSize() != 0`, the same pattern already used for the second
+   `Nested.Top()` call a few lines below. `BUGFIX #3` in source.
+4. **`pTag` (`new AMD_Element()`) leaked on two paths** — allocated
+   unconditionally per tag, but only ever freed via `Nested.Push()` plus
+   a later `Pop()`/`delete`; both the "unclassified tag" `continue` and
+   the `InCustom` (inside a `<custom>` field) case skipped that push,
+   leaking one `AMD_Element` per skipped or custom-nested tag. Same bug,
+   same fix, as `doctype/anzmeta.cxx`'s `BUGFIX #3`: moved the allocation
+   from the top of the tag-pair branch to immediately before its first
+   real use. `BUGFIX #4` in source.
+5. **`LoadFieldTable()` could crash on an empty (but existing) FIELDTYPE
+   file** — a `do`-`while` ran `Field_and_Type = pBuf;` (via
+   `STRING::operator=(const CHR*)`, which calls `strlen()` unconditionally)
+   once *before* ever checking whether `pBuf` (`strtok()`'s result) was
+   null. An empty file makes `strtok()` return `nullptr` on its very
+   first call. Same bug as, and fixed the same way as (converting the
+   `do`-`while` to a `while`), `doctype/cipc.cxx`'s `BUGFIX #5` and
+   `doctype/dif.cxx`'s `BUGFIX #5` — already fixed elsewhere in this same
+   batch, but the identical pattern here was missed. `BUGFIX #5` in
+   source.
+6. **`ParseDateRange()` used `Hold.Search(...)` with no `>0` guard before
+   acting on the result** — unlike every sibling `ParseDateRange()` in
+   this codebase (`dif.cxx`, `cipc.cxx`, `cipp.cxx`, `anzmeta.cxx` all
+   check it). `Search()` returns `0` when a tag isn't found, so
+   `Start += 9; Hold.EraseBefore(Start);` ran on a computed offset of 9
+   into an unrelated buffer instead of erroring out. `STRING`'s
+   `EraseBefore`/`EraseAfter` are bounds-checked so this never crashed,
+   but it could silently produce a plausible-looking wrong date instead
+   of a clear error value: confirmed with a 10-character buffer
+   containing no `BEGDATE` tag at all, whose last two (digit) characters
+   survived the bogus erase and parsed as a normal-looking number
+   (`fStart` came back `90.0` instead of the intended `-1.0` error
+   sentinel). Fixed by only proceeding when the opening tag was actually
+   found. `BUGFIX #6` in source.
 
-### Modernization
+Modernization: all `NULL` uses converted to `nullptr` throughout (14
+call sites in `.cxx`). Restored the missing `sgmlnorm.hxx` include in
+`anzlic.hxx` for header self-containment. Removed several now-genuinely-
+dead locals surfaced by bringing this file to a clean `-Wall -Wextra`
+build for the first time: `pCurrentTag` and `LastEnd` in `ParseFields()`
+(the latter written every iteration, but its only read lived in an inert
+`if (Nested.GetSize() != 0) { pTmp = Nested.Top(); }` block that computed
+a value and threw it away — removed both together), `cx` in the
+`/custom`-handling branch, and `found`/`tmp[160]` in `ParseDateRange()`.
 
-- Replaced all `NULL` with `nullptr` throughout both `.hxx` and `.cxx` (14 replacements in `.cxx`).
-- Added file-level and method-level doc comments to clarify SGML parsing helper functions.
-- Fixed missing parent class include (`sgmlnorm.hxx`) in `anzlic.hxx` to ensure header
-  self-containment (discovered during test compilation).
+Also fixed, this turn: `doctype/anzlic.cxx` was missing from
+`TEST_ENGINE_DOCTYPE_SRCS` in the top-level `Makefile`. That meant this
+file's original turn could never actually have linked a test against a
+real `ANZLIC` method — which is exactly why `BUGFIX #3`–`#6` went
+undetected then: nothing had ever called the real `ParseFields()`,
+`LoadFieldTable()`, or `ParseDateRange()` under test, plain or ASan.
+Added it. `tests/doctype/test_anzlic.cxx` now covers: `ParseFields` not
+crashing on a stray unmatched `/custom` closing tag (`BUGFIX #3`'s
+standalone repro) and on a well-formed `<custom>text</custom>` field
+(the realistic case, same root cause); a `<custom>` field followed by a
+real field not crashing or hanging (`BUGFIX #1`); `LoadFieldTable` not
+crashing on an empty FIELDTYPE file (`BUGFIX #5`) while still loading
+real entries; `ParseDateRange` defaulting to the `-1.0` error sentinel
+rather than a garbage value when `BEGDATE` is missing (`BUGFIX #6`) and
+parsing a well-formed range correctly; plus the pre-existing
+header-constant and `AMD_Element` accessor checks. All pass under plain
+compilation and AddressSanitizer/UndefinedBehaviorSanitizer, leak
+detector clean.
 
-### Tests
-
-Created `tests/doctype/test_anzlic.cxx` with 18 test cases covering:
-- Header constant definitions (MAXNESTINGLEN, ANZLIC_ACCEPT_EMPTY_TAGS)
-- File extension constants (standard, short, and uppercase variants) — 14 sub-tests
-- AMD_Element class operations (set/get tag, start, end positions) — 3 sub-tests
-- ANZLIC type definitions and string buffer operations — 2 sub-tests
-
-All tests pass under plain compilation and AddressSanitizer/UndefinedBehaviorSanitizer.
-No memory safety issues detected.
+A pre-existing compiler warning (`find_end_tag()`'s `const PCHR` return
+type — `PCHR` is already `char*`, so `const PCHR` means `char* const`,
+not the presumably-intended `const char*`) was left alone: fixing the
+spelling would change the declared return type, which is a public header
+signature change per GENERAL step 4, not something to do without asking.
 
 
 ## doctype/anzmeta.hxx
