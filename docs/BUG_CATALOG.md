@@ -3194,3 +3194,86 @@ suite was re-run to confirm no regression elsewhere.
 
 Modernization: the 2 code-level `NULL` uses converted to `nullptr`. No
 `sprintf` calls present. Added a class-level doc comment.
+
+## Isearch-cgi/cgi-util.hxx
+
+`class CGIAPP` parses raw CGI form input (`QUERY_STRING` for GET, the
+POST body off `stdin`, picked via `REQUEST_METHOD`) into name/value
+pairs. Every one of this turn's three bugs takes fully client-
+controlled input straight into a fixed-size stack buffer with no
+bounds check -- the most severe bug cluster found in this whole
+cleanup effort, and (unlike most of this session's other memory-safety
+finds) directly, trivially reachable by an ordinary HTTP request, not
+just a crafted key or a rare edge case.
+
+1. **POST: `Content-Length`-sized read into a 256-byte stack buffer**
+   — `cin.getline(temp1, ContentLen+1, '&')` told `getline` the buffer
+   was `ContentLen+1` bytes -- `ContentLen` parsed straight from the
+   client-supplied `Content-Length` header -- when `temp1` is a fixed
+   `CHR temp1[256]`. A POST body over 255 bytes with no `&` in the
+   first 255 overflows the stack. Confirmed with a standalone repro
+   under ASan before fixing (a 400-byte body, no `&`):
+   `AddressSanitizer: stack-buffer-overflow ... in
+   std::istream::getline ... in CGIAPP::GetInput`. Fixed by capping the
+   read at `sizeof(temp1)`; when a field doesn't fit, `getline` sets
+   failbit without consuming the delimiter, so the leftover bytes are
+   explicitly discarded up to the next real `&` (`cin.ignore(...,
+   '&')`) to keep the parser aligned with the stream instead of
+   misreading them as the start of the next field. `BUGFIX #1` in
+   source; re-ran the repro after the fix to confirm clean.
+2. **GET: no bound at all on the query-string copy loops** — the two
+   `while` loops copying a name/value segment out of `QUERY_STRING`
+   into `temp1`/`temp2` (also fixed 256-byte buffers) had no length
+   check whatsoever -- `QUERY_STRING` is the entire URL query, fully
+   attacker-controlled with no length limit enforced before this code
+   runs. Confirmed with a standalone repro under ASan before fixing (a
+   400-byte field name): `AddressSanitizer: stack-buffer-overflow ...
+   in CGIAPP::GetInput`. Unlike the POST case, this is plain in-memory
+   array iteration (not a stream), so the fix is simpler: cap the
+   *write* index while still advancing the *read* index through the
+   whole field, so parsing stays correctly aligned with the `=`/`&`
+   delimiters and only the copy is truncated. `BUGFIX #2` in source.
+3. **GET: writing through a string-literal pointer for a request with
+   no `QUERY_STRING` at all** — when `getenv("QUERY_STRING")` returns
+   `nullptr` (no query string present), `query` used to be pointed at
+   a string literal `""`. `plustospace()`/`unescape_url()` are called
+   on it immediately after and both write through their argument
+   unconditionally (`unescape_url()` always writes a `'\0'` terminator
+   even for an already-empty string) -- undefined behavior that
+   crashes on a typical modern OS (write to read-only `.rodata`).
+   Confirmed with a standalone repro under ASan before fixing --
+   triggered by simply requesting the CGI script with no query
+   string at all (no attack payload needed):
+   `AddressSanitizer: SEGV ... WRITE ... in unescape_url ... in
+   CGIAPP::GetInput`. Fixed by pointing `query` at a local mutable
+   buffer (`CHR EmptyQuery[1] = "";`) instead of a literal. `BUGFIX #3`
+   in source.
+
+All three are covered by dedicated regression tests in
+`tests/Isearch-cgi/test_cgi-util.cxx`; `make tests-asan` is what
+actually re-verifies each one, the same as the standalone repros used
+to confirm them before fixing.
+
+**Not fixed (needs a header change):** `escape_url(PCHR url, PCHR
+out)` writes up to 3x `strlen(url)` bytes into `out` (every non-
+alphanumeric, non-space byte becomes a 3-byte `%XX` escape) with no
+size parameter for `out` at all -- a caller that sizes `out` to match
+`url` would overflow. Grepped the whole tree for callers and found
+none (dead code, declared and defined but never invoked), so this
+wasn't confirmed live, and fixing the root cause needs an output-size
+parameter (a signature change) -- documented here instead, matching
+this session's convention for public-API landmines with no confirmed
+caller to break yet (see `src/glist.hxx`, `src/gstack.hxx`,
+`src/idb.hxx`, `src/vidb.hxx` earlier this batch).
+
+Also noted, not acted on: `GetName(INT4 i)`/`GetValue(INT4 i)` have no
+bounds check against the actual entry count, and there's no public
+accessor for that count either -- but grepped every real caller in the
+tree and found none using these two directly (only `GetValueByName()`,
+which is internally bounds-checked, and `CGIAPP::Display()`'s own
+`entry_count`-bounded loop), so left alone rather than guessed at.
+
+Modernization: all code-level `NULL` uses converted to `nullptr`. No
+`sprintf` calls present (`escape_url()` already used `snprintf`).
+Added class-level and field-level doc comments, including the
+`escape_url()`/`GetName()`/`GetValue()` caveats above.

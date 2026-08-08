@@ -67,7 +67,7 @@
 | 63 | src/isearch.hxx | done | 2026-08-08 | [src/isearch.hxx](BUG_CATALOG.md#srcisearchhxx) |
 | 64 | src/idb.hxx | done | 2026-08-08 | [src/idb.hxx](BUG_CATALOG.md#srcidbhxx) |
 | 65 | src/vidb.hxx | done | 2026-08-08 | [src/vidb.hxx](BUG_CATALOG.md#srcvidbhxx) |
-| 66 | Isearch-cgi/cgi-util.hxx | pending | | |
+| 66 | Isearch-cgi/cgi-util.hxx | done | 2026-08-08 | [Isearch-cgi/cgi-util.hxx](BUG_CATALOG.md#isearch-cgicgi-utilhxx) |
 | 67 | src/marc.hxx | pending | | |
 | 68 | doctype/medline.hxx | pending | | |
 | 69 | src/nfldmgr.hxx | pending | | |
@@ -233,7 +233,7 @@
 | 229 | doctype/unified.h | pending | | |
 | 230 | doctype/usmarc.cxx | pending | | |
 | 231 | doctype/uspat.cxx | pending | | |
-| 232 | Isearch-cgi/cgi-util.cxx | pending | | |
+| 232 | Isearch-cgi/cgi-util.cxx | done | 2026-08-08 | [Isearch-cgi/cgi-util.hxx](BUG_CATALOG.md#isearch-cgicgi-utilhxx) |
 | 233 | Isearch-cgi/config.cxx | pending | | |
 | 234 | Isearch-cgi/isrch_fetch.cxx | pending | | |
 | 235 | Isearch-cgi/isrch_html.cxx | pending | | |
