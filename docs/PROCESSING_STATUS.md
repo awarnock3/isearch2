@@ -99,7 +99,7 @@
 | 95 | doctype/incoming/sgmlgils.hxx | done | 2026-08-08 | [doctype/incoming/sgmlgils.hxx](BUG_CATALOG.md#doctypeincomingsgmlgilscxx) |
 | 96 | doctype/irlist.hxx | done | 2026-08-08 | [doctype/irlist.hxx](BUG_CATALOG.md#doctypeirlistcxx) |
 | 97 | doctype/listdigest.hxx | done | 2026-08-08 | [doctype/listdigest.hxx](BUG_CATALOG.md#doctypelistdigestcxx) |
-| 98 | doctype/litmed.hxx | pending | | |
+| 98 | doctype/litmed.hxx | done | 2026-08-08 | [doctype/litmed.hxx](BUG_CATALOG.md#doctypelitmedcxx) |
 | 99 | doctype/maildigest.hxx | pending | | |
 | 100 | doctype/marcdump.hxx | pending | | |
 | 101 | doctype/markdown.hxx | pending | | |
@@ -214,7 +214,7 @@
 | 210 | doctype/incoming/sgmlgils.cxx | done | 2026-08-08 | [doctype/incoming/sgmlgils.cxx](BUG_CATALOG.md#doctypeincomingsgmlgilscxx) |
 | 211 | doctype/irlist.cxx | done | 2026-08-08 | [doctype/irlist.cxx](BUG_CATALOG.md#doctypeirlistcxx) |
 | 212 | doctype/listdigest.cxx | done | 2026-08-08 | [doctype/listdigest.cxx](BUG_CATALOG.md#doctypelistdigestcxx) |
-| 213 | doctype/litmed.cxx | pending | | |
+| 213 | doctype/litmed.cxx | done | 2026-08-08 | [doctype/litmed.cxx](BUG_CATALOG.md#doctypelitmedcxx) |
 | 214 | doctype/maildigest.cxx | pending | | |
 | 215 | doctype/mailfolder.cxx | done | 2026-08-07 | [doctype/mailfolder.cxx](BUG_CATALOG.md#doctypemailfoldercxx) |
 | 216 | doctype/marcdump.cxx | pending | | |

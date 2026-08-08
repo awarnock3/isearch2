@@ -5484,3 +5484,70 @@ just the hand-trace); and no bogus record for a genuinely empty file
 (`BUGFIX #1`'s direct regression, confirmed via the real before/after
 test-revert described above).
 
+## doctype/litmed.cxx
+
+`class LITMED` (`: public SGMLNORM`) is an SGML/HTML-tagged LITMED
+(medical literature) DOCTYPE, explicitly adapted from
+`doctype/html.cxx` (per this file's own "based on BSN's html.cxx"
+comment, and its now-corrected copy-paste header that used to claim
+`"File: html.cxx"` / `"Class HTMLTAG"`). Shares `html.cxx`'s
+architecture (tag scanning via the inherited `SGMLNORM::parse_tags()`/
+`find_end_tag()`, an `IsLITMEDFieldTag()` allowlist) but not its
+"minimized tag" `<DD>`/`<DT>`/`<LI>`/`<TL>` fallback handling, which
+was never carried over — leaving a whole helper function dead. Two
+real bugs, one shared verbatim with `html.cxx`, one this file's own.
+
+1. **`ParseFields()` leaked the open file handle on an `fseek()`
+   failure** — identical shape to `doctype/html.cxx`'s `BUGFIX #1`:
+   `if (-1 == fseek(fp, RecStart, SEEK_SET)) goto error;` jumped to a
+   shared `error:` label whose body is just `cout << ...; return;` —
+   correct for the *other* jump to that label (`fp == nullptr`, nothing
+   to close) but not this one, where `fp` is a real, open handle from
+   the successful `fopen()` above. Fixed the same way: `fclose(fp);`
+   right before the `goto error;`. `BUGFIX #1` in source.
+2. **The whole-file-as-one-record fallback truncated the file's last
+   byte** — `RecEnd = ftell(fp) - 1;`, unlike `html.cxx`'s
+   corresponding line (plain `RecEnd = ftell(fp);`, no `- 1`) — this is
+   this file's *own* authoring error, not something carried over
+   unfixed from its ancestor. Same off-by-one shape as
+   `doctype/iknowdoc.cxx`'s `BUGFIX #3`. Confirmed via a real
+   before/after test-revert: with the bug reverted, a file consisting
+   of exactly `<title>My Title</title>` (no trailing newline) failed to
+   find *any* `TITLE` field at all — losing the file's last byte (the
+   closing `</title>`'s final `>`) broke `find_end_tag()`'s ability to
+   recognize the tag pair at all, not merely losing one character of
+   content. Fixed by dropping the `- 1`. `BUGFIX #2` in source.
+
+Also removed while bringing this file to a clean `-Wall -Wextra` build
+for the first time: a genuinely dead `find_next_tag()` helper
+(surfaced by `-Wunused-function`) — `html.cxx` uses its own copy of
+this same helper for the minimized-tag fallback mentioned above, but
+that fallback logic itself was never adapted into this file, leaving
+the helper with no caller. `NULL` converted to `nullptr` at all live
+call sites. Documented, not changed: `IsLITMEDAttributeTag()`'s
+`Tags[]` table holds only its own terminator sentinel — no real
+entries were ever filled in (unlike `html.cxx`'s equivalent table),
+so it always returns "not found"; left as-is rather than guessing at
+LITMED-specific attribute tags with no basis in this file for what
+they should be. Also documented: `STRICT_LITMED` is an *unconditional*
+`#define STRICT_LITMED 1` (unlike `html.cxx`'s `#ifndef`-guarded
+`STRICT_HTML`), confirmed via a real `-DSTRICT_LITMED=0` compile
+attempt that GCC's own `"STRICT_LITMED" redefined` warning shows gets
+silently overridden back to `1` — so `ParseFields()`'s `#else` branch
+(`IgnoreLITMEDTag()`) is permanently unreachable in practice, the same
+as `html.cxx`'s genuinely-dead `#if 1` branch, just spelled
+differently. Added class-level and per-function doc comments.
+`doctype/litmed.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_litmed.cxx` covers: extracting an allowlisted tag
+pair (`"title"`) with no trailing byte lost (`BUGFIX #2`'s direct
+regression, confirmed via the real before/after test-revert described
+above); not indexing a tag absent from `IsLITMEDFieldTag()`'s
+allowlist; extracting an `"xauthor"` field (a second allowlist entry,
+for basic table-coverage beyond just `"title"`); and `Present()`'s
+`"B"` element set not crashing (full field-lookup behavior needs a
+live `IDBOBJ::GetFieldData()`, out of scope here, matching
+`test_html.cxx`'s equivalent note). Field names are asserted in
+uppercase (`"TITLE"`/`"XAUTHOR"`) per the established
+`DF::SetFieldName()`-uppercases-internally gotcha.
+
