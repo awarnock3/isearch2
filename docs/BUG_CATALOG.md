@@ -5217,3 +5217,79 @@ Every test implicitly exercises `~IKNOWDOC()`'s now-safe
 `Db->GetDbFileStem()` call too (`BUGFIX #4`), confirmed leak/UB-free
 under `make tests-asan`.
 
+## doctype/incoming/sgmlgils.cxx
+
+`class SGMLGILS` (`: public SGMLNORM`) is a GILS SGML DOCTYPE that
+dispatches `Present()` by `RecordSyntax` *OID string* (e.g.
+`"1.2.840.10003.5.101"` for SUTRS) rather than by name, unlike every
+other `RecordSyntax`-aware DOCTYPE in this tree. Uniquely among every
+file processed so far, **this file has never successfully compiled in
+this repository's history** — it lives in `doctype/incoming/`, a
+staging directory referenced nowhere else in the entire tree (`grep
+-rl incoming` finds nothing outside this one directory: no Makefile,
+no other source file, nothing ever built or linked against it), and
+had four hard compile errors, not just warnings.
+
+1. **`SUTRS_OID`/`GRS1_OID` were undeclared identifiers** —
+   `Present()` compared `RecordSyntax` against these two names, but
+   neither is defined anywhere in this tree. Confirmed, not guessed:
+   this file's own `"Unsupported record syntax"` fallback message
+   literally quotes `"1.2.840.10003.5.101"` as the SUTRS OID — an
+   exact match for `src/defs.cxx`'s real `SutrsRecordSyntaxOID`
+   constant (`const CHR* SutrsRecordSyntaxOID = "1.2.840.10003.5.101";`).
+   By the same naming pattern, `GRS1_OID` is `GRS1RecordSyntaxOID`
+   (`"1.2.840.10003.5.105"`). Fixed by substituting the real constant
+   names. `BUGFIX #1` in source.
+2. **`GetSUTRSRecord()` was defined twice with an identical signature**
+   — a hard One-Definition-Rule violation. The first definition was an
+   empty stub (`*StringBuffer = ""; if(ElementSet == "B") { }`, doing
+   nothing); the second, immediately following it, is a complete
+   implementation (composes a `"B"` headline from Title/Control-
+   Identifier/Originator/Local-Control-Number per GILS's suggested
+   format, has placeholder strings for `"F"`/`"G"`, and reads a sibling
+   `.htm` file for `"HTML HTML 0"`). This has every appearance of an
+   ordinary editing mistake — writing a fuller replacement below an
+   earlier draft and forgetting to delete the draft. Fixed by removing
+   the empty first definition; the complete second one survives
+   unchanged. `BUGFIX #2` in source.
+3. **`GetGRS1Record()` was called but never declared or defined** —
+   `Present()`'s `GRS1RecordSyntaxOID` branch called it unconditionally.
+   Unlike the OID-name fix above, there was no existing "real"
+   implementation to recover here — GRS1 (Generic Record Syntax 1)
+   formatting was simply never written. Rather than invent formatting
+   logic with no basis for correctness, added a declaration (to
+   `sgmlgils.hxx`, purely additive and risk-free since this header is
+   never included by any other file in the tree) and a minimal
+   placeholder body matching this class's *own* established
+   convention for genuinely-unimplemented element sets (compare
+   `GetSUTRSRecord()`'s `"F"`/`"G"` branches, which are likewise just
+   placeholder strings). `BUGFIX #3` in source.
+
+No live `NULL`/`sprintf` usage. Also removed: `#define GILSRECORD_PATH
+"/home1/kgamiel/dev/GILS/records"`, a dead macro (never referenced
+anywhere in the file) hardcoding the original author's personal
+development-machine path. Also fixed: the header's own file-identity
+comment claimed `"File: sgmlnorm.hxx"` (copy-paste from its parent
+class's header) instead of `"sgmlgils.hxx"`. Added class-level and
+per-function doc comments. `doctype/incoming/sgmlgils.cxx` added to
+`TEST_ENGINE_DOCTYPE_SRCS`, which in turn surfaced a real Makefile gap:
+the `tests/obj/doctype-%.o`/`tests/obj-asan/doctype-%.o` pattern rules
+only ever `mkdir -p`'d the flat `tests/obj`/`tests/obj-asan` roots, but
+this file's path (nested one level under `doctype/incoming/`) needs
+`tests/obj/doctype-incoming/` to exist first. Fixed by generalizing
+both rules' directory creation from a hardcoded root to `mkdir -p
+$(dir $@)` — identical behavior for every existing (non-nested) file,
+now also correct for a nested one.
+
+`tests/doctype/incoming/test_sgmlgils.cxx` (mirroring the source's own
+`doctype/incoming/` nesting, per the established test-path convention)
+covers: `Present()` dispatching both OIDs to the right handler
+(`BUGFIX #1`'s direct regression) and reporting unsupported syntaxes;
+`GetGRS1Record()`'s placeholder actually being reachable at all
+(`BUGFIX #3`'s direct regression — before this turn, simply calling it
+was a compile error); `GetSUTRSRecord()`'s `"B"` composing the expected
+dash-joined summary (confirming `BUGFIX #2` kept the *complete*
+definition, not the empty stub), its `"F"` placeholder, its `"HTML
+HTML 0"` branch actually reading a real sibling `.htm` file, and its
+fallback message for an unrecognized element set.
+
