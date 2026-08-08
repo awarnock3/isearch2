@@ -81,7 +81,7 @@
 | 77 | doctype/cipp.hxx | done | 2026-08-08 | [doctype/cipp.hxx](BUG_CATALOG.md#doctypecippcxx) |
 | 78 | doctype/dif.hxx | done | 2026-08-08 | [doctype/dif.hxx](BUG_CATALOG.md#doctypedifcxx) |
 | 79 | doctype/doc_conf.hxx | done | 2026-08-08 | [doctype/doc_conf.hxx](BUG_CATALOG.md#doctypedoc_confhxx) |
-| 80 | doctype/emacsinfo.hxx | pending | | |
+| 80 | doctype/emacsinfo.hxx | done | 2026-08-08 | [doctype/emacsinfo.hxx](BUG_CATALOG.md#doctypeemacsinfocxx) |
 | 81 | doctype/eos_guide.hxx | pending | | |
 | 82 | doctype/fgdc.hxx | pending | | |
 | 83 | doctype/fgdcsite.hxx | pending | | |
@@ -196,7 +196,7 @@
 | 192 | doctype/dif.cxx | done | 2026-08-08 | [doctype/dif.cxx](BUG_CATALOG.md#doctypedifcxx) |
 | 193 | doctype/doctype.cxx | done | 2026-08-07 | [doctype/doctype.cxx](BUG_CATALOG.md#doctypedoctypecxx) |
 | 194 | doctype/dtconf.cxx | pending | | |
-| 195 | doctype/emacsinfo.cxx | pending | | |
+| 195 | doctype/emacsinfo.cxx | done | 2026-08-08 | [doctype/emacsinfo.cxx](BUG_CATALOG.md#doctypeemacsinfocxx) |
 | 196 | doctype/eos_guide.cxx | pending | | |
 | 197 | doctype/fgdc.cxx | pending | | |
 | 198 | doctype/fgdcsite.cxx | pending | | |

@@ -4200,3 +4200,67 @@ file (`BUGFIX #5`) while still loading real entries; and
 (bare number, "present", "unknown", a malformed value, and a real
 `START_DATE`/`STOP_DATE` range with the STOP_DATE-absent fallback).
 
+## doctype/emacsinfo.cxx
+
+`class EMACSINFO` splits a file into `"File:"`-prefixed records and
+indexes each record's `"File:"`/`"Node:"` line values (up to the next
+comma) as fields — the same author (Erik Scott) and era as
+`doctype/bibtex.cxx`, and it turned out to share two of that file's
+exact bug shapes.
+
+1. **`ParseRecords()` leaked the entire file buffer on every
+   successful call** — same shape as, and fixed the same way as,
+   `doctype/bibtex.cxx`'s `BUGFIX #1` (`RecBuffer` freed on every
+   error path but not the function's normal return). `BUGFIX #1` in
+   source.
+2. **`ParseFields()` leaked a `STRING::NewCString()` buffer on every
+   call** — same shape as, and fixed the same way as,
+   `doctype/bibtex.cxx`'s `BUGFIX #2` (the `file` variable existed only
+   for `perror()` calls that can use `STRING`'s existing non-allocating
+   `operator const char*()` instead, same as `fopen()` two lines
+   above). `BUGFIX #2` in source.
+3. **Stored `"File:"`/`"Node:"` field values included a trailing
+   comma** — the scan loop (`for (val_end = val_start;
+   (RecBuffer[val_end]!=',') && (val_end < ActualLength);
+   val_end++)`) stops with `val_end` pointing *at* the comma delimiter
+   (or at `ActualLength` if no comma is found), but
+   `fc.SetFieldEnd(val_end)` takes an inclusive end index, so the
+   delimiter (or, with no comma, one byte past the buffer's last real
+   character) was included in the stored field. Confirmed via a
+   regression test asserting the exact extracted substring for both
+   fields. Fixed by using `val_end - 1` for both the `"File:"` and
+   `"Node:"` fields. `BUGFIX #3` in source.
+4. **Wrong class/function names in diagnostic messages** — every
+   `cout`/`perror` message inside `ParseFields()` said
+   `"EMACSINFO::ParseRecords()"` (eight occurrences, evidently
+   copy-pasted from the real `ParseRecords()` above it and never
+   updated), and `Present()`'s "can't find first newline" message said
+   `"FTP::Present()"` (copy-pasted from `doctype/ftp.cxx`). Not a
+   behavioral bug, but actively misleading for anyone debugging from
+   these log lines — corrected all nine. Also corrected a stale comment
+   above `Present()` that claimed element set `"F"` excludes the
+   record's first line; the code's `"F"` branch is actually an
+   intentional no-op (shows the whole record, headline included) —
+   only `"B"` (brief) trims down to just the first line. `BUGFIX #4` in
+   source.
+
+Modernization: `(char *)0`/`(char*)0` null-pointer comparisons (the
+functional equivalent of `NULL`, just not spelled with the macro)
+converted to `nullptr` at all three sites. No live `sprintf` to
+modernize. Removed an always-unused `GPTYPE i` in `ParseRecords()` and
+fixed two `val_end`/`ActualLength` signed/unsigned comparison warnings
+(cast the unsigned side, matching `val_end`'s existing `INT` type)
+while bringing this file to a clean `-Wall -Wextra` build for the
+first time. Added class-level and per-function doc comments.
+
+`tests/doctype/test_emacsinfo.cxx` covers: `ParseRecords()` splitting
+a two-record file with correct boundaries (`BUGFIX #1`'s regression,
+verified leak-free under `make tests-asan`); `ParseFields()`
+extracting exact `"File:"`/`"Node:"` values with no trailing comma
+(`BUGFIX #3`) and adding no fields when neither marker is present.
+`Present()` isn't exercised directly — it calls
+`ResultRecord.GetRecordData()` unconditionally before even looking at
+`ElementSet`, and that call crashes on a default-constructed `RESULT`
+for reasons unrelated to any `EMACSINFO`-specific logic, the same
+issue noted for `doctype/bibtex.cxx`'s `Present()`.
+
