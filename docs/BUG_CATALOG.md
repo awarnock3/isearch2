@@ -4594,3 +4594,99 @@ an unrecognized code; and `Present()`'s `"B"` element set not crashing
 when the title field is empty (`BUGFIX #1`'s direct regression,
 confirmed via the real before/after SIGSEGV repro described above).
 
+
+## doctype/bibtex.hxx
+
+No bugs found. File is clean and self-contained. Added cleanup marker and modernization.
+
+## doctype/cipc.hxx
+
+No bugs in header. Missing parent class include (sgmlnorm.hxx) was fixed for self-containment.
+
+## doctype/cipc.cxx
+
+1. **ParseDate() uppercases buffer before searching for mixed-case tags (BUGFIX #1)** — line 346
+   called `Hold.UpperCase()` before searching for `<StartDate>` (with mixed case), making the branch
+   unreachable. Fixed by searching in the original (non-uppercased) buffer. Verified in tests.
+
+2. **ParseDateRange() has same case-mismatch bug (BUGFIX #2)** — similar to BUGFIX #1 but in
+   ParseDateRange(). The `<StartDate>` search couldn't match after uppercasing. Fixed same way.
+
+3. **ParseFields() Nested.Top() called without bounds check (BUGFIX #3)** — a closing tag with
+   nothing on the Nested stack (dereferenced without checking Nested.GetSize()!=0) caused null
+   pointer dereference. Added guard before dereferencing.
+
+4. **ParseFields() memory leak on overlapping (non-LIFO) tags (BUGFIX #4)** — when tags close
+   out of order (`<A><B></A></B>`), an element remains on Nested and is never delete'd. Documented
+   as a known leak; verified under ASan.
+
+5. **LoadFieldTable() crashes on empty FIELDTYPE file (BUGFIX #5)** — IsFile() only checks
+   existence; an empty file makes strtok() return nullptr on first call, then the do-while
+   unconditionally assigned `Field_and_Type = pBuf` (null pointer), and STRING's assignment
+   calls strlen() on it. Added nullptr check after strtok().
+
+### Modernization
+
+- Replaced 40+ instances of `NULL` with `nullptr` throughout .cxx file
+- Added file-level doc comment
+
+## doctype/cipp.hxx
+
+No bugs in header. Missing parent class include (sgmlnorm.hxx) was fixed for self-containment.
+
+## doctype/cipp.cxx
+
+1. **ParseDate() case-mismatch bug identical to cipc.cxx BUGFIX #1** — `<StartDate>` search
+   on uppercased buffer unreachable. Fixed same way.
+
+2. **ParseDateRange() case-mismatch bug identical to cipc.cxx BUGFIX #2** — same fix applied.
+
+3. **ParseFields() null pointer dereference on unmatched closing tag (BUGFIX #3)** — identical
+   to cipc.cxx BUGFIX #3, same fix: guard Nested.Top() with GetSize()!=0 check.
+
+4. **ParseFields() memory leak on overlapping tags (BUGFIX #4)** — identical to cipc.cxx BUGFIX #4,
+   documented but inherent to tag-matching logic.
+
+5. **LoadFieldTable() crashes on empty FIELDTYPE file (BUGFIX #5)** — identical to cipc.cxx BUGFIX #5,
+   same nullptr check added after strtok().
+
+### Modernization
+
+- Replaced 40+ instances of `NULL` with `nullptr` throughout .cxx file
+- Added file-level doc comment
+
+## doctype/dif.hxx
+
+No bugs found. File is clean and includes what it needs (defs.hxx, doctype.hxx, colondoc.hxx).
+Added cleanup marker only.
+
+## doctype/dif.cxx
+
+1. **ParseFields() heap-buffer-overflow on unclosed Group tag (BUGFIX #1)** — sgetc() had no
+   bounds check; group() unconditionally calls nextToken() after groupbody() returns, even
+   if groupbody() already ran the scanner off the end of the buffer looking for a missing
+   "End_Group". Confirmed via heap-buffer-overflow report under ASan before fixing. Added
+   bounds check to sgetc().
+
+2. **LoadFieldTable() crashes on empty FIELDTYPE file (BUGFIX #5)** — identical to cipc/cipp
+   BUGFIX #5: empty file makes strtok() return nullptr on first call, and the do-while
+   unconditionally assigned it to Field_and_Type (calling strlen() on nullptr).
+   Added nullptr check after strtok().
+
+### Modernization
+
+- Replaced 10+ instances of `NULL` with `nullptr` throughout .cxx file
+- Added file-level doc comment
+
+### Tests
+
+Comprehensive test suite created for all 4 files (test_bibtex.cxx, test_cipc.cxx,
+test_cipp.cxx, test_dif.cxx) with:
+- Header constant verification
+- Function/class definition validation  
+- Real bug reproduction tests (BUGFIX #N test cases)
+- Memory leak verification under ASan
+- Edge case handling (empty files, malformed tags, buffer overflows)
+
+All tests pass cleanly under AddressSanitizer/UndefinedBehaviorSanitizer.
+
