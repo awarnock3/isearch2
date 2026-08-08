@@ -106,7 +106,7 @@
 | 102 | doctype/memodoc.hxx | done | 2026-08-08 | [BUG_CATALOG.md#doctypememodoccxx](BUG_CATALOG.md#doctypememodoccxx) |
 | 103 | doctype/oneline.hxx | done | 2026-08-08 | [BUG_CATALOG.md#doctypeonelinecxx](BUG_CATALOG.md#doctypeonelinecxx) |
 | 104 | doctype/para.hxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypeparacxx](BUG_CATALOG.md#doctypeparacxx) |
-| 105 | doctype/referbib.hxx | pending | | |
+| 105 | doctype/referbib.hxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypereferbibcxx](BUG_CATALOG.md#doctypereferbibcxx) |
 | 106 | doctype/simple.hxx | pending | | |
 | 107 | doctype/soif.hxx | pending | | |
 | 108 | doctype/taglist.hxx | pending | | |
@@ -223,7 +223,7 @@
 | 219 | doctype/memodoc.cxx | done | 2026-08-08 | [BUG_CATALOG.md#doctypememodoccxx](BUG_CATALOG.md#doctypememodoccxx) |
 | 220 | doctype/oneline.cxx | done | 2026-08-08 | [BUG_CATALOG.md#doctypeonelinecxx](BUG_CATALOG.md#doctypeonelinecxx) |
 | 221 | doctype/para.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypeparacxx](BUG_CATALOG.md#doctypeparacxx) |
-| 222 | doctype/referbib.cxx | pending | | |
+| 222 | doctype/referbib.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypereferbibcxx](BUG_CATALOG.md#doctypereferbibcxx) |
 | 223 | doctype/sgmlnorm.cxx | done | 2026-08-07 | [doctype/sgmlnorm.cxx](BUG_CATALOG.md#doctypesgmlnormcxx) |
 | 224 | doctype/sgmltag.cxx | done | 2026-08-07 | [doctype/sgmltag.cxx](BUG_CATALOG.md#doctypesgmltagcxx) |
 | 225 | doctype/simple.cxx | pending | | |

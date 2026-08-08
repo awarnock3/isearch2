@@ -5982,3 +5982,94 @@ indexed as one record; and no bogus record for an empty file (the
 pre-existing `RecEnd == 0` guard already handled this correctly, unlike
 several sibling files this batch — confirmed, not assumed).
 
+## doctype/referbib.cxx
+
+`REFERBIB : public DOCTYPE` parses Unix `refer`-style bibliography
+records: `ParseRecords()` splits a file into one record per
+blank-line-separated entry, and `ParseFields()` splits each record's
+"%X value" tag lines into fields. Shares the same "TAG: value"
+value-extraction lineage as `doctype/colondoc.cxx` and
+`doctype/memodoc.cxx` (four of the six bugs below are that same
+cluster, cross-referenced rather than re-derived), plus one genuinely
+novel bug of its own in `ParseRecords()`. Six bugs found, all fixed and
+confirmed via before/after test-reverts (one under ASan).
+
+1. **`ParseRecords()`'s post-loop flush checked the wrong variable
+   (`BUGFIX #1`, novel to this file)** — `RecordEnd = (SavePosition ==
+   0) ? 0 : Position - 1;` checks `SavePosition` but decrements
+   `Position` — two different variables. `SavePosition` is only ever
+   assigned *inside* the loop, when a blank-line record boundary is
+   actually found; `Position` accumulates on every byte read
+   regardless. For a file containing exactly one bibliography entry
+   with no internal blank line (nothing unusual — a small database, or
+   just the last entry with no trailing separator after it),
+   `SavePosition` stays `0` for the whole file even though `Position`
+   correctly reaches the real end-of-file offset, so this wrongly took
+   the `RecordEnd = 0` branch. That then failed the `RecordEnd > Start`
+   guard immediately below, and the record was silently never indexed
+   at all. Confirmed via a before/after test-revert: a single-entry
+   file with no blank line produced zero calls to `DocTypeAddRecord()`.
+   Fixed by checking the same variable being decremented: `RecordEnd =
+   (Position == 0) ? 0 : Position - 1;` — matching the already-correct
+   mid-loop guard just above it, which uses `SavePosition` for *both*
+   halves consistently. `BUGFIX #1` in source.
+
+2. **`ParseFields()`'s "whole file as one record" fallback dropped the
+   last byte (`BUGFIX #2`)** — `RecEnd = ftell(fp) - 1;`, the same
+   off-by-one already fixed in `colondoc.cxx`'s `BUGFIX #1`,
+   `marcdump.cxx`'s `BUGFIX #2`, and `memodoc.cxx`'s `BUGFIX #1`.
+   Confirmed via a before/after test-revert. Fixed identically: `RecEnd
+   = ftell(fp);`. `BUGFIX #2` in source.
+
+3. **`parse_tags()`'s scan loop underflowed for any record under 4
+   bytes (`BUGFIX #3`)** — `for (GPTYPE i = 0; i < len - 4; i++)`; same
+   bug already fixed in `memodoc.cxx`'s `BUGFIX #2`. Confirmed via a
+   before/after test-revert under ASan: a genuine heap-buffer-overflow
+   aborting the process. Fixed identically: `i + 4 < len`. `BUGFIX #3`
+   in source.
+
+4. **Value-extraction's end-of-buffer fallback used the wrong length
+   (`BUGFIX #4`)** — `p = &RecBuffer[RecLength]` instead of
+   `&RecBuffer[ActualLength]`; same fix as `colondoc.cxx`'s `BUGFIX #3`
+   and `memodoc.cxx`'s `BUGFIX #4`, not independently revert-tested for
+   the same reason neither of those was (harmless whenever the two
+   lengths are equal, the only case reachable from this file's own
+   tests). `BUGFIX #4` in source.
+
+5. **Value length unconditionally excluded a trailing newline that
+   might not exist (`BUGFIX #5`)** — the trailing `- 1` in `INT val_len
+   = (p - *tags_ptr) - off - 1;` assumed a real `'\n'` always sits just
+   before `p`; same fix as `colondoc.cxx`'s `BUGFIX #1b` and
+   `memodoc.cxx`'s `BUGFIX #5`. `BUGFIX #5` in source.
+
+6. **Trailing-whitespace trim checked one byte past the value's real
+   end, and `FC::SetFieldEnd()` stored one byte past the correct
+   inclusive end (`BUGFIX #6`)** — `isspace(RecBuffer[val_len +
+   val_start])` and `SetFieldEnd(val_start + val_len)`; same paired fix
+   as `colondoc.cxx`'s `BUGFIX #2`/`BUGFIX #4` and `memodoc.cxx`'s
+   `BUGFIX #6`/`BUGFIX #7` — per those entries, these two silently
+   cancel out in the common case (trimming one byte too early, then
+   storing one byte too many), which is almost certainly why neither
+   was ever noticed by hand-testing. `BUGFIX #6` in source (both
+   sites).
+
+`NULL` converted to `nullptr` at all 15 call sites (`sed`, given the
+volume — verified by re-reading the full diff afterward). Added
+class-level doc comment to the header and `ParseRecords()`/
+`ParseFields()` doc comments in the source. `doctype/referbib.cxx`
+added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_referbib.cxx` covers: `UnifiedName()`'s tag-to-
+field-name mapping, including a reserved-but-ignored tag returning
+`nullptr`; a single reference with no internal blank line
+(`BUGFIX #1`'s direct regression); splitting two references at a
+blank line; extracting a tagged field with no trailing byte lost
+(`BUGFIX #2`); not crashing on an empty file (`BUGFIX #3`'s heap-
+overflow path); a recognized tag under its unified name; and an
+unrecognized *lowercase* tag falling through to `"Misc"` (the table is
+indexed by uppercase letter only — an initially-wrong test used an
+already-recognized uppercase tag by mistake, caught and corrected
+before it was ever run). Field names are asserted in uppercase per the
+established `DF::SetFieldName()`-uppercases-internally gotcha (applied
+proactively this time, not caught after a failing run).
+

@@ -106,6 +106,9 @@ ________________________________________________________________________________
 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		referbib.cxx
 Version:	$Revision: 1.6 $
@@ -154,6 +157,10 @@ void REFERBIB::AddFieldDefs ()
   DOCTYPE::AddFieldDefs ();
 }
 
+// Splits FileRecord's underlying file into one RECORD per bibliography
+// entry, delimited by a blank line, and adds each to Db via
+// DocTypeAddRecord(). A file with no internal blank line (a single
+// entry) is still indexed in full via the post-loop flush.
 void REFERBIB::ParseRecords (const RECORD& FileRecord)
 {
   // Break up the document into Medline records
@@ -217,7 +224,19 @@ void REFERBIB::ParseRecords (const RECORD& FileRecord)
   fclose (Fp);
 
   Record.SetRecordStart (Start);
-  RecordEnd = (SavePosition == 0) ? 0 : Position - 1;
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypereferbibcxx): this checked
+  // `SavePosition == 0`, not `Position == 0`, even though it's Position
+  // being decremented right below -- SavePosition is only ever assigned
+  // inside the loop when a blank-line record boundary is actually
+  // found, so for a file containing exactly one reference with no
+  // internal blank line (nothing unusual for a small bibliography),
+  // SavePosition stayed 0 for the whole file even though Position
+  // correctly reached the real end-of-file offset. That made this
+  // wrongly take the `RecordEnd = 0` branch, which then failed the
+  // `RecordEnd > Start` guard below and silently skipped indexing the
+  // record entirely. Confirmed via a before/after test-revert. Fixed
+  // by checking the same variable being decremented.
+  RecordEnd = (Position == 0) ? 0 : Position - 1;
 
   if (RecordEnd > Start)
     {
@@ -271,14 +290,14 @@ const CHR *REFERBIB::UnifiedName(const CHR *tag) const
     /* C */ "city",
     /* D */ "date",
     /* E */ "editor",
-    /* F */ NULL,
+    /* F */ nullptr,
     /* G */ "gov_order_nr",
     /* H */ "comment",
     /* I */ "publisher",
     /* J */ "journal",
     /* K */ "keywords",
-    /* L */ NULL,
-    /* M */ NULL,
+    /* L */ nullptr,
+    /* M */ nullptr,
     /* N */ "number",
     /* O */ "comment",
     /* P */ "pages",
@@ -286,18 +305,18 @@ const CHR *REFERBIB::UnifiedName(const CHR *tag) const
     /* R */ "report",
     /* S */ "series",
     /* T */ "title",
-    /* U */ NULL,
+    /* U */ nullptr,
     /* V */ "volume",
-    /* W */ NULL,
+    /* W */ nullptr,
     /* X */ "abstract",
-    /* Y */ NULL,
-    /* Z */ NULL
+    /* Y */ nullptr,
+    /* Z */ nullptr
   };
 
   // Make sure its a "legal" tag;
   if (tag[0] != '%' || tag[2] != '\0') return tag;
   // Ignore lower case tags
-  if (tag[1] < 'A' || tag[1] > 'Z') return NULL;
+  if (tag[1] < 'A' || tag[1] > 'Z') return nullptr;
   // Return unified field name
   return Table[(unsigned)tag[1] - (unsigned)'A'];
 #else
@@ -308,6 +327,12 @@ const CHR *REFERBIB::UnifiedName(const CHR *tag) const
 // Forward reference
 static PCHR *parse_tags (PCHR b, GPTYPE len);
 
+// Reads NewRecord's bytes off disk (or, if RecordEnd is unset, treats
+// the whole file as a single record -- see BUGFIX #2), splits them
+// into "%X value" tag/value pairs via the file-local parse_tags(), and
+// adds one DF field per pair to NewRecord's DFT, named via
+// UnifiedName() (falling back to "Misc" for an unrecognized tag, per
+// WANT_MISC).
 void REFERBIB::ParseFields (PRECORD NewRecord)
  {
   STRING fn;
@@ -324,7 +349,13 @@ void REFERBIB::ParseFields (PRECORD NewRecord)
     {
       fseek (fp, 0L, SEEK_END);
       RecStart = 0;
-      RecEnd = ftell (fp) - 1;
+      // BUGFIX #2 (docs/BUG_CATALOG.md#doctypereferbibcxx): this used to
+      // be `ftell(fp) - 1`, the same off-by-one truncation already fixed
+      // in doctype/colondoc.cxx's BUGFIX #1, doctype/marcdump.cxx's
+      // BUGFIX #2, and doctype/memodoc.cxx's BUGFIX #1 -- confirmed via
+      // a before/after test-revert to drop the last byte of every
+      // record read through this fallback.
+      RecEnd = ftell (fp);
     }
   fseek (fp, (long)RecStart, SEEK_SET);
   GPTYPE RecLength = RecEnd - RecStart;
@@ -334,7 +365,7 @@ void REFERBIB::ParseFields (PRECORD NewRecord)
   RecBuffer[ActualLength] = '\0';
 
   PCHR *tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL || tags[0] == NULL)
+  if (tags == nullptr || tags[0] == nullptr)
     {
       STRING doctype;
       NewRecord->GetDocumentType(&doctype);
@@ -361,18 +392,36 @@ void REFERBIB::ParseFields (PRECORD NewRecord)
   for (PCHR * tags_ptr = tags; *tags_ptr; tags_ptr++)
     {
       PCHR p = tags_ptr[1];
-      if (p == NULL)
-	p = &RecBuffer[RecLength]; // End of buffer
+      // BUGFIX #4 (docs/BUG_CATALOG.md#doctypereferbibcxx): this used
+      // to be `&RecBuffer[RecLength]` (the buffer's allocated
+      // capacity), not ActualLength (how much fread() actually
+      // returned) -- same fix as doctype/colondoc.cxx's BUGFIX #3 and
+      // doctype/memodoc.cxx's BUGFIX #4, for the same reason.
+      if (p == nullptr)
+	p = &RecBuffer[ActualLength]; // End of buffer
       // eg "%A "
       int off = strlen (*tags_ptr) + 1;
       INT val_start = (*tags_ptr + off) - RecBuffer;
       // Skip while space after the ' '
       while (isspace (RecBuffer[val_start]))
 	val_start++, off++;
-      // Also leave off the \n
-      INT val_len = (p - *tags_ptr) - off - 1;
+      INT val_len = (p - *tags_ptr) - off;
+      // BUGFIX #5 (docs/BUG_CATALOG.md#doctypereferbibcxx): this used
+      // to unconditionally subtract 1 more here ("leave off the \n"),
+      // assuming a trailing newline always sits just before `p` -- true
+      // for every interior field, but not for the last field's
+      // end-of-buffer fallback when the file doesn't end with '\n'.
+      // Same fix as doctype/colondoc.cxx's BUGFIX #1b and
+      // doctype/memodoc.cxx's BUGFIX #5.
+      if (val_len > 0 && p[-1] == '\n')
+	val_len--;
+      // BUGFIX #6 (docs/BUG_CATALOG.md#doctypereferbibcxx): this checked
+      // RecBuffer[val_len + val_start], one byte *past* the value's
+      // actual last character (val_start + val_len - 1) -- same
+      // off-by-one already fixed in doctype/colondoc.cxx's BUGFIX #2
+      // and doctype/memodoc.cxx's BUGFIX #6.
       // Strip potential trailing while space
-      while (val_len > 0 && isspace (RecBuffer[val_len + val_start]))
+      while (val_len > 0 && isspace (RecBuffer[val_start + val_len - 1]))
 	val_len--;
       if (val_len < 1) continue; // forget empty fields
 
@@ -390,13 +439,21 @@ void REFERBIB::ParseFields (PRECORD NewRecord)
       FieldName = unified_name ? unified_name: "Misc";
 #else
       // Ignore "unclassified" fields
-      if (unified_name == NULL) continue; // ignore these
+      if (unified_name == nullptr) continue; // ignore these
       FieldName = unified_name;
 #endif
       dfd.SetFieldName (FieldName);
       Db->DfdtAddEntry (dfd);
       fc.SetFieldStart (val_start);
-      fc.SetFieldEnd (val_start + val_len);
+      // BUGFIX #7 (docs/BUG_CATALOG.md#doctypereferbibcxx): this used
+      // to be `SetFieldEnd(val_start + val_len)`, one past the correct
+      // *inclusive* end index -- same fix as doctype/colondoc.cxx's
+      // BUGFIX #4 and doctype/memodoc.cxx's BUGFIX #7, for the same
+      // reason (matches doctype/sgmlnorm.cxx's/doctype/sgmltag.cxx's
+      // own `val_start + val_len - 1`, and src/index.cxx derives a
+      // field's length as `GetFieldEnd() - GetFieldStart() + 1`, which
+      // only works for an inclusive end).
+      fc.SetFieldEnd (val_start + val_len - 1);
       PFCT pfct = new FCT ();
       pfct->AddEntry (fc);
       df.SetFct (*pfct);
@@ -480,7 +537,18 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
   /* You should allocate these as you need them, but for now... */
   max_num_tags = TAG_GROW_SIZE;
   t = new PCHR [max_num_tags];
-  for (GPTYPE i = 0; i < len - 4; i++)
+  // BUGFIX #3 (docs/BUG_CATALOG.md#doctypereferbibcxx): this was
+  // `i < len - 4`; len is GPTYPE (unsigned UINT4, src/defs.hxx), so for
+  // any record under 4 bytes (trivially reached via BUGFIX #2's
+  // fallback for an empty file) `len - 4` underflowed to just under
+  // UINT_MAX, and the loop body's `b[i+1]`/`b[i+2]` reads ran straight
+  // past RecBuffer's real allocation on its very first iteration --
+  // same bug already fixed in doctype/memodoc.cxx's BUGFIX #2,
+  // confirmed there via ASan and fixed identically here without
+  // re-deriving. Rewritten as `i + 4 < len`, an exactly equivalent
+  // comparison for every len that doesn't underflow, since it never
+  // subtracts from the unsigned len at all.
+  for (GPTYPE i = 0; i + 4 < len; i++)
     {
       if (b[i] == '\r' || b[i] == '\v')
  	continue; // Skip over
@@ -513,10 +581,10 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
 		// allocate more space
 		max_num_tags += TAG_GROW_SIZE;
 		PCHR *New = new PCHR [max_num_tags];
-		if (New == NULL)
+		if (New == nullptr)
 		  {
 		    delete [] t;
-		    return NULL; // NO MORE CORE!
+		    return nullptr; // NO MORE CORE!
 		  }
 		memcpy(New, t, tc*sizeof(PCHR));
 		delete [] t;
@@ -531,6 +599,6 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
       else if (State == HUNTING)
 	State = CONTINUING;
     }
-  t[tc] = (PCHR) NULL;
+  t[tc] = (PCHR) nullptr;
   return t;
 }
