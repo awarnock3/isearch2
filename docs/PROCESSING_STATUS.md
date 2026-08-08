@@ -80,7 +80,7 @@
 | 76 | doctype/cipc.hxx | pending | | |
 | 77 | doctype/cipp.hxx | pending | | |
 | 78 | doctype/dif.hxx | pending | | |
-| 79 | doctype/doc_conf.hxx | pending | | |
+| 79 | doctype/doc_conf.hxx | done | 2026-08-08 | [doctype/doc_conf.hxx](BUG_CATALOG.md#doctypedoc_confhxx) |
 | 80 | doctype/emacsinfo.hxx | pending | | |
 | 81 | doctype/eos_guide.hxx | pending | | |
 | 82 | doctype/fgdc.hxx | pending | | |

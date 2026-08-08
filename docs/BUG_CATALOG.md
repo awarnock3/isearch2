@@ -3773,3 +3773,47 @@ Created `tests/doctype/test_anzmeta.cxx` with 12 test cases covering:
 All tests pass under plain compilation and AddressSanitizer/UndefinedBehaviorSanitizer.
 No memory safety issues detected.
 
+## doctype/doc_conf.hxx
+
+A pure-macro configuration header ("Local Configurations for BSn
+doctypes") — no functions or classes. `doctype/mailfolder.cxx` is its
+only current includer in the tree, and only actually relies on the
+`BSN_EXTENSIONS`/`BRIEF_MAGIC` macros at the bottom; every other
+doctype file that references `USE_UNIFIED_NAMES` or a per-doctype
+override defines its own local fallback rather than including this
+header.
+
+1. **No include guard at all** — every other `.hxx` in this tree uses
+   the standard `#ifndef X_HXX`/`#define X_HXX`/`#endif` pattern; this
+   file had none. Harmless today only because `mailfolder.cxx` (the
+   sole current includer) includes it exactly once — a latent
+   double-inclusion hazard for any future includer, and inconsistent
+   with the rest of the tree. Fixed by wrapping the whole file in
+   `#ifndef DOC_CONF_HXX`/`#define DOC_CONF_HXX`/`#endif`. `BUGFIX #1`
+   in source.
+2. **`USE_UNIFIED_NAMES` defined twice, identically** — once under a
+   "Bibliographic Formats" comment, then again under a second,
+   redundant "General" comment further down, both `#define
+   USE_UNIFIED_NAMES 1`. A same-value macro redefinition is legal C++
+   (no compile error), so this was never an observable defect, but it's
+   an obvious copy-paste duplicate. Removed the second definition.
+   `BUGFIX #2` in source.
+
+Also documented, not changed: `BRIEF_MAGIC` is only defined when
+`BSN_EXTENSIONS < 1`; if `BSN_EXTENSIONS` were ever set to `1`,
+`BRIEF_MAGIC` would never get defined at all. Not unique to this file —
+every `doctype/*.hxx` with its own local `BSN_EXTENSIONS` fallback
+(`anzlic.hxx`, `cipc.hxx`, `cipp.hxx`, `fgdc.hxx`, `html.hxx`, and
+others) has this exact same shape, and `BSN_EXTENSIONS` is never
+actually set to `1` anywhere in the current tree — a tree-wide
+incomplete-BSn-mode design choice, not a defect specific to this file.
+
+`tests/doctype/test_doc_conf.cxx` `#include`s `doc_conf.hxx` twice in
+the same translation unit — the direct regression test for `BUGFIX #1`
+— then checks every documented macro's default value, including the
+three per-doctype `*_UNIFIED_NAMES` overrides correctly falling back to
+the single (post-`BUGFIX #2`) `USE_UNIFIED_NAMES` definition.
+
+No live `NULL`/`sprintf` to modernize (pure macros, no code). Added a
+file-level doc comment; no functions to comment individually.
+
