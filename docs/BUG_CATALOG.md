@@ -4335,3 +4335,78 @@ by exact substring; not stopping early on a `0xFF` byte inside the
 title text (`BUGFIX #1`); and adding no `TITLE` field when the
 document has none.
 
+## doctype/fgdc.cxx
+
+`class FGDC` (`: public SGMLNORM`) is the USGS/FGDC metadata DOCTYPE —
+the third sibling in the family with `doctype/cipc.cxx` and
+`doctype/cipp.cxx` (predicted worth a close look when `cipc.cxx` was
+processed; that prediction held), sharing the same `ParseFields()`/
+`LoadFieldTable()`/`ParseDate()`/`ParseDateRange()`/`parse_tags()`/
+`find_end_tag()` structure and most of the same bugs, with
+`CIPC_Element`/`CIP_Element` replaced by `MD_Element`. Much larger than
+its two siblings (~2100 lines vs. ~1500), but the SGML-tag-scanning
+core is structurally identical; see `docs/BUG_CATALOG.md#doctypecipccxx`
+for the full reasoning behind each shared bug, cross-referenced below
+rather than repeated in full. One structural difference from both
+siblings: this file holds the live, canonical `GetNumericValue()` that
+`cipc.cxx`/`cipp.cxx` both call via their own commented-out copies +
+`extern` declarations — which is why `fgdc.cxx` was already linked into
+`TEST_ENGINE_DOCTYPE_SRCS` well before this, its own turn, came up.
+
+1. **`ParseDate()`'s `<BEGDATE>`/`<ENDDATE>` interval-parsing branch had
+   the same missing-`return` bug as `cipc.cxx`'s `BUGFIX #1`** — unlike
+   `cipc.cxx`, this file's needles (`<BEGDATE>`, `<ENDDATE>`) are
+   already spelled uppercase in the source, so there's no accompanying
+   case-mismatch half here; interval parsing itself already worked.
+   But the `<BEGDATE>`-found/`</BEGDATE>`-missing branch still fell
+   through into `Hold.EraseAfter(End-1)` with `End==0` (the same
+   harmless-only-because-`EraseAfter()`-bounds-checks underflow) and
+   kept going, searching for `<ENDDATE>` despite already having flagged
+   the record malformed, leaving `*fEnd` unset on that path. Fixed the
+   same way as `cipc.cxx`'s `BUGFIX #1`: added `*fEnd = *fStart;
+   return;` immediately after setting `*fStart = DATE_ERROR;`.
+   `BUGFIX #1` in source.
+2. **Same bug, duplicated in `ParseDateRange()`** — identical shape to
+   `cipc.cxx`'s `BUGFIX #2`; this is `ParseDateRange`, a near-duplicate
+   of `ParseDate()`. `BUGFIX #2` in source.
+3. **Unguarded `Nested.Top()` — the same null-pointer-dereference shape
+   as `cipc.cxx`'s `BUGFIX #3`**, in the identical spot in
+   `ParseFields()`'s closing-tag handling (`pTmp = (PMD_Element)
+   Nested.Top(); if (Tag == pTmp->get_tag())` with no
+   `Nested.GetSize() != 0` guard, unlike the sibling call site just
+   below it in the same function). Not re-confirmed with a separate
+   standalone SEGV repro here — `cipc.cxx`'s repro (see that entry)
+   exercises the identical code shape byte-for-byte; this file's
+   regression test (the same `</foo>`-as-first-tag input) passes clean
+   under `make tests-asan` after the fix. `BUGFIX #3` in source.
+4. **Leaked `MD_Element` on overlapping (non-LIFO) tags** — same as
+   `cipc.cxx`'s `BUGFIX #4`, same `<A><B></A></B>` repro, same fix
+   (drain `Nested` before `ParseFields()` returns). Confirmed
+   leak-free under `make tests-asan`. `BUGFIX #4` in source.
+5. **`LoadFieldTable()` could crash on an empty FIELDTYPE file** — same
+   as `cipc.cxx`'s `BUGFIX #5`, same fix (`do`-`while` → `while`,
+   checking `pBuf` before the first iteration too). `BUGFIX #5` in
+   source.
+
+Also fixed while bringing this file to a clean `-Wall -Wextra` build
+for the first time: the identical `DOUBLE Left;` unused-variable
+warning (in `ParseGPoly()`), and the identical dead
+`Nested.Top()`/`LastEnd`-comparison block in `ParseFields()` (removed,
+along with the now-unused `LastEnd` variable itself, which that dead
+block was the only reader of). `NULL` converted to `nullptr` at every
+live call site (comment-only mentions left alone). Confirmed via a
+standalone compile before any fixes were applied that these were the
+*only* two warnings in the entire ~2100-line file — the ~750-line
+`Present()` and the `parse_tags()`/`find_end_tag()` pair (diffed
+against `cipc.cxx`'s and confirmed structurally identical apart from
+`NULL`/`nullptr`) were already warning-clean.
+
+`tests/doctype/test_fgdc.cxx` mirrors `test_cipc.cxx`'s coverage,
+adjusted for the `BEGDATE`/`ENDDATE` tag spelling: `ParseDate`/
+`ParseDateRange` successfully parsing a well-formed interval and
+correctly erroring on a missing closing tag (`BUGFIX #1`/`#2`);
+`ParseFields` not crashing on a stray unmatched closing tag (`BUGFIX
+#3`) and not leaking on overlapping tags (`BUGFIX #4`); and
+`LoadFieldTable` not crashing on an empty FIELDTYPE file (`BUGFIX #5`)
+while still loading real entries correctly.
+

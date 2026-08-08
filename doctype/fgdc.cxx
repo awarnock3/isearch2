@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /* $Id: fgdc.cxx,v 1.33 2000/09/06 18:20:30 cnidr Exp $ */
 /************************************************************************
 Copyright (c) 1994,1995 Basis Systeme netzwerk, Munich
@@ -148,7 +151,10 @@ FGDC::FGDC (PIDBOBJ DbParent) : SGMLNORM (DbParent)
 }
 
 
-void 
+// Reads the file named by the "-o fieldtype=<filename>" doctype
+// option (prompting interactively if missing) and loads one
+// "FIELDNAME TYPE" entry per line into Db->FieldTypes.
+void
 FGDC::LoadFieldTable() {
   STRLIST StrList;
   STRING  FieldTypeFilename;
@@ -180,7 +186,17 @@ FGDC::LoadFieldTable() {
 
   pBuf = strtok(b,"\n");
 
-  do {
+  // BUGFIX #5 (docs/BUG_CATALOG.md#doctypefgdccxx): same bug as, and
+  // fixed the same way as, doctype/cipc.cxx's BUGFIX #5 -- this was a
+  // do-while, unconditionally running the body (and thus
+  // `Field_and_Type = pBuf;`) once before ever checking pBuf. If the
+  // FIELDTYPE file exists but is empty (IsFile() above only checks
+  // existence, not content), strtok() returns nullptr on the very
+  // first call, and STRING::operator=(const CHR*) calls strlen() on
+  // it unconditionally -- a null-pointer-dereference crash. Checking
+  // pBuf before the first iteration too, not just between iterations,
+  // fixes it.
+  while (pBuf) {
     Field_and_Type = pBuf;
     Field_and_Type.UpperCase();
 #ifdef WIN32
@@ -191,7 +207,8 @@ FGDC::LoadFieldTable() {
 	}
 #endif
     Db->FieldTypes.AddEntry(Field_and_Type);
-  } while ( (pBuf = strtok((CHR*)NULL,"\n")) );
+    pBuf = strtok((CHR*)nullptr,"\n");
+  }
 
   delete [] b;
 }
@@ -328,7 +345,9 @@ FGDC::UsefulSearchField(const STRING& Field)
 }
 
 
-void 
+// Record splitting is entirely inherited from SGMLNORM; FGDC only
+// customizes field parsing (ParseFields() below).
+void
 FGDC::ParseRecords (const RECORD& FileRecord)
 {
   SGMLNORM::ParseRecords (FileRecord);
@@ -347,8 +366,15 @@ FGDC::ParseDate(const STRING& Buffer, DOUBLE* fStart,
 }
 
 
-void 
-FGDC::ParseDate(const CHR *Buffer, DOUBLE* fStart, 
+// Parses Buffer as either a single date value (a bare number,
+// "present", "unknown", or a <CALDATE>...</CALDATE> block) or a
+// <BEGDATE>...<ENDDATE> pair, writing both *fStart and *fEnd in
+// either case (a single value maps to the trivial interval
+// fStart==fEnd). Sets DATE_ERROR on any recognized-but-malformed
+// shape (e.g. an opening tag with no matching close). Same grammar
+// as doctype/cipc.cxx's ParseDate(), modulo tag-name spelling.
+void
+FGDC::ParseDate(const CHR *Buffer, DOUBLE* fStart,
 		DOUBLE* fEnd) {
 //  CHR *found;
 //  CHR tmp[160];
@@ -422,6 +448,17 @@ FGDC::ParseDate(const CHR *Buffer, DOUBLE* fStart,
   // If so, the dates will be tagged with <begdate> and <enddate>
   //  Hold.UpperCase();
 
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypefgdccxx): unlike the
+  // <CALDATE> branch above and the <ENDDATE> branch below (both of
+  // which `return` immediately here), this branch used to fall
+  // through into Hold.EraseAfter(End-1) with End==0 (a STRINGINDEX
+  // underflow to SIZE_MAX -- harmless only because EraseAfter() itself
+  // already bounds-checks) and then kept going: searching for
+  // <ENDDATE> despite already having flagged the record as malformed,
+  // leaving *fEnd unset on this path. Same bug as, and fixed the same
+  // way as, doctype/cipc.cxx's BUGFIX #1 (though unlike that file,
+  // this one's needles are already correctly uppercase, so there's no
+  // accompanying case-mismatch half to this bug).
   Start = Hold.Search("<BEGDATE>");
 
   if (Start > 0) {                 // Found the opening tag
@@ -429,9 +466,11 @@ FGDC::ParseDate(const CHR *Buffer, DOUBLE* fStart,
     Hold.EraseBefore(Start);
     End = Hold.Search("</BEGDATE");
     if (End == 0) {                // but not the closing tag
-      cerr << "[FGDC::ParseDate] <BEGDATE> found, missing </BEGDATE>" 
+      cerr << "[FGDC::ParseDate] <BEGDATE> found, missing </BEGDATE>"
 	   << endl;
       *fStart = DATE_ERROR;
+      *fEnd = *fStart;
+      return;
     }
     Hold.EraseAfter(End-1);
     if (Hold.CaseEquals("present")
@@ -504,8 +543,11 @@ FGDC::ParseDateRange(const STRING& Buffer, DOUBLE* fStart,
 }
 
 
-void 
-FGDC::ParseDateRange(const CHR *Buffer, DOUBLE* fStart, 
+// Same grammar and shape as ParseDate() above (a near-duplicate, not
+// a wrapper), but promotes year/month-only dates to a full day range
+// via SRCH_DATE::PromoteToDayStart()/PromoteToDayEnd().
+void
+FGDC::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
 		DOUBLE* fEnd) {
 //  CHR *found;
 //  CHR tmp[160];
@@ -606,6 +648,8 @@ FGDC::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
   // If so, the dates will be tagged with <begdate> and <enddate>
   //  Hold.UpperCase();
 
+  // BUGFIX #2: same shape and same fix as ParseDate's BUGFIX #1 above
+  // -- this is ParseDateRange, a near-duplicate function.
   Start = Hold.Search("<BEGDATE>");
 
   if (Start > 0) {                 // Found the opening tag
@@ -613,9 +657,11 @@ FGDC::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
     Hold.EraseBefore(Start);
     End = Hold.Search("</BEGDATE");
     if (End == 0) {                // but not the closing tag
-      cerr << "[FGDC::ParseDate] <BEGDATE> found, missing </BEGDATE>" 
+      cerr << "[FGDC::ParseDate] <BEGDATE> found, missing </BEGDATE>"
 	   << endl;
       *fStart = DATE_ERROR;
+      *fEnd = *fStart;
+      return;
     }
     Hold.EraseAfter(End-1);
     if (Hold.CaseEquals("present")
@@ -747,7 +793,6 @@ FGDC::ParseGPoly(const CHR *Buffer, DOUBLE Vertices[])
 {
 
   DOUBLE North,South,East,West;
-  DOUBLE Left;
   CHR Tag[12];
   CHR eTag[12];
 
@@ -837,13 +882,20 @@ FGDC::ParseExtent(const CHR* Buffer, DOUBLE* extent)
 }
 
 
-void 
+// Reads the whole record into memory, tokenizes it into SGML tags
+// via parse_tags()/find_end_tag(), and adds one DF field per
+// recognized <tag>value</tag> pair -- both under its own short name
+// and under a full, underscore-joined name reflecting its nesting
+// (tracked via the Nested stack of MD_Element). Attribute values
+// (tag="...") are delegated to SGMLNORM::store_attributes(). Same
+// structure as doctype/cipc.cxx's ParseFields().
+void
 FGDC::ParseFields (RECORD *NewRecord)
 {
   PFILE fp;
   STRING fn;
 
-  if (NewRecord == (RECORD*)NULL) 
+  if (NewRecord == (RECORD*)nullptr)
     return;                      // ERROR
 
   // Open the file
@@ -883,7 +935,7 @@ FGDC::ParseFields (RECORD *NewRecord)
   NewRecord->GetDocumentType(&doctype);
 
   CHR **tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL) {
+  if (tags == nullptr) {
     cout << "Unable to parse `" << doctype << "' tags in file " << fn << "\n";
     // Clean up
     delete [] RecBuffer;
@@ -891,7 +943,6 @@ FGDC::ParseFields (RECORD *NewRecord)
   }
 
   GSTACK Nested;
-  size_t LastEnd=(size_t)0;
 //  PMD_Element pCurrentTag;
   PDFT pdft = new DFT ();
   GDT_BOOLEAN InCustom;
@@ -916,17 +967,25 @@ FGDC::ParseFields (RECORD *NewRecord)
 	// We keep a stack of the fields we have currently open.  This
 	// handles nested fields by making a long field name out of the
 	// nested values.
-	pTmp = (PMD_Element)Nested.Top();
-	if (Tag == pTmp->get_tag()) {
-	  pTmp = (PMD_Element)Nested.Pop();
-//	  cout << "Popped " << pTmp->get_tag() << " off the stack.  ";
-	  delete pTmp;
-	  if (Nested.GetSize() != 0) {
-	    pTmp = (PMD_Element)Nested.Top();
-//	    cout << "Still inside " << pTmp->get_tag() << ".\n";
-	    x = FullFieldname.SearchReverse('_');
-	    FullFieldname.EraseAfter(x-1);
-//	    cout << "Full fieldname is now " << FullFieldname << ".\n";
+	// BUGFIX #3 (docs/BUG_CATALOG.md#doctypefgdccxx): Nested.Top()
+	// was called here with no GetSize()!=0 guard, unlike its sibling
+	// call site just below. Same bug as, and fixed the same way as,
+	// doctype/cipc.cxx's BUGFIX #3 (see that entry for the confirmed
+	// SEGV repro -- this code is byte-identical, not re-reproduced
+	// here).
+	if (Nested.GetSize() != 0) {
+	  pTmp = (PMD_Element)Nested.Top();
+	  if (Tag == pTmp->get_tag()) {
+	    pTmp = (PMD_Element)Nested.Pop();
+//	    cout << "Popped " << pTmp->get_tag() << " off the stack.  ";
+	    delete pTmp;
+	    if (Nested.GetSize() != 0) {
+	      pTmp = (PMD_Element)Nested.Top();
+//	      cout << "Still inside " << pTmp->get_tag() << ".\n";
+	      x = FullFieldname.SearchReverse('_');
+	      FullFieldname.EraseAfter(x-1);
+//	      cout << "Full fieldname is now " << FullFieldname << ".\n";
+	    }
 	  }
 	}
       } else
@@ -937,9 +996,9 @@ FGDC::ParseFields (RECORD *NewRecord)
 
     const CHR *p = find_end_tag (tags_ptr, *tags_ptr);
     size_t tag_len = strlen (*tags_ptr);
-    int have_attribute_val = (NULL != strchr (*tags_ptr, '='));
+    int have_attribute_val = (nullptr != strchr (*tags_ptr, '='));
 
-    if (p != NULL) {
+    if (p != nullptr) {
       // We have a tag pair
       val_start = (*tags_ptr + tag_len + 1) - RecBuffer;
       val_len = (p - *tags_ptr) - tag_len - 2;
@@ -968,7 +1027,7 @@ FGDC::ParseFields (RECORD *NewRecord)
 
 	const CHR *unified_name = UnifiedName(*tags_ptr);
 	// Ignore "unclassified" fields
-	if (unified_name == NULL) 
+	if (unified_name == nullptr)
 	  continue; // ignore these
 	FieldName = unified_name;
 	if (!(FieldName.IsPrint())) {
@@ -989,13 +1048,14 @@ FGDC::ParseFields (RECORD *NewRecord)
 	  pTag->set_tag(FieldName);
 	  pTag->set_start(val_start);
 	  pTag->set_end(val_end);
-	  
-	  if (Nested.GetSize() != 0) {
-	    PMD_Element pTmp;
-	    if (val_start < LastEnd) {
-	      pTmp = (PMD_Element)Nested.Top();
-	    }
-	  }
+
+	  // Removed here: a dead `if (Nested.GetSize()!=0) { ... if
+	  // (val_start < LastEnd) pTmp = Nested.Top(); }` block (and the
+	  // LastEnd variable it was the only reader of) -- pTmp's value
+	  // was never used afterward, so the whole block, including the
+	  // LastEnd comparison, had no observable effect. Same dead block
+	  // as, and removed the same way as, doctype/cipc.cxx's.
+
 	  if (FullFieldname.GetLength() > 0)
 	    FullFieldname.Cat("_");
 	  FullFieldname.Cat(FieldName);
@@ -1075,13 +1135,12 @@ FGDC::ParseFields (RECORD *NewRecord)
 	    }
 	  }
 	  Nested.Push(pTag);
-	  LastEnd = val_end;
 	}
       }
     }
     if (have_attribute_val) {
       SGMLNORM::store_attributes (pdft, RecBuffer, *tags_ptr);
-    } else if (p == NULL) {
+    } else if (p == nullptr) {
 #if 1
       // Give some information
       cout << doctype << " Warning: \""
@@ -1092,7 +1151,20 @@ FGDC::ParseFields (RECORD *NewRecord)
   }
   
   NewRecord->SetDft (*pdft);
-  
+
+  // BUGFIX #4 (docs/BUG_CATALOG.md#doctypefgdccxx): any tag left open
+  // (pushed via Nested.Push() above but never matched by a closing
+  // tag -- e.g. malformed/truncated input, or overlapping non-LIFO
+  // tags) stayed on Nested forever; Nested only Pop()s+delete()s an
+  // element when it finds a matching close. Drain what's left before
+  // this local GSTACK goes out of scope, or every unclosed tag leaks
+  // its MD_Element. Same bug as, and fixed the same way as,
+  // doctype/cipc.cxx's BUGFIX #4.
+  while (Nested.GetSize() != 0) {
+    PMD_Element pLeftover = (PMD_Element)Nested.Pop();
+    delete pLeftover;
+  }
+
   // Clean up;
   delete [] tags;
   delete pdft;
@@ -1117,7 +1189,11 @@ FGDC::GetCleanedFieldData(const RESULT& ResultRecord,
 }
 
 
-void 
+// ElementSet BRIEF_MAGIC ("B") returns just the citation title,
+// formatted as an XML/SGML/HTML fragment depending on RecordSyntax;
+// other element sets format progressively larger slices of the
+// parsed metadata (idinfo, citation, full record) the same way.
+void
 FGDC::Present (const RESULT& ResultRecord, const STRING& ElementSet,
 	       const STRING& RecordSyntax, STRING *StringBuffer)
 {
@@ -1942,10 +2018,10 @@ FGDC::parse_tags (CHR *b, GPTYPE len) const
 		  // allocate more space
 		  max_num_tags += grow_size;
 		  PCHR *New = new PCHR[max_num_tags];
-		  if (New == NULL)
+		  if (New == nullptr)
 		    {
 		      delete[]t;
-		      return NULL;		// NO MORE CORE!
+		      return nullptr;		// NO MORE CORE!
 		    }
 		  memcpy (New, t, tc * sizeof (CHR*));
 		  delete[]t;
@@ -2004,10 +2080,10 @@ FGDC::parse_tags (CHR *b, GPTYPE len) const
   if (State != OK)
     {
       delete[]t;
-      return NULL;		// Parse ERROR
+      return nullptr;		// Parse ERROR
     }
-  
-  t[tc] = (CHR*) NULL;	// Mark end of list
+
+  t[tc] = (CHR*) nullptr;	// Mark end of list
   return t;
 }
 
@@ -2028,11 +2104,11 @@ const CHR*
 FGDC::find_end_tag (char **t, const char *tag) const
 {
   size_t len;
-  if (t == NULL || *t == NULL)
-    return NULL;		// Error
-  
+  if (t == nullptr || *t == nullptr)
+    return nullptr;		// Error
+
   if (*t[0] == '/')
-    return NULL;		// I'am confused!
+    return nullptr;		// I'am confused!
   
   // Look for "real" tag name
   for (len = 0; tag[len]; len++)
@@ -2060,15 +2136,15 @@ FGDC::find_end_tag (char **t, const char *tag) const
 	  
 	}
     }
-  while ((tt = t[++i]) != NULL);
-  
+  while ((tt = t[++i]) != nullptr);
+
 #if 0
   // No end tag, assume that the document was valid
   // and the end-tag is implicit with the start of the
   // next tag
   return t[1];
 #else
-  return NULL;		// No end tag found
+  return nullptr;		// No end tag found
 #endif
 }
 
