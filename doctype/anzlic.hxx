@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		anzlic.hxx
 Version:	1.00
@@ -10,6 +13,10 @@ Copyright:	A/WWW Enterprises, MCNC/CNIDR and USGS/FGDC
 
 #ifndef ANZLIC_HXX
 #define ANZLIC_HXX
+
+#ifndef SGMLNORM_HXX
+# include "sgmlnorm.hxx"
+#endif
 
 #ifndef BSN_EXTENSIONS
 # define BSN_EXTENSIONS	0 /* 0==> CNIDR's Isearch 1==> BSn's */
@@ -67,9 +74,8 @@ public:
 		      DOUBLE* fEnd);
 //  void ParseGPoly(const PCHR Buffer);
    ~ANZLIC ();
-/* SGML helper functions */
+  // SGML helper functions: parse tags, find end tags, and store attributes
    PCHR *parse_tags (PCHR b, GPTYPE len) const;
-  //   const PCHR find_end_tag (const char *const *t, const char *tag) const;
    const PCHR find_end_tag (char **t, const char *tag) const;
    void store_attributes (PDFT pdft, PCHR base_ptr, PCHR tag_ptr) const;
 private:

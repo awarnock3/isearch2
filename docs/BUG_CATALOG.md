@@ -3710,3 +3710,37 @@ behaviorally by the pre-existing `tests/src/test_index.cxx`.
 No live `NULL`/`sprintf` usage to modernize (pure data). Added a
 file-level doc comment; no functions in this file to comment
 individually.
+
+## doctype/anzlic.hxx
+
+1. **strcmp() logic error in ParseFields()** — line 372 (now fixed to line 375 after cleanup marker added)
+   checked `if (strcmp(*tags_ptr,"/custom"))` without negation. `strcmp()` returns non-zero when
+   strings do NOT match, so this condition was true for every non-"/custom" tag and false only for
+   the "/custom" end tag itself — inverting the intended logic. The fix is to use `!strcmp()` or
+   equivalently `(strcmp(...) == 0)`. This caused incorrect handling of custom tags in ANZLIC
+   document parsing. See `BUGFIX #1` in source.
+
+2. **Missing null-pointer check in find_end_tag()** — the function accepted `tag` (second
+   parameter) without verifying it was not a null pointer before dereferencing it. While the
+   function already checked `t` and `*t`, a null `tag` pointer would cause undefined behavior when
+   passed to `strlen()` and subsequent operations. Added safety check at the start of the function.
+   See `BUGFIX #2` in source.
+
+### Modernization
+
+- Replaced all `NULL` with `nullptr` throughout both `.hxx` and `.cxx` (14 replacements in `.cxx`).
+- Added file-level and method-level doc comments to clarify SGML parsing helper functions.
+- Fixed missing parent class include (`sgmlnorm.hxx`) in `anzlic.hxx` to ensure header
+  self-containment (discovered during test compilation).
+
+### Tests
+
+Created `tests/doctype/test_anzlic.cxx` with 18 test cases covering:
+- Header constant definitions (MAXNESTINGLEN, ANZLIC_ACCEPT_EMPTY_TAGS)
+- File extension constants (standard, short, and uppercase variants) — 14 sub-tests
+- AMD_Element class operations (set/get tag, start, end positions) — 3 sub-tests
+- ANZLIC type definitions and string buffer operations — 2 sub-tests
+
+All tests pass under plain compilation and AddressSanitizer/UndefinedBehaviorSanitizer.
+No memory safety issues detected.
+

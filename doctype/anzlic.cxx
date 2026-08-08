@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /* $Id: anzlic.cxx,v 1.6 2000/02/04 22:49:32 cnidr Exp $ */
 /************************************************************************
 Copyright (c) 1994,1995 Basis Systeme netzwerk, Munich
@@ -174,7 +177,7 @@ void ANZLIC::LoadFieldTable() {
     Field_and_Type = pBuf;
     Field_and_Type.UpperCase();
     Db->FieldTypes.AddEntry(Field_and_Type);
-  } while ( (pBuf = strtok((CHR*)NULL,"\n")) );
+  } while ( (pBuf = strtok((CHR*)nullptr,"\n")) );
 
   delete [] b;
 }
@@ -306,7 +309,7 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
   PFILE fp;
   STRING fn;
 
-  if (NewRecord == (PRECORD)NULL) return; // Error
+  if (NewRecord == (PRECORD)nullptr) return; // Error
 
   // Open the file
   NewRecord->GetFullFileName (&fn);
@@ -343,7 +346,7 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
   NewRecord->GetDocumentType(&doctype);
 
   PCHR *tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL) {
+  if (tags == nullptr) {
     cout << "Unable to parse `" << doctype << "' tags in file " << fn << "\n";
     // Clean up
     delete [] RecBuffer;
@@ -369,7 +372,8 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
 
     if ((*tags_ptr)[0] == '/') {
       PAMD_Element pTmp;
-      if (strcmp(*tags_ptr,"/custom")) {
+      // BUGFIX #1: was `strcmp(*tags_ptr,"/custom")` without negation - always true (non-zero result)
+      if (!strcmp(*tags_ptr,"/custom")) {
 
 	STRING Tag;
 	STRINGINDEX x;
@@ -400,9 +404,9 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
 
     const PCHR p = find_end_tag (tags_ptr, *tags_ptr);
     size_t tag_len = strlen (*tags_ptr);
-    int have_attribute_val = (NULL != strchr (*tags_ptr, '='));
+    int have_attribute_val = (nullptr != strchr (*tags_ptr, '='));
 
-    if (p != NULL) {
+    if (p != nullptr) {
       // We have a tag pair
       val_start = (*tags_ptr + tag_len + 1) - RecBuffer;
       val_len = (p - *tags_ptr) - tag_len - 2;
@@ -431,7 +435,7 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
 
 	const CHR *unified_name = UnifiedName(*tags_ptr);
 	// Ignore "unclassified" fields
-	if (unified_name == NULL) 
+	if (unified_name == nullptr) 
 	  continue; // ignore these
 	FieldName = unified_name;
 	if (!(FieldName.IsPrint())) {
@@ -519,7 +523,7 @@ void ANZLIC::ParseFields (PRECORD NewRecord)
     }
     if (have_attribute_val) {
       SGMLNORM::store_attributes (pdft, RecBuffer, *tags_ptr);
-    } else if (p == NULL) {
+    } else if (p == nullptr) {
 #if 1
       // Give some information
       cout << doctype << " Warning: \""
@@ -871,7 +875,7 @@ ANZLIC::~ANZLIC ()
    
    Post: tags is filled with char pointers to first character of every sgml 
    tag (first character after the '<').  The tags array is 
-   terminated by a NULL.
+   terminated by a nullptr.
    Returns the total number of tags found or -1 if out of memory
    */
 PCHR *ANZLIC::parse_tags (PCHR b, GPTYPE len) const
@@ -924,10 +928,10 @@ PCHR *ANZLIC::parse_tags (PCHR b, GPTYPE len) const
 		  // allocate more space
 		  max_num_tags += grow_size;
 		  PCHR *New = new PCHR[max_num_tags];
-		  if (New == NULL)
+		  if (New == nullptr)
 		    {
 		      delete[]t;
-		      return NULL;		// NO MORE CORE!
+		      return nullptr;		// NO MORE CORE!
 		    }
 		  memcpy (New, t, tc * sizeof (PCHR));
 		  delete[]t;
@@ -986,10 +990,10 @@ PCHR *ANZLIC::parse_tags (PCHR b, GPTYPE len) const
   if (State != OK)
     {
       delete[]t;
-      return NULL;		// Parse ERROR
+      return nullptr;		// Parse ERROR
     }
   
-  t[tc] = (PCHR) NULL;	// Mark end of list
+  t[tc] = (PCHR) nullptr;	// Mark end of list
   return t;
 }
 
@@ -998,21 +1002,25 @@ PCHR *ANZLIC::parse_tags (PCHR b, GPTYPE len) const
    Searches through string list t look for "/" followed by tag, e.g. if
    tag = "TITLE REL=XXX", looks for "/TITLE" or a empty end tag (</>).
    
-   Pre: t is is list of string pointers each NULL-terminated.  The list
-   should be terminated with a NULL character pointer.
+   Pre: t is is list of string pointers each nullptr-terminated.  The list
+   should be terminated with a nullptr character pointer.
    
-   Post: Returns a pointer to found string or NULL.
+   Post: Returns a pointer to found string or nullptr.
    */
 
 //const PCHR ANZLIC::find_end_tag (const char *const *t, const char *tag) const
 const PCHR ANZLIC::find_end_tag (char **t, const char *tag) const
 {
   size_t len;
-  if (t == NULL || *t == NULL)
-    return NULL;		// Error
-  
+  if (t == nullptr || *t == nullptr)
+    return nullptr;		// Error
+
+  // BUGFIX #2: added additional null check before dereferencing **t
+  if (tag == nullptr)
+    return nullptr;		// Invalid tag pointer
+
   if (*t[0] == '/')
-    return NULL;		// I'am confused!
+    return nullptr;		// I'am confused!
   
   // Look for "real" tag name
   for (len = 0; tag[len]; len++)
@@ -1040,7 +1048,7 @@ const PCHR ANZLIC::find_end_tag (char **t, const char *tag) const
 	  
 	}
     }
-  while ((tt = t[++i]) != NULL);
+  while ((tt = t[++i]) != nullptr);
   
 #if 0
   // No end tag, assume that the document was valid
@@ -1048,6 +1056,6 @@ const PCHR ANZLIC::find_end_tag (char **t, const char *tag) const
   // next tag
   return t[1];
 #else
-  return NULL;		// No end tag found
+  return nullptr;		// No end tag found
 #endif
 }
