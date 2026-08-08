@@ -5102,3 +5102,34 @@ value containing a `0x80` byte (`BUGFIX #2`'s regression, checked under
 `<TITLE>` (`BUGFIX #3`'s regression); and adding no `TITLE` field when
 there is none.
 
+## doctype/iafadoc.cxx
+
+`class IAFADOC` (`: public COLONDOC`) is a "colon:value"-tagged IAFA
+(Internet Anonymous FTP Archive) file announcement DOCTYPE. Record
+splitting and field parsing are entirely inherited from `COLONDOC`;
+`IAFADOC` only customizes `Present()`, which composes a one-line
+`BRIEF_MAGIC` ("B") headline by trying several fallback tag names in
+turn (`Title`; else `Package-`/`Service-`/`Preferred-`/`Mailinglist-`/
+`Newsgroup-Name`; else a truncated `Description`), appending an
+`Author` when one is present.
+
+**No bugs found.** A small, self-contained file — traced the full
+fallback chain by hand (each `DOCTYPE::Present()` call resets its
+output `STRING` first, so no stale-value carryover between attempts;
+each nested `if`/`else` only reaches one label-plus-lookup branch, so
+no double-labeling is possible; the `Description` truncation's
+`EraseAfter(CUT_OFF-3)` + `Cat("...")` lands at exactly `CUT_OFF`
+characters, confirmed not off-by-one) and found no functional defect.
+Compiles clean under `-Wall -Wextra` with zero warnings; no live
+`NULL`/`sprintf` usage. Added class-level and per-function doc
+comments. `doctype/iafadoc.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`
+(`doctype/colondoc.cxx`, its base class, was already linked in from an
+earlier turn).
+
+`tests/doctype/test_iafadoc.cxx` covers the full `Present()` fallback
+chain: `Title`+`Author` combined; `Title` alone with no `Author`;
+falling back to `Package-Name` when there's no `Title`; falling all
+the way through to `Newsgroup-Name`; falling back to a
+newline-truncated, ellipsis-suffixed `Description` when no name field
+exists at all; and not crashing when nothing is found anywhere.
+
