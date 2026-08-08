@@ -5928,3 +5928,57 @@ underflow path); no spurious trailing record when the file ends in a
 newline (`BUGFIX #1`'s more commonly-hit path); and consecutive blank
 lines each getting their own minimal record.
 
+## doctype/para.cxx
+
+`PARA : public DOCTYPE` indexes one record per paragraph, splitting on
+a blank line (`"\n\n"`). `ParseFields()`/`Present()` are inherited
+unchanged from `DOCTYPE`; only `ParseRecords()` is overridden. Two bugs
+found, both confirmed via before/after test-reverts (one under ASan).
+
+1. **`(i-1) > Start` underflowed for a "\n\n" marker at the very start
+   of the file (`BUGFIX #1`)** — `i` and `Start` are both `GPTYPE`
+   (unsigned `UINT4`, `src/defs.hxx`); the guard's purpose is to reject
+   a degenerate/near-empty paragraph, but when the marker was found at
+   `i == 0` (a file beginning with a blank line), `i - 1` underflowed
+   to `UINT_MAX`, always greater than `Start` — wrongly *passing* the
+   very check meant to reject this case, adding a bogus, empty
+   "paragraph" record spanning just the two leading newline characters.
+   Confirmed via a before/after test-revert: a file starting with
+   `"\n\n"` gained an extra record. Rewritten as `i > Start + 1`, an
+   exactly equivalent comparison for every `i` that doesn't underflow,
+   since it never subtracts from the unsigned `i` at all — with the fix,
+   a leading blank line is never treated as its own boundary; it's
+   simply absorbed into whichever real paragraph follows it (one
+   record, not two). `BUGFIX #1` in source.
+
+2. **`RecBuffer` was never freed on the success path (`BUGFIX #2`)** —
+   found incidentally while running `make tests-asan` on this file's
+   new tests: `RecBuffer` (`new CHR[RecLength + 2]`) is explicitly
+   `delete []`'d on the early-error paths (failed or short `fread()`),
+   but the function falls straight through to its closing brace on the
+   normal, successful path — a straightforward leak on every file this
+   function successfully processes. Confirmed via a before/after
+   test-revert under ASan: `AddressSanitizer` reported real, direct
+   leaks matching exactly the allocations from the reverted run's own
+   test temp files. Fixed by adding `delete [] RecBuffer;` at the end
+   of the function. `BUGFIX #2` in source.
+
+Also documented (not changed): `RecordEnd` for a paragraph lands on the
+last newline of its trailing separator run, not the paragraph's own
+last character — the same "`RecordEnd` lands on the delimiter itself"
+convention already documented for `doctype/oneline.cxx`, confirmed here
+by tracing the exact byte offsets a real two-paragraph test produces
+(caught an initially-wrong test assertion that assumed the opposite
+convention before this was traced through properly). No `NULL`/
+`sprintf` to modernize. `doctype/para.cxx` added to
+`TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_para.cxx` covers: splitting two paragraphs at a
+blank line with exact byte offsets (including the trailing-separator
+convention above); no bogus empty record for a file starting with a
+blank line, which merges into the one real paragraph that follows
+(`BUGFIX #1`); a single-paragraph file with no blank line anywhere
+indexed as one record; and no bogus record for an empty file (the
+pre-existing `RecEnd == 0` guard already handled this correctly, unlike
+several sibling files this batch — confirmed, not assumed).
+

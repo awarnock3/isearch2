@@ -1,8 +1,11 @@
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*
 
 File:        para.cxx
 Version:     1
-Description: class PARA - index documents by paragraphs 
+Description: class PARA - index documents by paragraphs
 Author:      Erik Scott, Scott Technologies, Inc.
 */
 
@@ -13,6 +16,15 @@ Author:      Erik Scott, Scott Technologies, Inc.
 PARA::PARA(PIDBOBJ DbParent) : DOCTYPE(DbParent) {
 }
 
+// Splits FileRecord's underlying file into one RECORD per paragraph,
+// delimited by a blank line ("\n\n"; a longer run of consecutive
+// newlines is burned through together as a single boundary, and
+// RecordEnd lands on that run's last newline, so a paragraph's record
+// includes its trailing separator, not just its own text -- same
+// convention as doctype/oneline.cxx's documented "RecordEnd lands on
+// the newline itself"), and adds each to Db via DocTypeAddRecord(). The
+// final paragraph (with no trailing blank line after it) is flushed
+// after the main scan.
 void PARA::ParseRecords(const RECORD& FileRecord) {
 
 
@@ -102,11 +114,23 @@ void PARA::ParseRecords(const RECORD& FileRecord) {
   // endings.
 
 
-  Start = 0; int j=0;
+  Start = 0; GPTYPE j=0;
   for (i=0; i< ActualLength-1; i++) {
     if ( (RecBuffer[i]=='\n') && (RecBuffer[i+1]=='\n') ) {
       // We found a para marker, didn't we?
-      if ( (i-1) > Start) {
+      // BUGFIX #1 (docs/BUG_CATALOG.md#doctypeparacxx): this used to be
+      // `(i-1) > Start`; i and Start are both GPTYPE (unsigned UINT4,
+      // src/defs.hxx), so whenever a "\n\n" marker was found at the
+      // very start of the file (i == 0, e.g. a file beginning with a
+      // blank line), `i - 1` underflowed to UINT_MAX, which is always
+      // greater than Start -- wrongly satisfying a check whose whole
+      // purpose is to *reject* a degenerate paragraph this close to
+      // Start. This added a bogus, empty "paragraph" record spanning
+      // just the two leading newline characters. Confirmed via a
+      // before/after test-revert. Rewritten as `i > Start + 1`, an
+      // exactly equivalent comparison for every i that doesn't
+      // underflow, since it never subtracts from the unsigned i at all.
+      if ( i > Start + 1) {
 	// Now we need to burn "\n"s until we get to the start of the
 	// new para.
 	for (j=i; (j < ActualLength) && (RecBuffer[j]=='\n'); j++);
@@ -127,8 +151,14 @@ void PARA::ParseRecords(const RECORD& FileRecord) {
 
     Db->DocTypeAddRecord(Record);
   }
-	
 
+  // BUGFIX #2 (docs/BUG_CATALOG.md#doctypeparacxx): RecBuffer was freed
+  // on the early-error paths above (failed/short fread()) but never
+  // here, on the normal success path -- a straightforward memory leak
+  // on every file this function successfully processes. Confirmed via
+  // ASan (`make tests-asan` caught real leaks from this exact
+  // function, one per test that reached this point).
+  delete [] RecBuffer;
 }
 
 PARA::~PARA() {
