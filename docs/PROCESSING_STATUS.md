@@ -79,7 +79,7 @@
 | 75 | doctype/bibtex.hxx | done | 2026-08-08 | [doctype/bibtex.hxx](BUG_CATALOG.md#doctypebibtexcxx) |
 | 76 | doctype/cipc.hxx | done | 2026-08-08 | [doctype/cipc.hxx](BUG_CATALOG.md#doctypecipccxx) |
 | 77 | doctype/cipp.hxx | done | 2026-08-08 | [doctype/cipp.hxx](BUG_CATALOG.md#doctypecippcxx) |
-| 78 | doctype/dif.hxx | pending | | |
+| 78 | doctype/dif.hxx | done | 2026-08-08 | [doctype/dif.hxx](BUG_CATALOG.md#doctypedifcxx) |
 | 79 | doctype/doc_conf.hxx | done | 2026-08-08 | [doctype/doc_conf.hxx](BUG_CATALOG.md#doctypedoc_confhxx) |
 | 80 | doctype/emacsinfo.hxx | pending | | |
 | 81 | doctype/eos_guide.hxx | pending | | |
@@ -193,7 +193,7 @@
 | 189 | doctype/cipc.cxx | done | 2026-08-08 | [doctype/cipc.cxx](BUG_CATALOG.md#doctypecipccxx) |
 | 190 | doctype/cipp.cxx | done | 2026-08-08 | [doctype/cipp.cxx](BUG_CATALOG.md#doctypecippcxx) |
 | 191 | doctype/colondoc.cxx | done | 2026-08-07 | [doctype/colondoc.cxx](BUG_CATALOG.md#doctypecolondoccxx) |
-| 192 | doctype/dif.cxx | pending | | |
+| 192 | doctype/dif.cxx | done | 2026-08-08 | [doctype/dif.cxx](BUG_CATALOG.md#doctypedifcxx) |
 | 193 | doctype/doctype.cxx | done | 2026-08-07 | [doctype/doctype.cxx](BUG_CATALOG.md#doctypedoctypecxx) |
 | 194 | doctype/dtconf.cxx | pending | | |
 | 195 | doctype/emacsinfo.cxx | pending | | |

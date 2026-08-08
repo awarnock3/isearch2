@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /* $Id: dif.cxx,v 1.18 2000/10/12 20:55:25 cnidr Exp $ */
 /*@@@
 File:		dif.cxx
@@ -76,7 +79,11 @@ char multilineGroup[NO_MULTILINE_GROUPS][25] = { "Quality",
                                                  "Project_Text",
                                                  "Source_Text",
                                                  "Sensor_Text" };
-void dbg(const char *s) {
+// A no-op by design (its printf is commented out) -- a debug hook the
+// parser calls at almost every grammar rule, left permanently
+// disabled rather than removed outright throughout this file's many
+// call sites.
+void dbg(const char * /* s */) {
   // printf("%s\n",s);
 }
 /* ========================= FROM FGDC doctype ========================*/
@@ -131,12 +138,21 @@ void DIF::LoadFieldTable() {
   b[ActualLength] = '\0';
   fclose(fp);
   pBuf = strtok(b,"\n");
-  do {
+  // BUGFIX #5 (docs/BUG_CATALOG.md#doctypedifcxx): this was a
+  // do-while, unconditionally running the body (and thus
+  // `Field_and_Type = pBuf;`) once before ever checking pBuf. An
+  // empty (but existing) FIELDTYPE file makes strtok() return nullptr
+  // on the very first call, and STRING::operator=(const CHR*) calls
+  // strlen() on it unconditionally -- a null-pointer-dereference
+  // crash. Same bug as, and fixed the same way as,
+  // doctype/cipc.cxx's BUGFIX #5.
+  while (pBuf) {
     Field_and_Type = pBuf;
     Field_and_Type.UpperCase();
     Db->FieldTypes.AddEntry(Field_and_Type);
     //cout << "Write field to dfd -> " << Field_and_Type << endl;
-   } while ( (pBuf = strtok((CHR*)NULL,"\n")) );
+    pBuf = strtok((CHR*)nullptr,"\n");
+  }
   delete [] b;
 }
 //
@@ -192,7 +208,11 @@ void DIF::ParseDate(const CHR *Buffer, DOUBLE* fStart, DOUBLE* fEnd) {
 DOUBLE DIF::ParseDateSingle(const CHR *Buffer) {
   DOUBLE fVal;
   STRING Hold;
-  cout << "Parse Single Date:" << fVal << endl;
+  // BUGFIX #3 (docs/BUG_CATALOG.md#doctypedifcxx): this unconditional
+  // debug print read fVal before it was ever assigned on any path
+  // below (a real "used uninitialized" per the compiler, not just
+  // stylistic) -- removed; the properly #ifdef DEBUG-guarded print
+  // right below already covers the "was this called" question.
 #ifdef DEBUG
   cout << "Parse Single Date." << endl;
 #endif
@@ -287,8 +307,16 @@ DIF::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
   return;
 }
 // Local prototypes
-DIF::DIF(PIDBOBJ DbParent) : COLONDOC(DbParent) {
-  count=1;
+// BUGFIX #2 (docs/BUG_CATALOG.md#doctypedifcxx): RecBuffer/pos/state/
+// status/toktype/RecBufferLen were all left uninitialized here. Every
+// one is set at the top of ParseFields() before use, so this was
+// never reachable as a live bug (nothing else in this class touches
+// them first -- ~DIF() is empty), but it's the same class of fix as
+// every other "constructor leaves members uninitialized" turn this
+// session (e.g. src/gstack.cxx, src/index.cxx).
+DIF::DIF(PIDBOBJ DbParent) : COLONDOC(DbParent), RecBuffer(nullptr),
+  RecBufferLen(0), state(0), status(0), toktype(eofType), pos(0),
+  count(1), pdft(nullptr) {
 }
 /*
  *
@@ -299,12 +327,10 @@ void DIF::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 		     const STRING& RecordSyntax, PSTRING StringBufferPtr)
 {
   *StringBufferPtr = "";
-  char tmpbuff[1024];         //temporary DIF holding place
   if (ElementSet.Equals("G")) {       //Brief DIF presentation (hit list)
     STRLIST Strlist;
     STRING TitleTag,Title,EntryIDTag,EntryID;
-    CHR *headline;
-   
+
     EntryIDTag = "Entry_ID";  //Send in brief for statistics informatio
     Db->GetFieldData(ResultRecord, EntryIDTag, &Strlist);
     Strlist.Join("\n",&EntryID);
@@ -330,13 +356,12 @@ void DIF::Present(const RESULT& ResultRecord, const STRING& ElementSet,
   } else if (ElementSet.Equals("B")) {
     STRLIST Strlist1,Strlist2;
     STRING TitleTag,Title,EntryIDTag,EntryID;
-    CHR *headline;
-    GDT_BOOLEAN Status1,Status2;
+    GDT_BOOLEAN Status1;
     TitleTag = "Entry_Title";
-    EntryIDTag = "Entry_ID"; 
+    EntryIDTag = "Entry_ID";
     Status1 = Db->GetFieldData(ResultRecord, TitleTag, &Strlist1);
-    Status2 = Db->GetFieldData(ResultRecord, EntryIDTag, &Strlist2);
-    
+    Db->GetFieldData(ResultRecord, EntryIDTag, &Strlist2);
+
     if (Status1) {
       Strlist1.Join("",&Title);
       Strlist2.Join("",&EntryID);
@@ -352,8 +377,7 @@ void DIF::Present(const RESULT& ResultRecord, const STRING& ElementSet,
   } else if (ElementSet.Equals("I")) {
     STRLIST Strlist;
     STRING EntryIDTag,EntryID;
-    CHR *headline;
-   
+
     EntryIDTag = "Entry_ID";  //Send in brief for statistics informatio
     Db->GetFieldData(ResultRecord, EntryIDTag, &Strlist);
     Strlist.Join("\n",&EntryID);
@@ -387,7 +411,6 @@ void DIF::Present(const RESULT& ResultRecord, const STRING& ElementSet,
     STRLIST Strlist;
     STRING FieldName;
     STRING EntryIDTag,EntryID;
-    CHR *headline;
     STRING Hold, FieldType,ESN_S;
     STRING Title,Edition,GeoForm,Spatial,West,East,North,South;
     STRING BegDate,EndDate,CalDate,Update,BrowseGraphic;
@@ -447,12 +470,11 @@ void DIF::Present(const RESULT& ResultRecord, const STRING& ElementSet,
   // 
   } else { 
     STRING TitleTag, Title;
-    CHR *pDictFile,*pRawData,*pFormattedData;
+    CHR *pRawData;
     STRING DataBuffer;
     STRLIST Strlist;
     STRING EntryIDTag,EntryID;
-    CHR *headline;
-   
+
     EntryIDTag = "Entry_ID";  //Send in brief for statistics informatio
     Db->GetFieldData(ResultRecord, EntryIDTag, &Strlist);
     Strlist.Join("\n",&EntryID);
@@ -488,7 +510,7 @@ void DIF::Present(const RESULT& ResultRecord, const STRING& ElementSet,
       if (!strcmp(temp,buffer)) {       
 	// add butto
 	char child_link[1024];
-	sprintf(child_link,"<CENTER><A HREF=\"/cgi-bin/md/zgatedriver.pl?ESNAME=B&SERVICE=SEARCH&DBNAME=CHILD&ATTRSET=1.2.840.10003.3.4&USE_1=3704&maxrecords=15&RECSYNTAX=1.2.840.10003.5.1000.34.10&TERM_1=%s&ACTION=SEARCH\"><img border=0 src=\"http://%s/children_button.gif\" alt=\"This entry has subsets, Click for a list\"></img></A></CENTER>",temp,IMGPATH);
+	snprintf(child_link,sizeof(child_link),"<CENTER><A HREF=\"/cgi-bin/md/zgatedriver.pl?ESNAME=B&SERVICE=SEARCH&DBNAME=CHILD&ATTRSET=1.2.840.10003.3.4&USE_1=3704&maxrecords=15&RECSYNTAX=1.2.840.10003.5.1000.34.10&TERM_1=%s&ACTION=SEARCH\"><img border=0 src=\"http://%s/children_button.gif\" alt=\"This entry has subsets, Click for a list\"></img></A></CENTER>",temp,IMGPATH);
 	delete [] temp;
 	DataBuffer+=child_link;
 	break;
@@ -535,19 +557,24 @@ void DIF::Present(const RESULT& ResultRecord, const STRING& ElementSet,
      FILE *fp;
      // Write raw DIF buffer to a temporary file
      char *TempFile = new CHR[256];
-     sprintf(TempFile, "/tmp/rawdif.%d", getpid());
+     snprintf(TempFile, 256, "/tmp/rawdif.%d", getpid());
      fp = fopen(TempFile, "w");
      fprintf(fp, "%s", pRawData);
      fclose(fp);
-     sprintf(command,"docmorph.pl -document=%s -dictionary=%s -format=colon-dif", TempFile, dictfile);
+     snprintf(command,sizeof(command),"docmorph.pl -document=%s -dictionary=%s -format=colon-dif", TempFile, dictfile);
      fp = popen(command,"r");
      
-     if (fp != NULL) {
-       while ((fgets(line,102400,fp) != NULL)) {
+     if (fp != nullptr) {
+       while ((fgets(line,102400,fp) != nullptr)) {
 	 DataBuffer.Cat(line);
        }
-       pclose(fp);      
+       pclose(fp);
      }
+     // BUGFIX #6 (docs/BUG_CATALOG.md#doctypedifcxx): TempFile (the
+     // new CHR[256] above) was never freed -- a leak on every record
+     // presented through this (USE_DIFMORPH-gated, not compiled by
+     // default in this build) path.
+     delete [] TempFile;
 #endif
     } else {
       DataBuffer.Cat(pRawData);
@@ -581,7 +608,7 @@ void DIF::ParseFields (PRECORD NewRecord)
   status=true;
   pos=0;
   STRING token;
-  if (NewRecord == (RECORD*)NULL) 
+  if (NewRecord == (RECORD*)nullptr) 
     return;                      // ERROR
   // Open the file
   NewRecord->GetFullFileName (&fn);
@@ -600,6 +627,7 @@ void DIF::ParseFields (PRECORD NewRecord)
   RecBuffer = (char *)calloc(RecLength+1,1);
   GPTYPE ActualLength = (GPTYPE) fread (RecBuffer, 1, RecLength, fp);
   RecBuffer[ActualLength] = '\0';	// ASCIIZ
+  RecBufferLen = (int)ActualLength;
   fclose (fp);
   start();
   NewRecord->SetDft(*pdft);
@@ -642,25 +670,27 @@ ML                           11                                 12
 void DIF::start() {
   dbg("<start>");
   toktype = nextToken();
+  // BUGFIX #4 (docs/BUG_CATALOG.md#doctypedifcxx): the fieldType and
+  // groupType cases each used to end with two complementary ifs
+  // (toktype != eofType -> ...+break; toktype == eofType -> break)
+  // that always break either way, with no code path actually falling
+  // through to the next case -- but the compiler can't prove that
+  // (-Wimplicit-fallthrough), and it reads as if falling into
+  // groupType/eofType were intentional. Collapsed to a single
+  // unconditional break with the same effect, removing the ambiguity.
   switch (toktype){
   case fieldType :
     atom();
     if (toktype != eofType) {
       atomtail();
-      break;
     }
-    if(toktype == eofType)
-      break;
+    break;
   case groupType :
     atom();
     if (toktype != eofType) {
       atomtail();
-      break;
     }
-    if(toktype == eofType) {
-      break;
-    }
-    
+    break;
   case eofType :
     break;
   default :
@@ -805,7 +835,26 @@ void DIF::parserError(const char *s) {  /* Parser error. */
 long DIF::tell() {
   return pos;
 }
+// BUGFIX #1 (docs/BUG_CATALOG.md#doctypedifcxx): this used to advance
+// pos and return RecBuffer[pos] with no bounds check at all, relying
+// entirely on every caller stopping as soon as it saw the '\0'
+// terminator. Most scanner methods do, but group() unconditionally
+// calls nextToken() (which calls sgetc()) once more after
+// groupbody() returns, even when groupbody() already hit EOF (e.g. a
+// "Group:" with no matching "End_Group" before the file ends) --
+// nextToken()'s own EOF path also doesn't call sungetc() to back off
+// afterward, so pos was already one past the terminator, and this
+// third call read further still. Confirmed a real heap-buffer-
+// overflow with a standalone repro (an unclosed group) before fixing.
+// Fixed by clamping pos to RecBufferLen (set once in ParseFields())
+// before every read: a single sgetc()/sungetc() pair at EOF behaves
+// exactly as before (advance to one past the terminator, then back to
+// it), but any further unmatched sgetc() call re-clamps instead of
+// advancing past the one-past-terminator position, so it always
+// re-reads the terminator safely no matter how many extra calls happen.
 long DIF::sgetc() {
+  if (pos > RecBufferLen)
+    pos = RecBufferLen;
   return (RecBuffer[pos++]);
 }
 void DIF::sungetc() {
@@ -837,7 +886,7 @@ void DIF::readNewLine() {
   skipWhitespace();
   int ch = sgetc();
   char buf[40];
-  sprintf(buf,"rnl:%c,%d",ch,ch);
+  snprintf(buf,sizeof(buf),"rnl:%c,%d",ch,ch);
   dbg(buf);
   while (ch != '\n' && ch != '\0') {
     if (ch == '&') {
@@ -850,7 +899,7 @@ void DIF::readNewLine() {
     }
     token+=(char)ch;
     ch=sgetc();
-    sprintf(buf,"rnl:%c,%d",ch,ch);
+    snprintf(buf,sizeof(buf),"rnl:%c,%d",ch,ch);
     dbg(buf);
     if (ch == '\0') dbg("eof");
   }

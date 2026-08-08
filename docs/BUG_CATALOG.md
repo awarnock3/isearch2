@@ -4095,3 +4095,108 @@ tag and not leaking on overlapping tags; and `LoadFieldTable` not
 crashing on an empty FIELDTYPE file while still loading real entries
 correctly.
 
+## doctype/dif.cxx
+
+`class DIF` (`: public COLONDOC`) is the GCMD/DIF (Directory
+Interchange Format) DOCTYPE — a genuinely different architecture from
+this batch's other files: a hand-written character-at-a-time scanner
+(`sgetc()`/`sungetc()`/`tell()`) feeding a small recursive-descent
+parser (`start()`/`atom()`/`field()`/`group()`/...). Found and fixed a
+confirmed heap-buffer-overflow (the most severe bug in this batch,
+verified with a real before/after ASan repro) plus five smaller bugs.
+
+1. **`sgetc()` had no bounds check at all, and `group()` could call it
+   again after the scanner had already run off the end of the
+   buffer** — `sgetc()` unconditionally did `RecBuffer[pos++]`, relying
+   entirely on every caller stopping as soon as it saw the `'\0'`
+   terminator. Most scanner methods correctly pair one `sgetc()`-until-
+   terminator loop with exactly one trailing `sungetc()`, but `group()`
+   unconditionally calls `nextToken()` (which calls `sgetc()`) once
+   more immediately after `groupbody()` returns — including when
+   `groupbody()` (via nested `atomtail()`/`textML()` calls) already ran
+   the scanner all the way to EOF looking for an `"End_Group"` that was
+   never there (a `"Group:"` left unclosed before the file ends).
+   `nextToken()`'s own EOF-detection path also doesn't call `sungetc()`
+   to back off afterward, so `pos` was already one past the terminator
+   by the time this extra call happened, and it read further still —
+   with nothing to stop it, since `sgetc()` had no bound of its own.
+   Confirmed with a real before/after ASan comparison: reverting the
+   fix and running just this file's unclosed-group regression test
+   reproduced a clean report —
+   ```
+   AddressSanitizer: heap-buffer-overflow doctype/dif.cxx:856 in DIF::sgetc()
+   ```
+   restoring the fix cleared it. Fixed by adding a new member,
+   `RecBufferLen` (set once in `ParseFields()` right after `RecBuffer`
+   is allocated and NUL-terminated), and clamping `pos` to it at the
+   top of `sgetc()` before every read: a single `sgetc()`/`sungetc()`
+   pair at EOF still behaves exactly as before (advance to one past the
+   terminator, then back to it), but any further unmatched `sgetc()`
+   call re-clamps instead of advancing past that point, so it always
+   safely re-reads the terminator no matter how many extra calls
+   happen. `BUGFIX #1` in source.
+2. **Constructor left `RecBuffer`/`pos`/`state`/`status`/`toktype`/the
+   new `RecBufferLen` all uninitialized** — every one is set at the top
+   of `ParseFields()` before use and nothing else in the class touches
+   them first (`~DIF()` is empty), so this was never reachable as a
+   live bug, but it's the same class of fix as every other
+   "constructor leaves members uninitialized" turn this session.
+   `BUGFIX #2` in source.
+3. **`ParseDateSingle()` printed an uninitialized variable** —
+   `cout << "Parse Single Date:" << fVal << endl;` ran unconditionally,
+   before `fVal` was ever assigned on any path below it (confirmed a
+   real `-Wuninitialized` by the compiler, not just a style nit). A
+   properly `#ifdef DEBUG`-guarded print of the same intent sits right
+   below it. Removed. `BUGFIX #3` in source.
+4. **`start()`'s `fieldType`/`groupType` cases had a spurious
+   `-Wimplicit-fallthrough`** — each ended with two complementary `if`s
+   (`toktype != eofType` → do work and `break`; `toktype == eofType` →
+   `break`) that always `break` either way, so no path actually falls
+   through to the next `case` — but the compiler can't prove two
+   conditions are complementary, and the code visually reads as if
+   falling into `groupType`/`eofType` were intentional. Collapsed each
+   to a single `if`-then-unconditional-`break`, identical behavior,
+   removing the ambiguity for both the compiler and future readers.
+   `BUGFIX #4` in source.
+5. **`LoadFieldTable()` could crash on an empty FIELDTYPE file** — same
+   shape as, and fixed the same way as, `doctype/cipc.cxx`'s
+   `BUGFIX #5` (a `do`-`while` that ran `Field_and_Type = pBuf;`
+   unconditionally before ever checking `pBuf`, crashing via
+   `STRING::operator=(const CHR*)`'s unconditional `strlen()` when
+   `strtok()` returns `nullptr` on its very first call). `BUGFIX #5` in
+   source.
+6. **`TempFile` (a `new CHR[256]` in the `USE_DIFMORPH`-gated branch of
+   `Present()`) was never freed** — a leak on every record presented
+   through that path. Not compiled by default in this build (`
+   USE_DIFMORPH` is never defined anywhere in the tree), but fixed
+   anyway since it was free to fix while already touching these exact
+   lines for `sprintf`→`snprintf` modernization. `BUGFIX #6` in source.
+
+Also documented, not changed: `ParseDateRange()`'s
+`Hold.EraseAfter(End-1)` after `Hold.Search("\n")` has the same
+"unguarded `End-1` underflow" shape seen in `cipc.cxx`/`cipp.cxx`, but
+it's likewise harmless in practice — `STRING::EraseAfter()` already
+bounds-checks and no-ops when handed an out-of-range index (confirmed
+when `cipc.cxx` was processed).
+
+Modernization: `NULL` converted to `nullptr` at every live call site.
+`sprintf` converted to `snprintf` throughout, including inside the
+`AGGREGATIO`/`USE_DIFMORPH`-gated branches that aren't compiled by
+default in this build (real, compilable C++ that could be enabled by
+a different build configuration, unlike genuinely commented-out code).
+Removed several always-unused local variables surfaced by bringing
+this file to a clean `-Wall -Wextra` build for the first time:
+`headline` (declared five times across `Present()`'s branches, never
+read in any of them), `Status2`/`pDictFile`/`pFormattedData`/
+`tmpbuff`. Added class-level and per-function doc comments.
+
+`tests/doctype/test_dif.cxx` covers: `ParseFields` extracting a simple
+field and not crashing on an empty record; not overflowing on an
+unclosed `Group:` (`BUGFIX #1`'s regression, verified via the
+before/after ASan comparison above) and correctly parsing a
+well-formed one; `LoadFieldTable` not crashing on an empty FIELDTYPE
+file (`BUGFIX #5`) while still loading real entries; and
+`ParseDate`/`ParseDateRange` covering their documented value shapes
+(bare number, "present", "unknown", a malformed value, and a real
+`START_DATE`/`STOP_DATE` range with the STOP_DATE-absent fallback).
+

@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:		dif.hxx
 Version:	1.00
@@ -25,6 +28,13 @@ Revised:        Chris Gokey
 #define DIF_TEXT_EXTENSION "sut"
 
 
+// A GCMD/DIF (Directory Interchange Format) DOCTYPE: "Fieldname:
+// value" / "Group: name ... End_Group" text, parsed by a small
+// hand-written recursive-descent parser (start()/atom()/field()/
+// group()/... below, implementing the grammar in the comment above
+// DIF::start() in dif.cxx) driven by a character-at-a-time scanner
+// (sgetc()/sungetc()/tell()) over RecBuffer. See dif.cxx for the
+// grammar and RecBufferLen's role in keeping the scanner in bounds.
 class DIF : public COLONDOC {
 public:
 
@@ -60,6 +70,10 @@ public:
    * 
    */
   char *RecBuffer;
+  // Set once in ParseFields() right after RecBuffer is allocated and
+  // NUL-terminated; sgetc() (see dif.cxx BUGFIX #1) uses this to keep
+  // pos from ever running past RecBuffer's allocated bounds.
+  int RecBufferLen;
   STRING groupName;
   STRING token;
   int state;
