@@ -39,7 +39,9 @@ tests/          NEW. Sibling to src/, not nested inside it. Mirrors the
                 relative paths of src/, doctype/, Isearch-cgi/. Also
                 holds tests/vendor/catch2/ (see TESTING) and
                 tests/reports/.
-docs/           NEW. PROCESSING_STATUS.md and BUG_CATALOG.md (see below).
+docs/           NEW. PROCESSING_STATUS.md and BUG_CATALOG.md (see below),
+                plus DOCUMENTATION_STATUS.md (see below) once /document-next
+                or /document-10 has run at least once.
 ```
 
 Only `src/`, `doctype/`, and `Isearch-cgi/` are in scope for processing.
@@ -219,6 +221,34 @@ stays greppable instead of exploding into per-file documents:
    directories to pass as files. Fixed; see `BUGFIX #1` in source.
 ```
 
+## docs/DOCUMENTATION_STATUS.md — format
+
+A separate concern from `docs/PROCESSING_STATUS.md`: whether a file has
+been through the dedicated documentation pass (`/document-next` /
+`/document-10`, see COMMANDS), not whether it's bug-fixed. Same shape as
+`docs/PROCESSING_STATUS.md`, one row per `done` (bug-fixed) file:
+
+```markdown
+| Order | File           | Status  | Last Documented |
+|-------|----------------|---------|------------------|
+| 1     | src/common.cxx | pending |                  |
+```
+
+`Status` is `pending`, `done`, or `generated` (`generated` rows are
+skipped, same treatment as `docs/PROCESSING_STATUS.md`). `Order` mirrors
+the `Order` value for the same file in `docs/PROCESSING_STATUS.md`.
+Rows are only added once a file reaches `done` in
+`docs/PROCESSING_STATUS.md` — documenting a file that's still going to
+change during bug-fixing would just mean redoing the work. `/document-
+next` and `/document-10` both sync this file against
+`docs/PROCESSING_STATUS.md` at the start of every invocation (adding
+rows for newly-`done` files, and flipping already-`done` documentation
+rows back to `pending` if the file has changed since its last
+`Isearch2 cleanup: documented ...` commit — the same diff-since-last-
+commit technique RESCAN-STATUS uses) rather than needing a separate
+rescan command of its own. This is how a colleague's later hand-edit to
+an already-documented file gets it redocumented automatically.
+
 ## AUTONOMY — unattended runs, blocked files, docs/AUTOPILOT_LOG.md
 
 Permission prompts are suppressed for this project (`.claude/settings.json`,
@@ -376,6 +406,18 @@ Claude Code tab.
   of the batch. See AUTONOMY for how blocking works unattended.
 - **PROCESS-10** — same as PROCESS-5, batched up to 10 files instead of
   5.
+- **DOCUMENT-NEXT** — a separate, dedicated documentation pass, not part
+  of GENERAL: takes the lowest-`Order` `pending` row in
+  `docs/DOCUMENTATION_STATUS.md` (synced against `done` rows in
+  `docs/PROCESSING_STATUS.md` at the start of every invocation — new
+  `done` files get queued, changed-since-documented files get
+  requeued), adds a Doxygen-style `@file`/`@brief` block to the file and
+  a full `@brief`/`@param`/`@return` block above every function
+  definition, plus one-line `@brief` comments on the matching `.hxx`
+  declarations. Confirms `make tests` still compiles clean, updates
+  `docs/DOCUMENTATION_STATUS.md`, commits, and pushes. Stops after one
+  file, same as PROCESS-NEXT.
+- **DOCUMENT-10** — batch version of DOCUMENT-NEXT, up to 10 files.
 - **SYNC-UPSTREAM** — fetches and merges `upstream/main` into
   `cleanup/isearch2`, tags the sync point, and reruns RESCAN-STATUS (not
   just ANALYZE) so newly merged files get queued immediately rather than
@@ -425,6 +467,35 @@ Claude Code tab.
   LibreOffice. Output goes to `docs/reports/commands-reference-
   <YYYYMMDD-HHMMSS>.pdf` (gitignored, disposable). Read-only. Not run
   automatically by anything else — invoke it deliberately.
+- **BUG-CATALOG-REPORT** — renders `docs/BUG_CATALOG.md` as a standalone
+  PDF: every bug found and fixed per file, plus findings deferred to
+  another file's turn. Cross-references each cataloged file against its
+  current row in `docs/PROCESSING_STATUS.md`, since RESCAN-STATUS can
+  flip a `done` file back to `pending` without touching the catalog —
+  reopened files get a dedicated summary table plus an inline warning on
+  their entry, so a stale "Fixed" claim doesn't read as settled fact.
+  Also scans the catalog's own text for "dead" file/function mentions
+  (negation-filtered) into a Dead Files & Functions table — a heuristic
+  starting point, not a verified static-analysis result. Parses the
+  catalog, builds an HTML report, then converts to PDF via headless
+  Chrome (falling back to LibreOffice, then wkhtmltopdf). Output goes to
+  `docs/reports/bug-catalog-report-<YYYYMMDD-HHMMSS>.pdf` (gitignored,
+  disposable). Read-only. Not run automatically by anything else —
+  invoke it deliberately.
+- **CODE-DOCUMENTATION-REPORT** — renders the Doxygen-style documentation
+  written by DOCUMENT-NEXT/DOCUMENT-10 as a standalone PDF: one section
+  per documented file with its file-level summary, then one entry per
+  function with its `@brief`/`@param`/`@return` documentation plus a
+  caller/callee cross-reference (which functions it calls, which
+  functions call it — a static-analysis heuristic scoped to the target
+  file's own functions, not a full whole-program call graph; virtual
+  dispatch, function pointers, and macro-expanded calls can't be
+  resolved this way and are noted as such). Takes an optional filename —
+  `/code-documentation-report <file>` reports on just that file,
+  otherwise every `done` row in `docs/DOCUMENTATION_STATUS.md`. Output
+  goes to `docs/reports/code-documentation-report-<YYYYMMDD-HHMMSS>.pdf`
+  (gitignored, disposable). Read-only. Not run automatically by anything
+  else — invoke it deliberately.
 
 When you're ready to hand the cleaned-up branch to your colleague for
 review, open a cross-fork pull request against the upstream repository:

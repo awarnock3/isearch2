@@ -109,3 +109,8 @@ doctype/dtconf
 /ISEARCH.mdt
 /ISEARCH.sta
 
+# Isearch2 cleanup: Python bytecode cache from running the .claude/tools/
+# report generators locally -- not source, regenerated automatically.
+__pycache__/
+*.pyc
+
