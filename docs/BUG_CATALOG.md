@@ -4690,3 +4690,41 @@ test_cipp.cxx, test_dif.cxx) with:
 
 All tests pass cleanly under AddressSanitizer/UndefinedBehaviorSanitizer.
 
+## doctype/firstline.cxx
+
+`class FIRSTLINE` (`: public DOCTYPE`) indexes a text file's first line
+(up to the first `\r`/`\n`, or the whole file if it has neither) as a
+single `"Headline"` field. A small, self-contained file — two bugs, one
+in each of the header and the implementation.
+
+1. **`firstline.hxx`'s include guard was missing its `#define`** — the
+   file opens `#ifndef FIRSTLINE_HXX` but, unlike every other header in
+   this tree (`#ifndef X_HXX` / `#define X_HXX`), never actually
+   defines `FIRSTLINE_HXX`. A second `#include "firstline.hxx"` within
+   the same translation unit would re-process the whole file and
+   redefine `class FIRSTLINE`. Purely additive (no declared signature
+   changed), so not subject to the GENERAL step 4 header freeze. Fixed
+   by adding the missing `#define`. `BUGFIX #1` in source.
+2. **`ParseFields()`'s Headline field end was off by one** — `FC`'s end
+   is inclusive of the last byte in the field (confirmed via
+   `src/index.cxx`'s own `fLen = fc.GetFieldEnd() -
+   fc.GetFieldStart() + 1;`), but `val_len` is a *count* of characters
+   read (valid indices `0..val_len-1`), not the inclusive end index
+   itself. `fc.SetFieldEnd(val_len)` therefore always pointed one byte
+   too far: for a line ending in `\r`/`\n`, the indexed field included
+   that trailing delimiter; for a file with no delimiter at all, it
+   pointed one byte past EOF. Fixed by changing to `SetFieldEnd(val_len
+   - 1)`. Confirmed via an exact-substring regression test (not just
+   "doesn't crash"). `BUGFIX #2` in source.
+
+Modernization: no live `NULL`/`sprintf` usage found. Added class-level
+and per-function doc comments. `doctype/firstline.cxx` added to
+`TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_firstline.cxx` covers: extracting exactly the first
+line, excluding the newline (`BUGFIX #2`'s direct regression, for a
+file with a `\n`); extracting the whole file when there's no newline at
+all (`BUGFIX #2`'s other half); and adding no `Headline` field for an
+empty file. Field names are asserted in uppercase (`"HEADLINE"`) per
+the established `DF::SetFieldName()`-uppercases-internally gotcha.
+
