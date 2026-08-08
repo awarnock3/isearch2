@@ -96,7 +96,10 @@ This is the source of truth for status — not just `docs/PROCESSING_STATUS.md`.
 Detecting status by grepping the tree itself means ANALYZE is safe to
 re-run any time (new files get queued, already-marked files are left
 alone) even if the manifest file is ever lost, edited by hand, or out
-of sync.
+of sync. ANALYZE deliberately never looks past the marker to ask whether
+a `done` file's content has drifted since — that's what RESCAN-STATUS is
+for (see COMMANDS below); it diffs against the last processed commit
+instead of just checking whether the marker exists.
 
 ## Shell command style
 
@@ -318,10 +321,10 @@ to interpret a failure.
 
 Documented here conceptually; the actual invokable slash commands live
 in `.claude/commands/` (see the files provided alongside this one) so
-you can type `/analyze`, `/process-next`, `/process <filename>`,
-`/process-5`, `/process-10`, `/sync-upstream`, `/smoke-test`,
-`/blocked-report`, and `/reprocess-blocked` directly in the Claude Code
-tab.
+you can type `/analyze`, `/rescan-status`, `/process-next`,
+`/process <filename>`, `/process-5`, `/process-10`, `/sync-upstream`,
+`/smoke-test`, `/blocked-report`, and `/reprocess-blocked` directly in the
+Claude Code tab.
 
 - **ANALYZE** — ensures branch + baseline (see GIT), scans `src/`,
   `doctype/`, `Isearch-cgi/`; builds a `#include` dependency graph;
@@ -333,8 +336,29 @@ tab.
   rows in `docs/PROCESSING_STATUS.md`, then commits and pushes that file
   (message `Isearch2 cleanup: update processing order (ANALYZE)`,
   skipped if nothing changed). **Never modifies a source file.** Safe to
-  re-run any time.
-- **PROCESS NEXT** — reads `docs/PROCESSING_STATUS.md`, takes the
+  re-run any time. Only ever adds files it has never seen before — a file
+  already carrying the `processed` marker is excluded even if its content
+  has since changed underneath that marker; see RESCAN-STATUS for that
+  case.
+- **RESCAN-STATUS** — the reprocessing-aware sibling of ANALYZE. Does
+  everything ANALYZE does for brand-new files, plus one more check: for
+  every row already `done`, finds the commit that last marked it done
+  (the most recent `Isearch2 cleanup: processed ...` commit touching that
+  path) and diffs the file against it. Unchanged since then → row left
+  alone. Changed since then (typically via `/sync-upstream` merging in an
+  edit, or a hand-edit) → row flipped back to `pending` (`Last Processed`
+  and `Bug Catalog` cleared, `Order` left as-is), so it re-enters the
+  queue for `/process-next`/`/process-5`/`/process-10` to pick up. `done`
+  rows with no discoverable processed-commit are left `done` and reported
+  as inconclusive rather than guessed at. Leaves `pending`, `blocked`, and
+  `generated` rows untouched. Same read-only-w.r.t.-source contract as
+  ANALYZE — writes only `docs/PROCESSING_STATUS.md`, commits with message
+  `Isearch2 cleanup: update processing order (RESCAN)`. Doesn't find or
+  catalog bugs itself; that still only happens when a (re)queued file
+  actually goes through the GENERAL pipeline. Not run automatically by
+  anything else — invoke it deliberately, e.g. after a `/sync-upstream`
+  merge, in place of (or in addition to) `/analyze`.
+- **PROCESS-NEXT** — reads `docs/PROCESSING_STATUS.md`, takes the
   lowest-`Order` `pending` row, runs the GENERAL pipeline (including
   both commits and both pushes) on that one file, then stops. A
   `blocked` outcome (see AUTONOMY) also stops here, same as normal.
@@ -353,10 +377,13 @@ tab.
 - **PROCESS-10** — same as PROCESS-5, batched up to 10 files instead of
   5.
 - **SYNC-UPSTREAM** — fetches and merges `upstream/main` into
-  `cleanup/isearch2`, tags the sync point, and reruns ANALYZE so newly
-  merged files get queued immediately rather than sitting untracked (as
-  happened after the `49e7b2d` merge before this command existed). Not
-  run automatically by anything else — invoke it deliberately.
+  `cleanup/isearch2`, tags the sync point, and reruns RESCAN-STATUS (not
+  just ANALYZE) so newly merged files get queued immediately rather than
+  sitting untracked (as happened after the `49e7b2d` merge before this
+  command existed), and so any already-`done` file the merge just
+  modified gets reopened to `pending` instead of silently staying `done`
+  with stale content behind it. Not run automatically by anything else —
+  invoke it deliberately.
 - **SMOKE-TEST** — see SMOKE TEST above. Builds the real production
   binaries and verifies indexing + search actually work against the
   sample corpus. Read-only with respect to the cleanup tree itself (no
@@ -377,6 +404,27 @@ tab.
   that file. Continues until every file blocked at the start of the run
   is either processed or explicitly deferred. Not run automatically by
   anything else — invoke it deliberately.
+- **STATUS-REPORT** — generates a comprehensive PDF report of cleanup
+  progress, including summary statistics (done/blocked/pending counts and
+  percentages), function/subroutine counts per file, and detailed tables
+  for each file status category. Reads `docs/PROCESSING_STATUS.md`,
+  counts functions in each source file via C++ pattern detection, builds
+  an HTML report with styled summary boxes and sortable tables, then
+  converts to PDF via LibreOffice (or wkhtmltopdf fallback). Output goes
+  to `docs/reports/status-report-<YYYYMMDD-HHMMSS>.pdf` (gitignored,
+  disposable). Read-only with respect to the cleanup tree — no commits,
+  no status updates. Not run automatically by anything else — invoke it
+  deliberately when you want a snapshot of current progress.
+- **COMMANDS-REFERENCE** — generates a PDF reference guide listing all
+  available Isearch2 cleanup commands from this CLAUDE.md file, including
+  command names, invocation syntax (e.g., `/analyze`, `/process-next`),
+  full descriptions, and key attributes. Useful as a quick reference or
+  for sharing project workflows with team members. Parses the COMMANDS
+  section, extracts command details, builds an HTML guide with a summary
+  table and detailed per-command sections, then converts to PDF via
+  LibreOffice. Output goes to `docs/reports/commands-reference-
+  <YYYYMMDD-HHMMSS>.pdf` (gitignored, disposable). Read-only. Not run
+  automatically by anything else — invoke it deliberately.
 
 When you're ready to hand the cleaned-up branch to your colleague for
 review, open a cross-fork pull request against the upstream repository:

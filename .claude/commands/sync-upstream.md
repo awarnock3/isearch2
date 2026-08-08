@@ -27,12 +27,21 @@ you want to check for upstream changes, e.g. before a big batch run.
 5. Push the merge commit itself: `git push origin cleanup/isearch2`.
    Do this before step 6 so the merge is safely on the remote
    regardless of what happens next.
-6. **Rerun `/analyze`, as a mandatory last step — every time, even when
-   the merge was fully conflict-free.** This is what actually queues any
-   brand-new files the merge introduced; skipping it is exactly how 11
-   files went unqueued after the previous manual sync (`49e7b2d`,
-   2026-08-05) until this command existed.
+6. **Rerun `/rescan-status`, as a mandatory last step — every time, even
+   when the merge was fully conflict-free.** This queues any brand-new
+   files the merge introduced (what `/analyze` alone used to catch —
+   skipping this step is exactly how 11 files went unqueued after the
+   previous manual sync, `49e7b2d`, 2026-08-05, before that command
+   existed), and additionally catches the case unique to syncing: a file
+   that was already `done` in this fork but that the merge just changed
+   again (upstream editing a file you'd already cleaned up). Those rows
+   get flipped back to `pending` automatically — see RESCAN-STATUS in
+   CLAUDE.md. Plain `/analyze` would silently skip that file forever,
+   since it only excludes-and-leaves-alone anything already carrying the
+   `processed` marker; it doesn't know how to reopen one.
 7. Report: what was fetched (commit range from `upstream/main`), whether
    the merge was clean or conflicted (and if conflicted, which files,
    and that it's waiting on manual resolution — stop here in that case),
-   the sync tag, and how many new files `/analyze` queued in step 6.
+   the sync tag, how many new files `/rescan-status` queued in step 6,
+   and how many previously-`done` files it reopened to `pending` because
+   the merge changed them.
