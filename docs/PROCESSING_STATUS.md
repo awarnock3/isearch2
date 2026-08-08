@@ -70,7 +70,7 @@
 | 66 | Isearch-cgi/cgi-util.hxx | done | 2026-08-08 | [Isearch-cgi/cgi-util.hxx](BUG_CATALOG.md#isearch-cgicgi-utilhxx) |
 | 67 | src/marc.hxx | done | 2026-08-08 | [src/marc.hxx](BUG_CATALOG.md#srcmarchxx) |
 | 68 | doctype/medline.hxx | done | 2026-08-08 | [doctype/medline.hxx](BUG_CATALOG.md#doctypemedlinehxx) |
-| 69 | src/nfldmgr.hxx | pending | | |
+| 69 | src/nfldmgr.hxx | done | 2026-08-08 | [src/nfldmgr.hxx](BUG_CATALOG.md#srcnfldmgrcxx) |
 | 70 | src/nlatlon.hxx | pending | | |
 | 71 | src/stopword.hxx | pending | | |
 | 72 | src/sw.hxx | pending | | |
@@ -156,7 +156,7 @@
 | 152 | src/mergeunit.cxx | pending | | |
 | 153 | src/multiterm.cxx | pending | | |
 | 154 | src/nfield.cxx | done | 2026-08-07 | [src/nfield.cxx](BUG_CATALOG.md#srcnfieldcxx) |
-| 155 | src/nfldmgr.cxx | pending | | |
+| 155 | src/nfldmgr.cxx | done | 2026-08-08 | [src/nfldmgr.cxx](BUG_CATALOG.md#srcnfldmgrcxx) |
 | 156 | src/nlatlon.cxx | pending | | |
 | 157 | src/nlist.cxx | pending | | |
 | 158 | src/numsearch.cxx | pending | | |

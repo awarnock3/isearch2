@@ -3444,3 +3444,82 @@ same ASan report shown above before confirming the fix suppresses it.
 
 Modernization: all `NULL` uses converted to `nullptr`. No live
 `sprintf` calls. Added class-level and per-function doc comments.
+
+## src/nfldmgr.cxx
+
+`class NUMERICFLDMGR` manages a set of per-attribute `NUMERICLIST`
+field tables, loaded from a database's `<dbName>.fdf` definition file.
+It has **no callers anywhere in the current tree**, and `src/Makefile`'s
+`OBJ` list (the real production link) doesn't include `nfldmgr.o`
+either — this is dead code, though still processed per the standard
+pipeline. It also depends on two features the original author left
+commented out (`NUMERICLIST::LoadTable()` in `LoadFields()`, and
+`NUMERICLIST::Find()` in `Find()`) — noted below rather than guessed
+at.
+
+1. **File didn't compile** — `if(fields[NumFields].GetCount==0)`
+   references the non-static member function `GetCount` without
+   calling it (missing `()`); this is ill-formed C++ (GCC: "invalid
+   use of member function ... did you forget the '()'?") and the file
+   has evidently never compiled since this line was written. Fixed by
+   adding the call: `GetCount()`. `BUGFIX #1` in source. Note:
+   `LoadTable()` (the line directly above) is itself commented out, so
+   even after this fix `GetCount()` always returns 0 here and every
+   field is skipped — a pre-existing incomplete feature, not something
+   this turn attempts to finish.
+2. **Constructor left `fields`/`MaxEntries` uninitialized, and a second
+   `LoadFields()` call would leak the first call's array** — the
+   constructor only set `NumFields = 0`. Fixed via a member-initializer
+   list (`fields(nullptr), NumFields(0), MaxEntries(0)`). Separately,
+   `LoadFields()` reassigns `fields = new NUMERICLIST[counter]`
+   unconditionally, so calling it twice on the same `NUMERICFLDMGR`
+   would leak whatever the first call allocated; fixed by freeing the
+   previous `fields` (a `delete` on `nullptr` is a no-op, so this is
+   safe on the very first call too) before reassigning. `BUGFIX #2` in
+   source.
+3. **`GetResult()` indexed `fields[-1]` with no bounds check** —
+   `LocateFieldByAttribute()` documents that it "returns -1 if no field
+   for this attribute" (including when no fields were ever loaded), but
+   `GetResult()` passed that straight into `fields[i]` unconditionally.
+   Not confirmed reachable through any current caller (there are none),
+   but free to fix on the public API, same reasoning as
+   `src/vidb.cxx`'s `BUGFIX #2`. Fixed with an early return when
+   `i==-1`. `BUGFIX #3` in source.
+4. **Unbounded `sscanf` into a fixed buffer** —
+   `sscanf(Input,"%d %s",&Attribute,TypeString)` has no width limit on
+   `TypeString[128]`; a `.fdf` line whose second token is longer than
+   127 bytes overflows it. `Input` itself is capped at 255 bytes
+   (`fgets(Input,256,fp)`), so the overflow is real for any line with a
+   long enough second field. Fixed with an explicit field width:
+   `"%d %127s"`. Also converted the two `FullName`/`FieldFile`
+   `sprintf`s (unbounded on `dbName`, an `LoadFields()` parameter) to
+   `snprintf` with explicit buffer sizes, and `NULL` to `nullptr`
+   throughout. `BUGFIX #4` in source.
+5. **Destructor's `if(NumFields>0)` guard leaked the `fields` array
+   whenever zero fields were successfully loaded** — `LoadFields()`
+   allocates `fields` (sized by the `.fdf` file's line count) *before*
+   the loop that increments `NumFields`; if every line is skipped (e.g.
+   all `TEXT`, or — per `BUGFIX #1`'s note — every field's `GetCount()`
+   coming back 0, which is the normal case today) `NumFields` stays 0
+   and the old destructor never freed `fields` at all. Confirmed with a
+   real ASan leak report from exactly this path (a `.fdf` with one
+   `NUMERIC` line) while writing this file's regression tests. Fixed by
+   dropping the guard entirely — `delete [] fields;` unconditionally,
+   relying on `delete` on `nullptr` being a no-op. `BUGFIX #5` in
+   source; also applied to the equivalent guard in `LoadFields()`
+   itself (see `BUGFIX #2`).
+
+Covered by `tests/src/test_nfldmgr.cxx`: `LoadFields` returning 0 for a
+missing file, `LoadFields` skipping `TEXT`/loading no `NUMERIC` fields
+(pins the current incomplete-`LoadTable()` behavior *and* is the
+`BUGFIX #5` leak regression, verified leak-free under `make
+tests-asan`), `LoadFields` not overflowing on an oversized second token
+(`BUGFIX #4`), `GetResult` not crashing on an unmatched attribute
+(`BUGFIX #3`), and `Find` returning 0 when no field matches.
+
+Modernization: all `NULL` uses converted to `nullptr`, all `sprintf`
+converted to `snprintf`. Added class-level and per-function doc
+comments, including a note on `Find()`'s incomplete
+`fields[FieldIndex].Find(Key,Relation)` call (also left commented out
+by the original author — `Find()` currently always returns 1 once
+`Attribute` matches a loaded field, regardless of `Key`/`Relation`).

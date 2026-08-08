@@ -5,6 +5,12 @@
 #include "irset.hxx"
 */
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+// Loads and looks up per-attribute NUMERICLIST field tables for a
+// database, from "<dbName>.fdf". See src/nfldmgr.cxx for the format
+// and for a note on this class's current callers (there are none).
 class NUMERICFLDMGR{
 private:
 	PNUMERICLIST fields;

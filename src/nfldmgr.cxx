@@ -42,6 +42,20 @@ Description:	Class NUMERICFLDMGR
 Author:		Jim Fullton, CNIDR
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+// NUMERICFLDMGR manages a set of per-attribute NUMERICLIST field
+// tables (one per configured numeric field) loaded from a database's
+// "<dbName>.fdf" definition file. Note: this class has no callers
+// anywhere in the current tree and src/Makefile's OBJ list doesn't
+// link nfldmgr.o into the production binary either -- it is dead code,
+// though still processed per the standard pipeline. It also relies on
+// two features left commented-out by the original author (LoadTable()
+// in LoadFields(), and NUMERICLIST::Find() in Find()); see
+// docs/BUG_CATALOG.md for why those are documented as incomplete
+// rather than guessed at.
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -77,17 +91,32 @@ Author:		Jim Fullton, CNIDR
 
 
 
-NUMERICFLDMGR::NUMERICFLDMGR()
+// BUGFIX #2 (docs/BUG_CATALOG.md#srcnfldmgrcxx): fields/MaxEntries were
+// left uninitialized; fields is only read in ~NUMERICFLDMGR()/GetResult()
+// when NumFields>0, which LoadFields() guarantees, but leaving a raw
+// pointer member indeterminate is needless risk for a one-line fix.
+NUMERICFLDMGR::NUMERICFLDMGR() : fields(nullptr), NumFields(0), MaxEntries(0)
 {
-  NumFields = 0;
-		
 }
+// BUGFIX #5: was `if(NumFields>0) delete [] fields;`. LoadFields()
+// allocates `fields` (an array sized by the .fdf file's line count)
+// before the loop that increments NumFields, so any call that ends up
+// loading zero fields -- e.g. every field being "TEXT", or (as things
+// stand today, see BUGFIX #1's note) every field's GetCount() coming
+// back 0 -- leaked the whole array and its NUMERICLIST elements'
+// internal STRING buffers. Confirmed via a real ASan leak report from
+// this exact path. `delete` on a null pointer is a no-op, so the
+// NumFields>0 guard was never actually needed.
 NUMERICFLDMGR::~NUMERICFLDMGR()
 {
-  if(NumFields>0)
-    delete [] fields;
+  delete [] fields;
 }
 
+// Incomplete: the actual per-field lookup (fields[FieldIndex].Find(Key,
+// Relation)) is commented out below, so Position is always its 0
+// initializer and this always returns 1 (found) once Attribute matches
+// a loaded field, regardless of Key/Relation. Left as-is rather than
+// guessed at -- see the file-level comment above.
 INT NUMERICFLDMGR::Find(INT Attribute, INT4 Relation, FLOAT Key)
 {
   INT FieldIndex;
@@ -105,8 +134,10 @@ INT NUMERICFLDMGR::Find(INT Attribute, INT4 Relation, FLOAT Key)
 
 
 
-/* reads field definition file and loads fields */
-
+// Parses "<dbName>.fdf" (one "<attribute> <type>" line per field,
+// '#' starts a comment, blank lines skipped) and loads a NUMERICLIST
+// per non-TEXT field. Returns the number of fields loaded (0 if the
+// .fdf file doesn't exist).
 INT NUMERICFLDMGR::LoadFields(PCHR dbName)
 {
   CHR FullName[256];
@@ -115,12 +146,19 @@ INT NUMERICFLDMGR::LoadFields(PCHR dbName)
   INT Attribute;
   FILE *fp;
   INT counter=0;
-  
-  sprintf(FullName,"%s.fdf",dbName); // make definition file name
+
+  // BUGFIX #2: a second call would otherwise leak whatever `fields`
+  // already pointed at from a prior call (delete on nullptr is a
+  // no-op, so this is safe even before the first successful call; see
+  // BUGFIX #5 for why NumFields>0 alone isn't sufficient here).
+  delete [] fields;
+  NumFields=0;
+
+  snprintf(FullName,sizeof(FullName),"%s.fdf",dbName); // make definition file name
   fp=fopen(FullName,"rb");
-  if(fp==NULL)
+  if(fp==nullptr)
     return(0);			// no fields
-  while(fgets(Input,256,fp)!=NULL){
+  while(fgets(Input,256,fp)!=nullptr){
     PCHR p;
     p=strchr(Input,'\n');
     if(p)
@@ -135,7 +173,7 @@ INT NUMERICFLDMGR::LoadFields(PCHR dbName)
 
   fields=new NUMERICLIST[counter];
   rewind(fp);
-  while(fgets(Input,256,fp)!=NULL){
+  while(fgets(Input,256,fp)!=nullptr){
     PCHR p;
     p=strchr(Input,'\n');
     if(p)
@@ -145,21 +183,29 @@ INT NUMERICFLDMGR::LoadFields(PCHR dbName)
       *p='\0';			// zap comments
     if(!strlen(Input))
       continue;
-    sscanf(Input,"%d %s",&Attribute,TypeString);
+    // BUGFIX #4: unbounded %s could overflow TypeString[128] if a line's
+    // second token is longer than 127 bytes.
+    sscanf(Input,"%d %127s",&Attribute,TypeString);
     // 62	TEXT
     // 12	NUMERIC or whatever
     // etc
-    
+
     if(!StrCaseCmp(TypeString,"TEXT")){
       continue;
     }else{
       // make the field
       CHR FieldFile[256];
-      
-      sprintf(FieldFile,"%s.%d",dbName,Attribute);
+
+      snprintf(FieldFile,sizeof(FieldFile),"%s.%d",dbName,Attribute);
       fields[NumFields].SetFileName(FieldFile);
 //      fields[NumFields].LoadTable();
-      if(fields[NumFields].GetCount==0)
+      // BUGFIX #1: was `GetCount==0` (member function reference, not a
+      // call -- doesn't even compile, "did you forget the ()?"). Note
+      // LoadTable() above is itself commented out, so GetCount() is
+      // always 0 here regardless; see docs/BUG_CATALOG.md for why this
+      // is left as a documented incomplete feature rather than guessed
+      // at further.
+      if(fields[NumFields].GetCount()==0)
 	continue;
       fields[NumFields].SetAttribute(Attribute);
       fields[NumFields].Sort();
@@ -193,6 +239,9 @@ INT NUMERICFLDMGR::LocateFieldByAttribute(INT Attribute)
 }
 
 
+// Adds one IRESULT to `s` per hit position recorded against the
+// NUMERICLIST field matching attribute `use`; a no-op if no field
+// matches (see BUGFIX #3).
 void NUMERICFLDMGR::GetResult(INT use, PIRSET s, PIDBOBJ Parent)
 {
   INT i,w;
@@ -203,6 +252,11 @@ void NUMERICFLDMGR::GetResult(INT use, PIRSET s, PIDBOBJ Parent)
   //fields[i].ResetHitPosition();
   i=LocateFieldByAttribute(use);
 //  printf("GetResult: Found field %d by attribute\n",i);
+  // BUGFIX #3: LocateFieldByAttribute() returns -1 when `use` doesn't
+  // match any loaded field (including when none were ever loaded);
+  // indexing fields[-1] below was an out-of-bounds read with no guard.
+  if(i==-1)
+    return;
   while((gp=fields[i].GetNextHitPosition())!=-1){
     w = Parent->GetMainMdt()->LookupByGp(gp);
     ThisMdt = Parent->GetMainMdt();
