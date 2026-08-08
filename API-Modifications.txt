@@ -1,0 +1,104 @@
+Suggestions from ChatGPT:
+Question: I'm designing an web-based OpenAPI for document search. Currently, I'm using the search endpoint like this: GET http://<host>:<port>/v1/search?database=<dbname>&q=example
+
+Should I make this a POST instead of GET? In addition to GET?
+Since the database name is mandatory, should I make it part of the path, i.e., GET http://<host>:<port>?v1/search/<dbname>?q=example
+
+What do best practices suggest for these? Are there any guidelines that would offer improvements in compatibility and discoverability?
+--------------------
+* Add POST:
+POST /v1/search
+POST /v1/databases/books/search
+Content-Type: application/json
+
+{
+    "query": "einstein",
+    "limit": 20,
+    "offset": 0,
+    "fields": ["title", "author", "abstract"],
+    "filters": [
+        {"field": "year", "gte": 1900},
+        {"field": "year", "lte": 1950}
+    ]
+}
+
+* Database as a resource
+GET /v1/databases/mydb/search?q=example
+
+* Use standard URI conventions
+/v1/databases/{database}/search
+
+* Define pagination explicitly
+GET /v1/databases/books/search?q=einstein&limit=20&offset=40
+
+* Return useful HTTP status codes
+200 OK
+400 Bad Request          malformed search
+404 Not Found            database doesn't exist
+401 Unauthorized         authentication required
+403 Forbidden            database inaccessible
+422 Unprocessable Entity syntactically valid but invalid search
+500 Internal Server Error
+
+* OpenAPI Discoverability
+GET /openapi.json
+Your OpenAPI definition should describe:
+
+path parameters
+query parameters
+request bodies
+response schemas
+authentication/security schemes
+error responses
+pagination
+examples
+
+* Sample OpenAPI.json
+paths:
+  /v1/databases/{database}/search:
+    get:
+      summary: Search documents
+      parameters:
+        - name: database
+          in: path
+          required: true
+          schema:
+            type: string
+
+        - name: q
+          in: query
+          required: true
+          schema:
+            type: string
+
+      responses:
+        '200':
+          description: Search results
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SearchResults'
+
+    post:
+      summary: Search documents
+      parameters:
+        - name: database
+          in: path
+          required: true
+          schema:
+            type: string
+
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+
+
+* Summary
+GET  /v1/databases/{database}/search?q=example
+POST /v1/databases/{database}/search
+
+GET  /v1/search/{database}?q=example
+POST /v1/search/{database}
