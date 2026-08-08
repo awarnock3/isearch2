@@ -5434,3 +5434,53 @@ correctly at a magic separator line, also verified against exact
 byte-offset boundaries; and no bogus record for a genuinely empty
 file (`BUGFIX #2`'s other guarded call site).
 
+## doctype/listdigest.cxx
+
+`class LISTDIGEST` (`: public MAILFOLDER`) is a Listserv-style mail
+digest DOCTYPE — a simpler sibling of `doctype/irlist.cxx`:
+`ParseRecords()` splits only at a long `"====...===="` magic separator
+line, with no `IsMailFromLine()` splitting at all (so `irlist.cxx`'s
+`BUGFIX #1`, the missing blank-line guard, doesn't apply here — there's
+nothing to guard). One confirmed bug, of the same underflow family as
+`irlist.cxx`'s `BUGFIX #2` and the already-fixed
+`doctype/mailfolder.cxx`.
+
+1. **Unsigned integer underflow added a record ending ~4 billion bytes
+   past the real file, for a genuinely empty file** — `GPTYPE` is
+   `UINT4` (`src/defs.hxx`); the post-loop final-record logic,
+   `RecordEnd = Position - 1;`, underflowed to `UINT_MAX` whenever
+   `Position` stayed `0` (i.e. `fgets()` never succeeded even once —
+   a zero-byte file), and `RecordEnd > Start` (0) then passed. Confirmed
+   via a real before/after test-revert (the same `4294967295`
+   wraparound signature as `irlist.cxx`'s `BUGFIX #2`). Fixed the same
+   way: `RecordEnd = (Position == 0) ? 0 : Position - 1;`. `BUGFIX #1`
+   in source.
+
+**Investigated and confirmed NOT a bug**, despite the identical-looking
+`RecordEnd = SavePosition - 1;` line inside the main loop (the same
+shape that *was* a real, separately-numbered bug in `irlist.cxx`): in
+this file, `Position += line_len;` runs unconditionally for *every*
+line, before the magic-separator check, and that check requires
+`line_len > magic_len` (40) to enter the block at all — so
+`SavePosition` is provably at least 41 whenever `RecordEnd =
+SavePosition - 1;` executes, never 0. Confirmed both by hand-trace and
+a standalone runnable check (`SavePosition = 41` for a magic line as
+literally the first line of the file) before concluding this site
+needed no guard — deliberately left unguarded per "don't add
+validation for a scenario that can't happen," with a source comment
+explaining why, rather than copying `irlist.cxx`'s guard by rote.
+
+`NULL` converted to `nullptr` at the one live call site. No `sprintf`
+usage. Added class-level and per-function doc comments.
+`doctype/listdigest.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`
+(`doctype/mailfolder.cxx`, its base class, was already linked in from
+an earlier turn).
+
+`tests/doctype/test_listdigest.cxx` covers: splitting correctly at a
+magic separator line, verified against exact byte-offset boundaries;
+no bogus record when a magic separator is literally the first line of
+the file (an empirical check on the "not a bug" finding above, not
+just the hand-trace); and no bogus record for a genuinely empty file
+(`BUGFIX #1`'s direct regression, confirmed via the real before/after
+test-revert described above).
+
