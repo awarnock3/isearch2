@@ -3127,3 +3127,70 @@ out and never-compiled old `IsSystemFile()` implementation, was left
 alone). Added class-level and per-function doc comments to `IDB`,
 `Initialize()`, the destructor, `Index()`, `KillAll()`, `CleanupDb()`,
 and `MakeDbGilsRec()`.
+
+## src/vidb.hxx
+
+`class VIDB` is a "virtual database": a view over a list of real `IDB`
+databases (`c_dblist`), loaded from a `.vdb` file naming one
+sub-database per line. Found the most externally-significant bug
+category of this batch's non-index-parser files.
+
+1. **Multiple methods indexed `c_dblist` with an unvalidated index —
+   confirmed externally reachable via a real request path** —
+   `KeyLookup()` parses a database number directly out of its `Key`
+   argument (`"DBnum:Key"` syntax) and indexed `c_dblist[i]` with it,
+   with no bounds check. Traced every real caller in the tree:
+   `src/Iget.cxx` and `src/zpresent.cxx` both declare `VIDB *pdb` and
+   pass a record key straight from their own command-line/protocol
+   arguments through to `pdb->KeyLookup()` -- i.e. a remote client of
+   either of those tools controls `Key`, and a key like `"999:x"`
+   against a `VIDB` with fewer than 1000 sub-databases would have read
+   `c_dblist[999]` out of bounds and then called a method through
+   whatever garbage pointer was sitting there. Fixed by bounds-checking
+   `i` against `c_dbcount` and returning (leaving `*ResultBuffer`
+   untouched) when out of range. `BUGFIX #1` in source.
+
+   The same function's no-prefix-key branch, plus `GetDfdt()` and
+   `GetRecordDfdt()`, unconditionally used `c_dblist[0]` -- safe only
+   because every *other* code path happens to guarantee `c_dbcount >
+   0`, except one: a `.vdb` file that exists, is non-empty, but
+   contains only comment/blank lines leaves `Initialize()` completing
+   normally (it only `EXIT_ERROR`s on a *fully* empty raw file) with
+   `c_dbcount == 0` and `c_dblist[0]` never written to -- so this
+   dereferenced an uninitialized pointer in that specific case. Fixed
+   with the same `c_dbcount <= 0` guard. `BUGFIX #1` (continued) in
+   source.
+
+2. **`GetDbNameByNumber()` and `Present()` had the same missing-bounds-
+   check shape**, using a caller-supplied (`GetDbNameByNumber`) or
+   `RESULT`-embedded (`Present`) index into `c_dblist` with nothing
+   stopping an out-of-range value. Neither was confirmed externally
+   reachable the way `BUGFIX #1` was -- `GetDbNameByNumber()`'s only
+   callers (`Isearch-cgi/isrch_srch.cxx`) pass back a `DbNum` a search
+   result was already stamped with internally, and `RESULT::GetDbNum()`
+   defaults to `0` (safe whenever `c_dbcount > 0`, per `RESULT`'s own
+   earlier turn this session) -- but both are `public` API on a class
+   whose one confirmed-reachable sibling bug was serious, and the fix
+   is free, so both got the same guard. `BUGFIX #2` in source.
+
+**Not otherwise pursued:** `c_inconsistent_doctypes` is set to
+`GDT_FALSE` once in `Initialize()` and never set `GDT_TRUE` anywhere,
+making the `if(c_inconsistent_doctypes) return GDT_FALSE;` check in
+`IsDbCompatible()` permanently dead -- reads like an incomplete
+feature (detecting when a `.vdb`'s sub-databases have inconsistent
+doctypes) rather than a regression, and implementing that detection
+from scratch would be guessing at intended behavior, not fixing a
+confirmed bug, so left alone and just noted here.
+
+**No live-`VIDB` integration test this turn**, for the same structural
+reason as `src/idb.hxx` just above (`VIDB::Initialize()` constructs
+real `IDB` objects, which need the full `DTREG`/`doctype/` dependency
+chain) -- see that entry for the full reasoning. `vidb.hxx` confirmed
+self-contained is not applicable here (it depends on `idb.hxx`/
+`dtreg.hxx` by design, as a `VIDB` fundamentally needs `IDB`), but
+`vidb.cxx` was confirmed to compile clean under `-Wall -Wextra` via
+direct `g++ -c`, and the existing (unaffected, `vidb.cxx` isn't linked)
+suite was re-run to confirm no regression elsewhere.
+
+Modernization: the 2 code-level `NULL` uses converted to `nullptr`. No
+`sprintf` calls present. Added a class-level doc comment.

@@ -66,7 +66,7 @@
 | 62 | src/gstack.hxx | done | 2026-08-07 | [src/gstack.hxx](BUG_CATALOG.md#srcgstackhxx) |
 | 63 | src/isearch.hxx | done | 2026-08-08 | [src/isearch.hxx](BUG_CATALOG.md#srcisearchhxx) |
 | 64 | src/idb.hxx | done | 2026-08-08 | [src/idb.hxx](BUG_CATALOG.md#srcidbhxx) |
-| 65 | src/vidb.hxx | pending | | |
+| 65 | src/vidb.hxx | done | 2026-08-08 | [src/vidb.hxx](BUG_CATALOG.md#srcvidbhxx) |
 | 66 | Isearch-cgi/cgi-util.hxx | pending | | |
 | 67 | src/marc.hxx | pending | | |
 | 68 | doctype/medline.hxx | pending | | |
@@ -180,7 +180,7 @@
 | 176 | src/termobj.cxx | pending | | |
 | 177 | src/thesaurus.cxx | pending | | |
 | 178 | src/tokengen.cxx | pending | | |
-| 179 | src/vidb.cxx | pending | | |
+| 179 | src/vidb.cxx | done | 2026-08-08 | [src/vidb.hxx](BUG_CATALOG.md#srcvidbhxx) |
 | 180 | src/vlist.cxx | pending | | |
 | 181 | src/zpresent.cxx | pending | | |
 | 182 | src/zsearch.cxx | pending | | |
