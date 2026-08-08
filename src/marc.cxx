@@ -39,6 +39,9 @@
 /* DispMARC - print marc records from a file                              */
 /**************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 //#define index(s,c) strchr(s,c)
 
 #include "gdt.h"
@@ -56,24 +59,56 @@
 #include "marclib.hxx"
 #include "marc.hxx"
 
+// Forward declaration: the definition lives further down (with the
+// rest of the "EXTERNAL ROUTINES" block, matching marclib.cxx's own
+// `extern struct MemBlock *RememberKey;`), but MARC::~MARC() (BUGFIX
+// #1, see docs/BUG_CATALOG.md#srcmarchxx) needs it before that point.
+extern struct MemBlock *RememberKey;
+
 MARC::MARC(STRING & Data)
+  // BUGFIX #2: c_format/c_maxlen used to be set at the bottom of this
+  // constructor, after the GetMARC() failure check's early `return;` --
+  // a malformed record left them uninitialized on exactly the path
+  // where a caller (with no way to ask "did construction succeed?" --
+  // c_rec isn't exposed either) is most likely to still go on to call
+  // Print()/GetPrettyBuffer(), which read c_maxlen as a word-wrap width
+  // and index into a line buffer with it. Moved into the initializer
+  // list so they're always valid. See docs/BUG_CATALOG.md#srcmarchxx.
+  : c_format(0), c_maxlen(79)
 {
   c_data = Data.NewCString();
   c_len = Data.GetLength();
-  if((c_rec = GetMARC(c_data,c_len,0)) == NULL) {
+  if((c_rec = GetMARC(c_data,c_len,0)) == nullptr) {
     cerr << "Error parsing MARC record" << endl;
     return;
   }
-  c_format = 0;
-  c_maxlen = 79;
 }
 
 MARC::~MARC()
 {
   if(c_data)
     delete [] c_data;
-  
-  // FREE THE c_rec!!
+
+  // BUGFIX #1: this comment used to be the only trace of the leak --
+  // c_rec (and every MARC_FIELD/MARC_SUBFIELD hung off it) was
+  // allocated via AllocSafe(&RememberKey, ...) in GetMARC()/marclib.cxx
+  // and never freed. Fixed using FreeSafe()'s "free everything"
+  // flag=1 path (src/memcntl.cxx), which walks and frees the entire
+  // RememberKey chain in one call -- everything GetMARC() allocates
+  // goes through that same chain (confirmed via marclib.cxx), except
+  // record data itself when GetMARC() is called with copy=0 (as it is
+  // here, from the constructor above), which points straight at
+  // c_data and is freed separately just above, not double-freed here.
+  //
+  // Caveat for any *future* MARC caller: RememberKey is one process-
+  // wide chain, not per-object, so this call frees the c_rec of every
+  // MARC object, not just this one -- safe only because the sole
+  // caller in the tree (doctype/usmarc.cxx's USMARC::Present())
+  // never keeps two MARC objects alive at once (construct, use,
+  // delete, in that order, every time). See
+  // docs/BUG_CATALOG.md#srcmarchxx.
+  if (c_rec)
+    FreeSafe(&RememberKey, nullptr, 1);
 }
 
 
@@ -129,12 +164,12 @@ DISP_FORMAT defaultformat[] = {
      {"Subjects:","6xx", "", "", " -- ",".\n",  TRUE,FALSE,FALSE,FALSE,FALSE, 15},
      {"Other authors:","7xx", "", "", " ",".\n",  TRUE,FALSE,FALSE,FALSE,FALSE, 15},
      {"Call Numbers:","950", "", "", " ","\n",TRUE,FALSE,FALSE,FALSE,FALSE,15},
-     {NULL,NULL,NULL,NULL,NULL,NULL,FALSE,FALSE,FALSE,FALSE,FALSE,0}
+     {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,FALSE,FALSE,FALSE,FALSE,FALSE,0}
 };
 
 DISP_FORMAT titleformat[] =  {
      {"Title:"  , "245", "", ""," ", ".\n",  TRUE,FALSE,FALSE,FALSE,FALSE, 15},
-     {NULL,NULL,NULL,NULL,NULL,NULL,FALSE,FALSE,FALSE,FALSE,FALSE,0}
+     {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,FALSE,FALSE,FALSE,FALSE,FALSE,0}
 };
 
 
@@ -144,13 +179,13 @@ DISP_FORMAT shortformat[] =  {
 */
      {"Author:" , "1xx", "", ""," ", ".\n",  TRUE,FALSE,FALSE,FALSE,FALSE, 15},
      {"Title:"  , "245", "", ""," ", ".\n",  TRUE,FALSE,FALSE,FALSE,FALSE, 15},
-     {NULL,NULL,NULL,NULL,NULL,NULL,FALSE,FALSE,FALSE,FALSE,FALSE,0}
+     {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,FALSE,FALSE,FALSE,FALSE,FALSE,0}
 };
 
  DISP_FORMAT marcformat[] =  {
      {"Record ID: ", "", "",""," ","\n", TRUE,FALSE,FALSE,FALSE,FALSE, 0},
      {"" , "xxx", "", "","", "\n",  TRUE,TRUE,TRUE,TRUE,FALSE,0},
-     {NULL,NULL,NULL,NULL,NULL,NULL,FALSE,FALSE,FALSE,FALSE,FALSE,0}
+     {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,FALSE,FALSE,FALSE,FALSE,FALSE,0}
 };
 
 DISP_FORMAT evaluationformat[] = {
@@ -164,7 +199,7 @@ DISP_FORMAT evaluationformat[] = {
      {"Subjects:","6xx", "", "", " -- ",".\n",  TRUE,FALSE,FALSE,FALSE,FALSE, 15},
      {"Call Numbers:","950", "", "", " ","\n",TRUE,FALSE,FALSE,FALSE,FALSE,15},
 */
-     {NULL,NULL,NULL,NULL,NULL,NULL,FALSE,FALSE,FALSE,FALSE,FALSE,0}
+     {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,FALSE,FALSE,FALSE,FALSE,FALSE,0}
 };
 
 DISP_FORMAT htmlformat[] = {
@@ -180,7 +215,7 @@ DISP_FORMAT htmlformat[] = {
   // {"Subjects:","6xx", "", "", " -- ",".\n",  TRUE,FALSE,FALSE,FALSE,FALSE, 15},
   // {"Other authors:","7xx", "", "", " ",".\n",  TRUE,FALSE,FALSE,FALSE,FALSE, 15},
   // {"Call Numbers:","950", "", "", " ","\n",TRUE,FALSE,FALSE,FALSE,FALSE,15},
-     {NULL,NULL,NULL,NULL,NULL,NULL,FALSE,FALSE,FALSE,FALSE,FALSE,0}
+     {nullptr,nullptr,nullptr,nullptr,nullptr,nullptr,FALSE,FALSE,FALSE,FALSE,FALSE,0}
 };
 
 /* local prototypes */
@@ -251,17 +286,17 @@ MARC::Print(FILE *fp)
 
   for (f = formatcontrol; f->label; f++) {
     /* get the first field in the format */
-    fld = GetField(c_rec, (MARC_FIELD *)NULL, fieldbuffer, f->tags);
+    fld = GetField(c_rec, (MARC_FIELD *)nullptr, fieldbuffer, f->tags);
 
     /* if no field found, check for number format */
-    if (fld == NULL && *f->tags == '\0') {
+    if (fld == nullptr && *f->tags == '\0') {
       /* a null tag means output the supplied */
       /* record number			*/
       snprintf(linebuffer, sizeof(linebuffer), "%s%s%d%s", 
 	       f->label, f->beginpunct,displaynum, 
 	       f->endpunct);
       /* assume it won't be INT4er than maxlen*/
-      outputline (NULL,linebuffer, maxlen, f->indent, fp);
+      outputline (nullptr,linebuffer, maxlen, f->indent, fp);
     }	
     repeat = FALSE;
 			
@@ -278,14 +313,14 @@ MARC::Print(FILE *fp)
 	lineOut.Cat(fieldbuffer);
 	lineOut.Cat(f->endpunct);
 	lineOut.GetCString(linebuffer, sizeof(linebuffer) - 1);
-	outputline (NULL, linebuffer, maxlen, f->indent, fp);
+	outputline (nullptr, linebuffer, maxlen, f->indent, fp);
       }
       else  {/* more selective printing */
 	line = format_field(fld,f,linebuffer,repeat);
-	if (line) outputline (NULL, line, maxlen, f->indent, fp);
+	if (line) outputline (nullptr, line, maxlen, f->indent, fp);
       }
       /* more of the same tag set? */
-      fld = GetField((MARC_REC *)NULL,fld->next,fieldbuffer,f->tags);
+      fld = GetField((MARC_REC *)nullptr,fld->next,fieldbuffer,f->tags);
       if (fld) repeat = TRUE;
     }
   }
@@ -335,10 +370,10 @@ MARC::Print(STRING* StringBuffer)
 
   for (f = formatcontrol; f->label; f++) {
     // get the first field in the format
-    fld = GetField(c_rec, (MARC_FIELD *)NULL, fieldbuffer, f->tags);
+    fld = GetField(c_rec, (MARC_FIELD *)nullptr, fieldbuffer, f->tags);
 
     // if no field found, check for number format
-    if (fld == NULL && *f->tags == '\0') {
+    if (fld == nullptr && *f->tags == '\0') {
       // a null tag means output the supplied record number
       snprintf(linebuffer, sizeof(linebuffer), "%s%s%d%s", 
 	       f->label, f->beginpunct,displaynum, 
@@ -372,7 +407,7 @@ MARC::Print(STRING* StringBuffer)
 	}
       }
       // more of the same tag set?
-      fld = GetField((MARC_REC *)NULL,fld->next,fieldbuffer,f->tags);
+      fld = GetField((MARC_REC *)nullptr,fld->next,fieldbuffer,f->tags);
       if (fld) 
 	repeat = TRUE;
     }
@@ -439,7 +474,7 @@ format_field(MARC_FIELD *mf, const DISP_FORMAT *format, CHR *buff, INT repeat)
     return(buff);	
   }
   else 
-    return(NULL); // no subfields copied
+    return(nullptr); // no subfields copied
 }
 
 
@@ -465,7 +500,18 @@ outputline(void *(outfunc)(), CHR *line, INT maxlen, INT indent, FILE *fp)
     return;
   }
   else { // put out first part, no indentation
-    for (c = &line[maxlen - 1]; *c != ' '; c--); // find word break
+    // BUGFIX #3: this scanned backward for a space with no lower
+    // bound -- a single "word" (e.g. a URL or identifier with no
+    // spaces) at or past maxlen bytes into a real MARC field's data
+    // ran the scan past the start of line, reading (and then writing
+    // '\0' into) memory before the buffer. Confirmed a real stack-
+    // buffer-underflow with a standalone repro under ASan before
+    // fixing (a 299-byte space-less field). Bounded at `line`, falling
+    // back to a hard break at maxlen-1 if no space is found in range,
+    // instead of scanning indefinitely. See
+    // docs/BUG_CATALOG.md#srcmarchxx.
+    for (c = &line[maxlen - 1]; c > line && *c != ' '; c--); // find word break
+    if (c == line && *c != ' ') c = &line[maxlen - 1]; // no space in range; hard break
     *c = '\0';
     nextpart = c+1;
     fwrite(line, 1, strlen(line), fp);
@@ -480,7 +526,10 @@ outputline(void *(outfunc)(), CHR *line, INT maxlen, INT indent, FILE *fp)
 
   // loop to output rest of line
   while ((linelen = strlen(nextpart)) > (maxlen - indent)) {
-    for (c = &nextpart[maxlen - indent]; *c != ' '; c--); 
+    // BUGFIX #3 (continued, see the first-part word-break scan above):
+    // same unbounded-backward-scan shape, same fix.
+    for (c = &nextpart[maxlen - indent]; c > nextpart && *c != ' '; c--);
+    if (c == nextpart && *c != ' ') c = &nextpart[maxlen - indent]; // hard break
     // find word break
     *c = '\0'; 
     // (*outfunc)(indentstr); 
@@ -513,7 +562,18 @@ OutputString(CHR *line, INT maxlen, INT indent, STRING* Buffer)
     return;
   } else { 
     // put out first part, no indentation
-    for (c = &line[maxlen - 1]; *c != ' '; c--); // find word break
+    // BUGFIX #3: this scanned backward for a space with no lower
+    // bound -- a single "word" (e.g. a URL or identifier with no
+    // spaces) at or past maxlen bytes into a real MARC field's data
+    // ran the scan past the start of line, reading (and then writing
+    // '\0' into) memory before the buffer. Confirmed a real stack-
+    // buffer-underflow with a standalone repro under ASan before
+    // fixing (a 299-byte space-less field). Bounded at `line`, falling
+    // back to a hard break at maxlen-1 if no space is found in range,
+    // instead of scanning indefinitely. See
+    // docs/BUG_CATALOG.md#srcmarchxx.
+    for (c = &line[maxlen - 1]; c > line && *c != ' '; c--); // find word break
+    if (c == line && *c != ' ') c = &line[maxlen - 1]; // no space in range; hard break
     *c = '\0';
     nextpart = c+1;
     *Buffer = line;
@@ -526,7 +586,10 @@ OutputString(CHR *line, INT maxlen, INT indent, STRING* Buffer)
 
   // loop to output rest of line
   while ((linelen = strlen(nextpart)) > (maxlen - indent)) {
-    for (c = &nextpart[maxlen - indent]; *c != ' '; c--); 
+    // BUGFIX #3 (continued, see the first-part word-break scan above):
+    // same unbounded-backward-scan shape, same fix.
+    for (c = &nextpart[maxlen - indent]; c > nextpart && *c != ' '; c--);
+    if (c == nextpart && *c != ' ') c = &nextpart[maxlen - indent]; // hard break
     // find word break
     *c = '\0'; 
     Buffer->Cat(indentstr);

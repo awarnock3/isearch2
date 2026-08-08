@@ -68,7 +68,7 @@
 | 64 | src/idb.hxx | done | 2026-08-08 | [src/idb.hxx](BUG_CATALOG.md#srcidbhxx) |
 | 65 | src/vidb.hxx | done | 2026-08-08 | [src/vidb.hxx](BUG_CATALOG.md#srcvidbhxx) |
 | 66 | Isearch-cgi/cgi-util.hxx | done | 2026-08-08 | [Isearch-cgi/cgi-util.hxx](BUG_CATALOG.md#isearch-cgicgi-utilhxx) |
-| 67 | src/marc.hxx | pending | | |
+| 67 | src/marc.hxx | done | 2026-08-08 | [src/marc.hxx](BUG_CATALOG.md#srcmarchxx) |
 | 68 | doctype/medline.hxx | pending | | |
 | 69 | src/nfldmgr.hxx | pending | | |
 | 70 | src/nlatlon.hxx | pending | | |
@@ -144,7 +144,7 @@
 | 140 | src/intlist.cxx | pending | | |
 | 141 | src/iresult.cxx | done | 2026-08-07 | [src/iresult.cxx](BUG_CATALOG.md#srciresultcxx) |
 | 142 | src/irset.cxx | pending | | |
-| 143 | src/marc.cxx | pending | | |
+| 143 | src/marc.cxx | done | 2026-08-08 | [src/marc.hxx](BUG_CATALOG.md#srcmarchxx) |
 | 144 | src/marclib.cxx | pending | | |
 | 145 | src/md5.cxx | pending | | |
 | 146 | src/md5sum.cxx | pending | | |

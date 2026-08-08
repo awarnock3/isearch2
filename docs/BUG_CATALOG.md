@@ -3277,3 +3277,79 @@ Modernization: all code-level `NULL` uses converted to `nullptr`. No
 `sprintf` calls present (`escape_url()` already used `snprintf`).
 Added class-level and field-level doc comments, including the
 `escape_url()`/`GetName()`/`GetValue()` caveats above.
+
+## src/marc.hxx
+
+`class MARC` parses one MARC bibliographic record (via
+`marclib.cxx`'s `GetMARC()`) and formats it for display. Sole real
+caller: `doctype/usmarc.cxx`'s `USMARC::Present()`, which always
+constructs, uses, and destroys exactly one `MARC` object at a time --
+load-bearing for `BUGFIX #1` below.
+
+1. **`~MARC()` never freed `c_rec`** — the destructor's only trace of
+   this was the original author's own comment, `// FREE THE c_rec!!`.
+   `c_rec` (and every `MARC_FIELD`/`MARC_SUBFIELD` hung off it) is
+   allocated via `AllocSafe(&RememberKey, ...)` in `GetMARC()`
+   (`marclib.cxx`), a custom "Intuition Remember"-style pool allocator
+   (`src/memcntl.cxx`, processed earlier this session) that tracks
+   every allocation in one linked list per `RememberKey` and can free
+   the whole list in one call via `FreeSafe(&RememberKey, nullptr, 1)`
+   -- exactly the primitive needed here, confirmed by checking that
+   every allocation `GetMARC()` makes (including nested fields/
+   subfields) goes through that same chain. Fixed by calling it in the
+   destructor. The catch: `RememberKey` is **one process-wide chain,
+   not per-object** -- calling this frees every live `MARC` object's
+   `c_rec`, not just the one being destroyed, which would be a bug if
+   two `MARC` objects were ever alive at once. Confirmed they aren't:
+   the only real caller in the tree constructs, uses, and deletes one
+   `MARC` at a time, every time. `BUGFIX #1` in source; covered by
+   `MARC does not leak its parsed record`, verified via
+   `make tests-asan`'s LeakSanitizer (not a repro -- a leak isn't a
+   crash to reproduce, just something to observe going away).
+2. **Constructor left `c_format`/`c_maxlen` uninitialized on a parse
+   failure** — both were set *after* the `GetMARC()` failure check's
+   early `return;`, so a malformed record left them uninitialized on
+   exactly the path where a caller -- with no way to ask "did
+   construction succeed?" (`c_rec` isn't exposed, there's no
+   `IsValid()`) -- is likely to still call `Print()`/
+   `GetPrettyBuffer()` anyway, which read `c_maxlen` as a word-wrap
+   width and index into a line buffer with it. Fixed by moving both
+   into the constructor's member-initializer list, so they're always
+   valid regardless of parse success. `BUGFIX #2` in source; covered by
+   `MARC handles a malformed record without leaving format state
+   uninitialized`.
+3. **Word-wrap helpers scanned backward for a space with no lower
+   bound — confirmed a real stack-buffer-underflow** —
+   `outputline()`/`OutputString()` each have two copies of
+   `for (c = &line[maxlen - 1]; *c != ' '; c--);` ("find a word break
+   to wrap at"), with nothing stopping `c` from running past the start
+   of the buffer if the text has no space within range (an unbroken
+   run of `maxlen`+ characters -- e.g. a URL or identifier in a real
+   MARC field, or any field value with no spaces). Confirmed with a
+   standalone repro under ASan before fixing (a 299-byte space-less
+   field): `AddressSanitizer: stack-buffer-overflow ... READ ...
+   underflows this variable ... in OutputString`. Fixed by bounding
+   each scan at its buffer's start, falling back to a hard break at the
+   original position when no space is found in range (matching the
+   original code's intent for the has-a-space case, since that path is
+   unaffected). `BUGFIX #3` in source (all 4 occurrences); re-ran the
+   repro after the fix, plus a normal multi-word case, to confirm both
+   the fix and no regression to ordinary wrapping. Covered by `MARC::
+   Print wraps a long space-less field instead of crashing`.
+
+**Not otherwise pursued:** `class MARC`'s declaration is wrapped in
+`extern "C" { ... }` in `marc.hxx`, which doesn't really make sense for
+a C++ class with constructors/methods (C linkage can't represent
+those) -- harmless in practice since compilers just do the sensible
+C++ thing for the class's own members regardless, but a header change
+either way, so left alone.
+
+Modernization: all live code-level `NULL` uses converted to `nullptr`
+(one more, inside an already-dead `/* ... */`-commented-out
+`GetPrettyBuffer()` implementation, correctly left alone). No live
+`sprintf` calls (already using `snprintf`). Added class-level and
+per-function doc comments. Tests (`tests/src/test_marc.cxx`) build a
+minimal well-formed MARC record by hand (same byte layout as
+`tests/src/test_marclib.cxx`'s existing helper) and cover a normal
+parse-and-print, the leak regression, a malformed-record case, and the
+long-field word-wrap regression.
