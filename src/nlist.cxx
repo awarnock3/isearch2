@@ -35,6 +35,8 @@ THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 /*@@@
 File:		nlist.cxx
@@ -56,6 +58,7 @@ static INT
 SortCmpGP(const void* x, const void* y);
 
 
+/// Constructs an empty list with the default 2-coordinate entry shape.
 NUMERICLIST::NUMERICLIST()
 {
   Ncoords    = 2;
@@ -65,9 +68,17 @@ NUMERICLIST::NUMERICLIST()
   FileName   = "";
   Pointer    = 0;
   StartIndex = EndIndex = -1;
+  // BUGFIX #2 (docs/BUG_CATALOG.md#srcnlisthxx): Attribute/Relation
+  // were left indeterminate by both constructors -- every other member
+  // was explicitly set. Matches the same "indeterminate primitive
+  // member" category already fixed in RESULT's and NUMERICFLD's
+  // constructors.
+  Attribute  = 0;
+  Relation   = 0;
 }
 
 
+/// Constructs an empty list whose entries hold n coordinate values.
 NUMERICLIST::NUMERICLIST(INT n)
 {
   Ncoords    = n;
@@ -77,6 +88,9 @@ NUMERICLIST::NUMERICLIST(INT n)
   FileName   = "";
   Pointer    = 0;
   StartIndex = EndIndex = -1;
+  // BUGFIX #2, second constructor -- see the default constructor above.
+  Attribute  = 0;
+  Relation   = 0;
 }
 
 

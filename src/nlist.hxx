@@ -35,6 +35,8 @@ THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 /*@@@
 File:		nlist.hxx
@@ -65,6 +67,10 @@ enum IntType { AT_START, INSIDE, AT_END };
 enum NumBlock { VAL_BLOCK, GP_BLOCK };
 
 
+/// Owns a heap-allocated, growable table of NUMERICFLD entries used for
+/// numeric-attribute range search. Non-copyable: no live call site ever
+/// copies one (see BUGFIX #1), so the copy constructor and operator=
+/// are both deleted rather than given deep-copy semantics.
 class NUMERICLIST {
 private:
   PNUMERICFLD  table;      // the table of attribute/numeric data
@@ -92,6 +98,15 @@ private:
 public:
   NUMERICLIST();
   NUMERICLIST(INT n);
+  // BUGFIX #1 (docs/BUG_CATALOG.md#srcnlisthxx): NUMERICLIST owned
+  // `table` (heap-allocated, freed in ~NUMERICLIST()) with no
+  // user-declared copy constructor or operator= -- the compiler-
+  // generated ones shallow-copied `table`, confirmed to cause a
+  // heap-use-after-free (ASan) on copy. No live call site ever copies
+  // a NUMERICLIST, so it's made explicitly non-copyable rather than
+  // given deep-copy semantics.
+  NUMERICLIST(const NUMERICLIST&) = delete;
+  NUMERICLIST& operator=(const NUMERICLIST&) = delete;
   void         SetRelation(INT r)      { Relation = r; };
   INT          GetRelation()           { return(Relation); };
   DOUBLE       GetNumericValue(INT i)  { return(table[i].GetNumericValue()); };

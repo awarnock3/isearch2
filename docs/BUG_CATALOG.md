@@ -6943,3 +6943,39 @@ No test file was written for the reasons in the scope note above;
 `BUGFIX #1` is documented in detail here and at its comment site in
 source instead, matching `src/Iget.cxx`/`src/Iindex.cxx`'s precedent.
 
+## src/nlist.hxx
+
+Reprocessed via `/reprocess-blocked` (originally blocked at GENERAL
+step 4 on 2026-08-07; see the resolved `docs/AUTOPILOT_LOG.md` entry for
+the original finding). `NUMERICLIST` owns a heap-allocated `table` array
+(`new NUMERICFLD[50*Ncoords]` in both constructors, freed in
+`~NUMERICLIST()`) used for numeric-attribute range search.
+
+1. **No copy semantics — confirmed heap-use-after-free on copy** — no
+   user-declared copy constructor or `operator=` existed, so the
+   compiler-generated ones shallow-copied `table`; confirmed via a
+   standalone repro (`NUMERICLIST b = a;`, let `b` then `a` go out of
+   scope) triggering a real heap-use-after-free in `~NUMERICLIST()`
+   under ASan. No live call site copies a `NUMERICLIST` (only
+   default-construction). **Decision (human, via `/reprocess-blocked`):
+   make it non-copyable** rather than implement deep-copy semantics
+   nothing needs — `NUMERICLIST(const NUMERICLIST&) = delete;` and
+   `NUMERICLIST& operator=(const NUMERICLIST&) = delete;` added to the
+   header. See `BUGFIX #1` in source.
+2. **`Attribute`/`Relation` left indeterminate by both constructors** —
+   every other member was explicitly set; matches the same
+   "indeterminate primitive member" category already fixed in
+   `RESULT`'s and `NUMERICFLD`'s constructors. Fixed by zero-
+   initializing both in both constructors. See `BUGFIX #2` in source.
+
+`src/intlist.hxx` (`INTERVALLIST`, derives from `NUMERICLIST`) has the
+identical shape and was reprocessed in this same `/reprocess-blocked`
+run; see its own entry below.
+
+`tests/src/test_nlist.cxx` covers: `NUMERICLIST` is non-copyable
+(`std::is_copy_constructible`/`is_copy_assignable`, `STATIC_REQUIRE_FALSE`
+— `BUGFIX #1`); both constructors leave `GetAttribute()`/`GetRelation()`
+at a deterministic `0` (`BUGFIX #2`), alongside a basic sanity check of
+`GetCoords()`/`GetCount()`. `make tests`/`make tests-asan` pass clean
+(676 test cases, 2292 assertions).
+

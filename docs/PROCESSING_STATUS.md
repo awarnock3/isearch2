@@ -45,7 +45,7 @@
 | 41 | src/opobj.hxx | done | 2026-08-07 | [src/opobj.cxx](BUG_CATALOG.md#srcopobjcxx) |
 | 42 | src/fpt.hxx | done | 2026-08-07 | [src/fpt.hxx](BUG_CATALOG.md#srcfpthxx) |
 | 43 | src/nfield.hxx | done | 2026-08-07 | [src/nfield.cxx](BUG_CATALOG.md#srcnfieldcxx) |
-| 44 | src/nlist.hxx | blocked | 2026-08-07 | [src/nlist.hxx](AUTOPILOT_LOG.md#srcnlisthxx) |
+| 44 | src/nlist.hxx | done | 2026-08-09 | [BUG_CATALOG.md#srcnlisthxx](BUG_CATALOG.md#srcnlisthxx) |
 | 45 | src/date.hxx | done | 2026-08-07 | [src/date.cxx](BUG_CATALOG.md#srcdatecxx) |
 | 46 | src/intfield.hxx | done | 2026-08-07 | [src/intfield.cxx](BUG_CATALOG.md#srcintfieldcxx) |
 | 47 | src/intlist.hxx | blocked | 2026-08-07 | [src/intlist.hxx](AUTOPILOT_LOG.md#srcintlisthxx) |
