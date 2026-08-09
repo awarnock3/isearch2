@@ -119,7 +119,7 @@
 | 115 | src/Isearch.cxx | done | 2026-08-09 | [BUG_CATALOG.md#srcisearchcxx](BUG_CATALOG.md#srcisearchcxx) |
 | 116 | src/Iutil.cxx | done | 2026-08-09 | [src/Iutil.cxx](BUG_CATALOG.md#srciutilcxx) |
 | 117 | src/attr.cxx | done | 2026-08-07 | [src/attr.cxx](BUG_CATALOG.md#srcattrcxx) |
-| 118 | src/attrlist.cxx | pending | | |
+| 118 | src/attrlist.cxx | done | 2026-08-07 | [src/attrlist.hxx](BUG_CATALOG.md#srcattrlisthxx) |
 | 119 | src/common.cxx | done | 2026-08-07 | [src/common.cxx](BUG_CATALOG.md#srccommoncxx) |
 | 120 | src/date.cxx | done | 2026-08-07 | [src/date.cxx](BUG_CATALOG.md#srcdatecxx) |
 | 121 | src/datesearch.cxx | pending | | |
