@@ -44,6 +44,9 @@ Description:	Hash class
 Author:		Jim Fullton (Jim.Fullton@cnidr.org)
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdlib.h>
 #include <string.h>
 #include "gdt.h"
@@ -116,6 +119,13 @@ void HASH::GetValue(const STRING& a, STRING *b) const
 
 }
 
+/**
+ * @brief Parses a "name=value" entry and inserts it into the table
+ * (name upper-bounded to 255 chars, value likewise), unless the key
+ * already exists.
+ * @param a The "name=value" string to parse; silently ignored if it
+ * contains no '=' or if the key is already present.
+ */
 void HASH::AddEntry(const STRING& a) const
 {
   // a is of type name=value
@@ -144,10 +154,20 @@ void HASH::AddEntry(const STRING& a) const
   strncpy(Value,p,sizeof(Value)-1);
   Value[sizeof(Value)-1]='\0';
   r.Key=IndexStr2Num(name);
-  r.Block=strdup(Value);
+  // BUGFIX #5 (docs/BUG_CATALOG.md#srchashcxx): r.Block used to be
+  // strdup()'d unconditionally, before checking whether the key
+  // already exists, and Insert()'s return value was discarded --
+  // leaking the strdup'd copy both on every duplicate key (Insert()
+  // never called at all) and on every table-overflow insertion failure
+  // (Insert() returns non-zero without storing r). Only allocating
+  // after confirming the key is new, and freeing on a failed Insert(),
+  // closes both leaks.
   if (!Check(r.Key)) {
     // printf("Add %s/%s\n",name,Value);
-    Insert(r);
+    r.Block=strdup(Value);
+    if (Insert(r) != 0) {
+      free(r.Block);
+    }
   } else {
    // printf("%s/%s already exists\n",name,Value);
   }

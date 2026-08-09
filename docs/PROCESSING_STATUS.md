@@ -136,7 +136,7 @@
 | 132 | src/geosearch.cxx | done | 2026-08-09 | [src/geosearch.cxx](BUG_CATALOG.md#srcgeosearchcxx) |
 | 133 | src/glist.cxx | done | 2026-08-07 | [src/glist.hxx](BUG_CATALOG.md#srcglisthxx) |
 | 134 | src/gstack.cxx | done | 2026-08-07 | [src/gstack.hxx](BUG_CATALOG.md#srcgstackhxx) |
-| 135 | src/hash.cxx | pending | | |
+| 135 | src/hash.cxx | done | 2026-08-09 | [src/hash.cxx](BUG_CATALOG.md#srchashcxx) |
 | 136 | src/idb.cxx | done | 2026-08-08 | [src/idb.hxx](BUG_CATALOG.md#srcidbhxx) |
 | 137 | src/index.cxx | done | 2026-08-07 | [src/index.cxx](BUG_CATALOG.md#srcindexcxx) |
 | 138 | src/infix2rpn.cxx | done | 2026-08-07 | [src/infix2rpn.cxx](BUG_CATALOG.md#srcinfix2rpncxx) |

@@ -95,6 +95,21 @@ TEST_CASE("HASH::AddEntry with no '=' is a no-op instead of crashing", "[hash]")
 	SUCCEED();
 }
 
+TEST_CASE("HASH::AddEntry on a duplicate key doesn't leak the discarded value", "[hash]") {
+	// BUGFIX #5 (see docs/BUG_CATALOG.md#srchashcxx): r.Block used to be
+	// strdup()'d before checking whether the key already existed, and
+	// the duplicate-key branch (Check() == true) never freed it --
+	// a guaranteed leak on every duplicate AddEntry() call. Confirmed
+	// originally via a standalone repro under ASan's LeakSanitizer.
+	HASH h;
+	h.AddEntry(STRING("greeting=hello"));
+	h.AddEntry(STRING("greeting=world"));  // same key, discarded value
+
+	STRING out;
+	h.GetValue(STRING("greeting"), &out);
+	REQUIRE(out == STRING("hello"));  // first value wins, unchanged
+}
+
 TEST_CASE("HASH::AddEntry with an over-long name/value doesn't overflow its buffers", "[hash]") {
 	// BUGFIX #4 coverage: before the fix, name/Value (CHR[256]) were
 	// filled via unbounded strcpy from a CHR[513] source, so a name or

@@ -1211,6 +1211,35 @@ member — compiles fine since `const` only applies to the pointer
 itself, not what it points to, but the `const` is misleading about
 what these methods actually do.
 
+## src/hash.cxx
+
+`hash.cxx`'s own turn, per the note above — `BUGFIX #1`-`#4` were
+already applied here during `hash.hxx`'s turn; this file's own pass
+found one more.
+
+1. **`AddEntry` leaked the `strdup()`'d value on a duplicate key, and
+   on table-overflow insertion failure** — `r.Block=strdup(Value)` ran
+   unconditionally, before checking whether the key already exists,
+   and `Insert(r)`'s return value was discarded entirely. Two distinct
+   leaks followed: every call with an already-present key skipped
+   `Insert()` altogether (the `Check(r.Key)` guard), so the just-`strdup`'d
+   copy was never referenced by anything and never freed — a guaranteed
+   leak on every duplicate, not an edge case; and every call that *did*
+   reach `Insert()` but hit table overflow (`Insert()` returns `2`
+   without storing `r`) leaked the same way. Confirmed with a
+   standalone repro under AddressSanitizer's LeakSanitizer
+   (`tests/src/test_hash.cxx`, run against the pre-fix code with the
+   fix temporarily reverted): two `AddEntry()` calls with the same key
+   reported a 6-byte direct leak from `strdup()` at the exact call
+   site, confirmed reachable and detected (unlike `src/fpt.cxx`'s
+   `FILE*`-handle leak from an earlier turn — LeakSanitizer doesn't see
+   those, but a plain `strdup()`'d buffer with no other references is
+   exactly what it's built to catch). Fixed by only `strdup()`-ing
+   after `Check()` confirms the key is new, and freeing `r.Block` if
+   `Insert()` still fails (table overflow). See `BUGFIX #5` in source;
+   regression test in `tests/src/test_hash.cxx`. `make tests`/`make
+   tests-asan` pass clean (713 test cases, 2379 assertions).
+
 ## src/idbobj.hxx
 
 `IDBOBJ` is the abstract interface INDEX/IRSET/NUMERICFLDMGR/
