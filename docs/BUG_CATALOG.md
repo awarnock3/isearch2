@@ -7254,6 +7254,36 @@ not `INTERVALLIST`'s own), so it was verified by inspection only,
 documented explicitly in the test file's own comments. `make
 tests`/`make tests-asan` pass clean (678 test cases, 2297 assertions).
 
+## src/intlist.cxx
+
+`BUGFIX #1`/`#2` above were already applied to this file during
+`intlist.hxx`'s `/reprocess-blocked` turn; this file's own pass found
+one more, isolated to `DiskFind(STRING, DOUBLE, ...)`'s `START_BLOCK`
+case.
+
+1. **Three unconditional `cerr` diagnostics, the only ones in this file
+   not gated behind `#ifdef DEBUG`** — every other diagnostic message
+   in this file (in this same function's `START_BLOCK` case above them,
+   and throughout the `END_BLOCK`/`PTR_BLOCK` cases below) is wrapped in
+   `#ifdef DEBUG`; these three, in the `TOO_HIGH`/`TOO_LOW`/`Low>=High`
+   branches that report an ordinary "no match" outcome, were left
+   ungated. A range/interval search coming up empty is a normal,
+   expected result (a date or numeric query outside the indexed range,
+   not an error condition) — left as-is, every such miss would spam
+   `cerr` in a normal production build, on what's likely a common path
+   given how frequently range searches partially miss. Confirmed by
+   direct comparison against every sibling diagnostic in the same
+   function (all correctly `#ifdef DEBUG`-gated) and the identically-
+   shaped `END_BLOCK` case just below (which has no such messages at
+   all, gated or not) — not independently reproduced with a live
+   on-disk index (same disproportionate-fixture reasoning as
+   `src/geosearch.cxx`'s `BUGFIX #2` last turn: the bug is already
+   unambiguous by inspection against the function's own established
+   convention). Fixed by wrapping all three in `#ifdef DEBUG`, matching
+   every other diagnostic in the file. See `BUGFIX #3` in source.
+   `make tests`/`make tests-asan` pass clean (713 test cases, 2379
+   assertions).
+
 ## src/mergeunit.hxx
 
 Reprocessed via `/reprocess-blocked` (originally blocked at GENERAL
