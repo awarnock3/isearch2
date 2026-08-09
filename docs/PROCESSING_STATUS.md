@@ -166,7 +166,7 @@
 | 162 | src/opstack.cxx | done | 2026-08-09 | [src/opstack.cxx](BUG_CATALOG.md#srcopstackcxx) |
 | 163 | src/rcache.cxx | done | 2026-08-09 | [src/rcache.cxx](BUG_CATALOG.md#srcrcachecxx) |
 | 164 | src/reclist.cxx | done | 2026-08-09 | [src/reclist.cxx](BUG_CATALOG.md#srcreclistcxx) |
-| 165 | src/record.cxx | pending | | |
+| 165 | src/record.cxx | done | 2026-08-09 | [src/record.cxx](BUG_CATALOG.md#srcrecordcxx) |
 | 166 | src/registry.cxx | done | 2026-08-07 | [src/registry.cxx](BUG_CATALOG.md#srcregistrycxx) |
 | 167 | src/result.cxx | done | 2026-08-07 | [src/result.cxx](BUG_CATALOG.md#srcresultcxx) |
 | 168 | src/rset.cxx | pending | | |

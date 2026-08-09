@@ -33,6 +33,11 @@ TEST_CASE("RECORD(PathName, FileName) constructor adds a trailing slash and stri
 	REQUIRE(s == "/tmp/isearch2_test_dir/");
 	r.GetFileName(&s);
 	REQUIRE(s == "myfile.txt");
+
+	// BUGFIX #2 coverage: RecordStart/RecordEnd used to be left
+	// indeterminate by this constructor (unlike the default one).
+	REQUIRE(r.GetRecordStart() == 0);
+	REQUIRE(r.GetRecordEnd() == 0);
 }
 
 TEST_CASE("RECORD SetKey/GetKey round-trips", "[record]") {
@@ -144,4 +149,30 @@ TEST_CASE("RECORD Write/Read round-trips every field through a file", "[record]"
 	REQUIRE(restored.GetRecordEnd() == 20u);
 	restored.GetDocumentType(&s);
 	REQUIRE(s == "HTML");
+}
+
+TEST_CASE("RECORD Write/Read round-trips a GPTYPE above INT_MAX", "[record]") {
+	// BUGFIX #1 coverage: Write() used %d (signed) on RecordStart/
+	// RecordEnd (GPTYPE, unsigned); confirmed via a standalone repro
+	// that the original %d/GetInt() pairing already round-tripped
+	// correctly on this platform (complementary two's-complement
+	// reinterpretation), the same "works today only by platform
+	// coincidence" case already found in src/fc.cxx -- fixed to %u/
+	// GetLong() anyway for portability, not because this was a
+	// demonstrated failure.
+	RECORD original;
+	original.SetRecordStart(3000000000u);
+	original.SetRecordEnd(4000000000u);
+
+	FILE* fp = tmpfile();
+	REQUIRE(fp != nullptr);
+	original.Write(fp);
+	rewind(fp);
+
+	RECORD restored;
+	restored.Read(fp);
+	fclose(fp);
+
+	REQUIRE(restored.GetRecordStart() == 3000000000u);
+	REQUIRE(restored.GetRecordEnd() == 4000000000u);
 }

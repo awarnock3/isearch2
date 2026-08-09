@@ -440,6 +440,64 @@ implementation, Order 165, needed to write `tests/src/test_record.cxx`)
   specifier), while `Read()` parses them back via `STRING::GetInt()`
   (signed 32-bit `atoi()`). Values above `INT_MAX` would print as
   negative and/or fail to round-trip.
+  **Resolved during `src/record.cxx`'s own turn below**: like
+  `src/fc.cxx`'s identical case, confirmed via a standalone repro that
+  this already round-trips correctly on this platform — fixed anyway
+  for portability, not because of a demonstrated failure.
+
+## src/record.cxx
+
+The deferred `Write()`/`Read()` finding above, and one more found on
+this file's own dedicated turn:
+
+1. **`Write()`/`Read()` used a signed format specifier and signed
+   parse for unsigned `GPTYPE` fields** — `fprintf(fp, "%d\n",
+   RecordStart)` (and `RecordEnd`) against `STRING::GetInt()`
+   (`atoi()`, signed 32-bit) on the read side. Confirmed via a
+   standalone repro that this round-trips correctly *today* on this
+   platform (`RecordStart`/`RecordEnd` set above `INT_MAX`, written,
+   read back, matched exactly) — printf's signed reinterpretation of
+   the unsigned bit pattern and `atoi()`'s int-to-unsigned assignment
+   wrap modulo 2^32 the same way, the identical "works by platform
+   coincidence" mechanism already found and fixed in `src/fc.cxx`'s
+   `Write()`/`Read()`. Not a demonstrated failure, but still
+   unspecified/implementation-defined behavior, not a guarantee. Fixed
+   to `%u`/`GetLong()` (`LONG` = 64-bit `long` here, wide enough to
+   parse the full unsigned 32-bit range with no narrowing) for the same
+   reason `fc.cxx` was: portability, not correctness of a live bug. See
+   `BUGFIX #1` in source. Verified via the same repro (still passes
+   after the fix) and a new `tests/src/test_record.cxx` regression test
+   using a value above `INT_MAX`.
+
+2. **`RECORD(STRING&, STRING&)` left `RecordStart`/`RecordEnd`
+   indeterminate** — unlike the default constructor (which explicitly
+   zeroes every member), this one only sets `PathName`/`FileName`.
+   `RecordStart`/`RecordEnd` are plain `GPTYPE` members with no default
+   member initializer, so they're only safely zeroed when a constructor
+   explicitly does so (`Key`/`DocumentType` don't have this problem —
+   `STRING`'s own default constructor already runs for them regardless
+   of this constructor's body). No live call site constructs a `RECORD`
+   with this constructor today (confirmed via `grep`: every real
+   `RECORD Record;` in this tree uses the default constructor), so this
+   is latent, not an active bug — the same "indeterminate primitive
+   member" category already fixed for `RESULT`/`NUMERICFLD`/
+   `NUMERICLIST`/`MERGEUNIT` elsewhere in this project. Fixed by
+   zero-initializing both, matching the default constructor. See
+   `BUGFIX #2` in source. **Verification caveat**: unlike this
+   project's usual memory-safety bugs, a revert-and-repro check doesn't
+   reliably demonstrate this one — reverting the fix and rerunning the
+   test suite under ASan+UBSan still passed, because the indeterminate
+   stack memory happened to read back as zero in that run. Neither ASan
+   nor UBSan catch uninitialized-*value* reads (as opposed to
+   out-of-bounds or use-after-free); that would need MemorySanitizer,
+   which isn't part of this project's toolchain. The fix is still
+   correct and worth keeping — this is a limitation of the
+   verification technique for this specific bug class, not evidence
+   the bug wasn't real.
+
+No `NULL`/`sprintf` beyond what `BUGFIX #1` already modernized, zero
+warnings under `-Wall -Wextra`. `make tests`/`make tests-asan` pass
+clean (733 test cases, 2832 assertions).
 
 ## src/rcache.hxx
 
