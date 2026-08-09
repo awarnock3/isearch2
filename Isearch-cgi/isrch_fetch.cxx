@@ -43,6 +43,9 @@ Description:    CGI app that searches against Iindex-ed databases
 Author:         Kevin Gamiel, kgamiel@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <iostream>
 #include <stdio.h>
 #include <sys/types.h>
@@ -82,7 +85,17 @@ int main(int argc, char **argv)
   cout << "<a href=\"http://www.cnidr.org/\"><i>CNIDR</a> Isearch-cgi ";
   cout << IsearchVersion << "</i> ";
 
-  if(argc < 4) {
+  // BUGFIX #1 (docs/BUG_CATALOG.md#isearch-cgiisrch_fetchcxx): this
+  // checked argc < 4, guaranteeing only argv[0..3] (dbpath, dbname,
+  // key), but the code below unconditionally reads argv[4] (es) too --
+  // when argc == 4 exactly (the usage message's 4 parameters minus the
+  // omitted <es>), argv[4] is the C++-standard-guaranteed nullptr
+  // sentinel, dereferenced via STRING::operator=(const CHR*)'s
+  // strlen() call. Confirmed with the real binary: `isrch_fetch dbpath
+  // dbname key` (3 real args) segfaulted before this fix. Fixed by
+  // requiring argc >= 5, matching the 4 real parameters the usage
+  // message documents.
+  if(argc < 5) {
     cout << "isrch_fetch " << IsearchVersion << endl;
     cout << "Copyright (c) 1995-2000 MCNC/CNIDR and A/WWW Enterprises" << endl;
     cout << "<p>Usage:  isrch_fetch &lt;dbpath&gt; &lt;dbname&gt; &lt;key&gt; &lt;es&gt;\n";
@@ -112,8 +125,22 @@ int main(int argc, char **argv)
 
   PCHR name;
   name=File.NewCString();
-  if ((strstr(name,".html")!=name+strlen(name)-5) 
-      && (strstr(name,".htm")!=name+strlen(name)-4))
+  // BUGFIX #2 (docs/BUG_CATALOG.md#isearch-cgiisrch_fetchcxx): both
+  // copies of this check computed name+strlen(name)-5 (and -4)
+  // unconditionally -- for a filename shorter than 5 (or 4) characters
+  // (e.g. File ending up empty when RecordKey doesn't match any real
+  // record, since KeyLookup()'s result is never checked), this
+  // underflows the pointer before the start of the name buffer, technically
+  // undefined behavior even though it didn't reproduce as an observable
+  // crash under ASan/UBSan (including -fsanitize=pointer-overflow) in
+  // testing -- pointer arithmetic that's never dereferenced doesn't
+  // trip those checks. Computed once and length-guarded instead of
+  // duplicating the fragile pointer arithmetic at both call sites.
+  size_t namelen = strlen(name);
+  GDT_BOOLEAN IsHtmlFile =
+    (namelen>=5 && strstr(name,".html")==name+namelen-5) ||
+    (namelen>=4 && strstr(name,".htm")==name+namelen-4);
+  if (!IsHtmlFile)
     cout << "\n<pre>" << endl;
 
   // Get the record in HTML explicitly
@@ -121,7 +148,7 @@ int main(int argc, char **argv)
   pdb->Present(RsRecord, ESet, HtmlRecordSyntax, &Record);
   cout << Record;
 
-  if ((strstr(name,".html")!=name+strlen(name)-5) && (strstr(name,".htm")!=name+strlen(name)-4))
+  if (!IsHtmlFile)
     cout << "\n</pre>" << endl;
   
   return 0;

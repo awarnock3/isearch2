@@ -9196,3 +9196,70 @@ test changes: `tests/Isearch-cgi/test_config.cxx` (written during
 tests`/`make tests-asan` pass clean (745 test cases, 2850 assertions,
 unchanged from before this turn).
 
+## Isearch-cgi/isrch_fetch.cxx
+
+**Scope note, read first:** same `main()`-only structural limitation as
+[`src/Iget.cxx`](#srcigetcxx)/[`src/zsearch.cxx`](#srczsearchcxx) (a CGI
+executable this time, not a CLI tool, but the same duplicate-`main()`
+problem for linking into the Catch2 binary). Verified by building the
+real production binary (`make isearch-cgi`) and running it directly,
+plus a standalone AddressSanitizer/UndefinedBehaviorSanitizer build
+(`-fsanitize=address,undefined,pointer-overflow`) linked against the
+real `libIsearch.a`.
+
+Two bugs found; one fixed and confirmed via a real crash, one fixed
+defensively despite not reproducing under any sanitizer tried:
+
+1. **`argc < 4` check still lets `argv[4]` be read — confirmed
+   SIGSEGV** (most severe finding in this file) — the usage message
+   documents 4 required parameters (`<dbpath> <dbname> <key> <es>`,
+   i.e. `argv[1..4]`, needing `argc >= 5`), but the guard only checked
+   `argc < 4` (i.e. `argc >= 4`, guaranteeing only `argv[1..3]`).
+   `ESet = argv[4];` right after runs unconditionally — when `argc ==
+   4` exactly (the last parameter omitted), `argv[4]` is the C++-
+   standard-guaranteed `nullptr` sentinel, dereferenced via
+   `STRING::operator=(const CHR*)`'s `strlen()` call. Confirmed with
+   the real binary: `isrch_fetch dbpath dbname key` (3 real arguments)
+   segfaulted before this fix, printed the usage message and exited
+   cleanly after. Fixed by checking `argc < 5`. See `BUGFIX #1` in
+   source.
+2. **`name+strlen(name)-5`/`-4` pointer arithmetic underflows for short
+   filenames** — used twice (deciding whether to wrap the presented
+   record in `<pre>`/`</pre>`) to check whether the document's filename
+   ends in `.html`/`.htm`, with no guard on `strlen(name)` being at
+   least 5 (or 4) first. `File` comes from `RsRecord.GetFileName()`
+   after `pdb->KeyLookup(RecordKey, &RsRecord)`, whose result is never
+   checked — an invalid/nonexistent `RecordKey` (fully attacker-
+   controlled input on a CGI endpoint) leaves `File` empty, making
+   `strlen(name)==0` and the computed pointers 4-5 bytes before the
+   allocated buffer. Technically undefined behavior (forming an
+   out-of-bounds pointer, even only for a comparison, not a
+   dereference) — but it did **not** reproduce as an observable crash
+   under a real invalid-key run, nor under `-fsanitize=address,
+   undefined`, nor with `pointer-overflow` added explicitly: no memory
+   is actually read at the bad address (only pointer *values* are
+   compared), so ASan's redzone checks never trigger, and the
+   arithmetic doesn't hit whatever narrower conditions
+   `-fsanitize=pointer-overflow` checks for on this platform. Followed
+   this project's "don't overclaim without a reproduced failure"
+   discipline in reporting that honestly — but fixed anyway, since it's
+   real UB per the C++ standard regardless of whether any available
+   tool catches it, and the fix is cheap and safe: length-guard both
+   checks, and compute the result once instead of duplicating the
+   (previously fragile) pointer arithmetic at both call sites. See
+   `BUGFIX #2` in source.
+
+Also noted, not changed: `pdb` (`new IDB(...)`) and `name`
+(`File.NewCString()`) are never explicitly freed before any `return`/
+`exit()` path. Confirmed via a LeakSanitizer run that this is real but
+inert — the process exits immediately after either way, so the OS
+reclaims everything regardless; same shape as `src/zsearch.cxx`'s
+identical, already-reviewed finding this batch.
+
+No test file was written for the reasons in the scope note above; both
+fixes are documented in detail here and at their `BUGFIX #n` comment
+sites in source instead, plus the runtime/ASan confirmation above.
+`make isearch-cgi` passes clean; `make tests`/`make tests-asan`
+(unaffected by this file) still pass clean (745 test cases, 2850
+assertions).
+
