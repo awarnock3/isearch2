@@ -7726,3 +7726,57 @@ One characteristic observed but deliberately left unfixed:
   guess -- the same category as `Isearch.cxx`'s already-documented
   `-RECT{}` finding.
 
+## src/geosearch.cxx
+
+`INDEX`'s geographic bounding-box search (`BoundingRectangle()`/
+`Interval()`; `index.hxx`, already `done`, is frozen — no header
+changes here). Two bugs found and fixed.
+
+1. **`NumericSearch()` (`src/numsearch.cxx`) returns a null `PIRSET`
+   for a non-numeric field, and every call site here dereferenced it
+   immediately** (most severe finding in this file) — `NumericSearch()`
+   explicitly `return((PIRSET)NULL)` when the queried field isn't
+   numerically typed in this database (unconfigured, or typed "TEXT");
+   `numsearch.cxx` itself hasn't reached its own turn yet (Order 158),
+   so its body wasn't touched here, only this file's handling of what
+   it can return. `BoundingRectangle()` calls it 4 times
+   (`NORTHBC`/`EASTBC`/`SOUTHBC`/`WESTBC`) and `Interval()` calls it 4
+   more (reached from `BoundingRectangle()` for the non-enclosed
+   portion of the query, and directly by any other caller), and none of
+   the 8 call sites checked before using the result — the exact same
+   "leaf search function returns null on an unusable field, callers
+   don't check" shape as last turn's `datesearch.cxx` finding. Confirmed
+   with a standalone repro under AddressSanitizer + UndefinedBehavior
+   Sanitizer (`tests/src/test_geosearch.cxx`, run against the pre-fix
+   code with the fix temporarily reverted): a `TESTIDBOBJ` with no
+   configured field types (so `NORTHBC` etc. all look non-numeric, the
+   same condition a real misconfigured or non-geo database hits) made
+   `BoundingRectangle()` crash with a genuine SIGSEGV at
+   `LessThanNorth->And(*LessThanEast)`, the very first dereference.
+   Fixed by checking each `NumericSearch()` result immediately and
+   bailing out with a freshly-allocated empty `IRSET` (freeing whatever
+   was already allocated in that function first) instead of
+   dereferencing a possible null — matching `datesearch.cxx`'s own fix
+   shape: a geo query against fields that aren't numeric can't be
+   evaluated, so "no matches" is the correct empty-but-valid result,
+   not a crash. See `BUGFIX #1` in source; regression tests in
+   `tests/src/test_geosearch.cxx` covering `BoundingRectangle()`,
+   `Interval()` directly, and the Date-Line-crossing split path (which
+   funnels through `Interval()` too).
+2. **`Interval()` leaked `ResultA` on one of its five empty-intersection
+   early returns** — the function bails out early five separate times
+   whenever an intermediate result set comes up empty, and four of
+   those five correctly `delete ResultA` first (it's the accumulator
+   carried across the whole function); the fifth — right after
+   `ResultC->And(*ResultD)` comes up empty — returned `ResultC` without
+   ever freeing `ResultA`. Confirmed by direct comparison with the
+   other four sibling branches in the same function, which are
+   unambiguous precedent for what this one should do too; not
+   independently reproduced with a live on-disk index (would need a
+   populated numeric index to make `ResultA` non-empty going in, a
+   disproportionately large fixture for a leak that's already obvious
+   by inspection against its own function's other branches). Fixed by
+   adding the same `delete ResultA;` this path was missing. See
+   `BUGFIX #2` in source. `make tests`/`make tests-asan` pass clean
+   (712 test cases, 2378 assertions).
+

@@ -133,7 +133,7 @@
 | 129 | src/filemap.cxx | done | 2026-08-05 | [src/filemap.hxx](BUG_CATALOG.md#srcfilemaphxx) |
 | 130 | src/fprec.cxx | done | 2026-08-07 | [src/fprec.cxx](BUG_CATALOG.md#srcfpreccxx) |
 | 131 | src/fpt.cxx | done | 2026-08-09 | [src/fpt.cxx](BUG_CATALOG.md#srcfptcxx) |
-| 132 | src/geosearch.cxx | pending | | |
+| 132 | src/geosearch.cxx | done | 2026-08-09 | [src/geosearch.cxx](BUG_CATALOG.md#srcgeosearchcxx) |
 | 133 | src/glist.cxx | done | 2026-08-07 | [src/glist.hxx](BUG_CATALOG.md#srcglisthxx) |
 | 134 | src/gstack.cxx | done | 2026-08-07 | [src/gstack.hxx](BUG_CATALOG.md#srcgstackhxx) |
 | 135 | src/hash.cxx | pending | | |
