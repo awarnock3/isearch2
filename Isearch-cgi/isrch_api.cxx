@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-10
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -10,7 +13,7 @@
 
 static bool ContainsNoCase(const CHR *value, const CHR *needle)
 {
-  if (value == NULL || needle == NULL || needle[0] == '\0') {
+  if (value == nullptr || needle == nullptr || needle[0] == '\0') {
     return false;
   }
   const size_t value_len = strlen(value);
@@ -36,7 +39,7 @@ static bool ContainsNoCase(const CHR *value, const CHR *needle)
 
 static bool WantsProblemOnly(const CHR *accept_header)
 {
-  if (accept_header == NULL || accept_header[0] == '\0') {
+  if (accept_header == nullptr || accept_header[0] == '\0') {
     return false;
   }
   const bool wants_problem = ContainsNoCase(accept_header, "application/problem+json");
@@ -46,6 +49,19 @@ static bool WantsProblemOnly(const CHR *accept_header)
 
 static STRING BuildSearchLink(const ApiRequest& req, INT start)
 {
+  // BUGFIX #1 (docs/BUG_CATALOG.md#isearch-cgiisrch_apicxx): STRING has no
+  // Cat(INT) overload, only Cat(UCHR) and Cat(const STRING&) (the latter
+  // reachable via STRING's own INT-converting constructor). Passing an INT
+  // directly resolves to Cat(UCHR) -- a standard integral conversion beats
+  // the user-defined conversion needed to reach Cat(const STRING&) -- so
+  // it appended the raw byte value of the number (truncated mod 256)
+  // instead of its decimal digits. Confirmed live against the real
+  // isrch_api binary: start=65/max_hits=66 produced a raw 0x01 control
+  // byte (from a clamped prev_start of 1) and a literal "B" (byte value 66)
+  // in the emitted "prev" link instead of "1" and "66" -- silently
+  // corrupting every pagination link this file ever generates. Fixed by
+  // wrapping each value in STRING(...) explicitly so Cat(const STRING&)
+  // is the only viable overload.
   STRING link = "/api/v1/search?database=";
   link.Cat(req.database);
   if (req.q.GetLength() > 0) {
@@ -53,15 +69,15 @@ static STRING BuildSearchLink(const ApiRequest& req, INT start)
     link.Cat(req.q);
   }
   link.Cat("&start=");
-  link.Cat((INT)start);
+  link.Cat(STRING(start));
   link.Cat("&max_hits=");
-  link.Cat((INT)req.max_hits);
+  link.Cat(STRING(req.max_hits));
   return link;
 }
 
 static STRING NormalizePath(const CHR *raw_path)
 {
-  STRING path = raw_path != NULL ? raw_path : "";
+  STRING path = raw_path != nullptr ? raw_path : "";
   if (path.GetLength() == 0) {
     return "/";
   }
@@ -80,7 +96,7 @@ int main(int argc, char **argv)
   (void)argv;
 
   const CHR *method = getenv("REQUEST_METHOD");
-  if (method == NULL || method[0] == '\0') {
+  if (method == nullptr || method[0] == '\0') {
     WriteHttpHeader(400, true);
     WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
                  "Invalid request", "REQUEST_METHOD is required.");
@@ -88,7 +104,7 @@ int main(int argc, char **argv)
   }
 
   const CHR *accept_header = getenv("HTTP_ACCEPT");
-  if (accept_header == NULL || accept_header[0] == '\0') {
+  if (accept_header == nullptr || accept_header[0] == '\0') {
     accept_header = getenv("ACCEPT");
   }
   if (WantsProblemOnly(accept_header)) {
@@ -130,7 +146,7 @@ int main(int argc, char **argv)
 
   if (StrCaseCmp(method, "POST") == 0) {
     const CHR *content_type = getenv("CONTENT_TYPE");
-    if (content_type == NULL || content_type[0] == '\0') {
+    if (content_type == nullptr || content_type[0] == '\0') {
       content_type = getenv("HTTP_CONTENT_TYPE");
     }
     if (!ContainsNoCase(content_type, "application/json")) {
@@ -142,15 +158,15 @@ int main(int argc, char **argv)
     }
   }
 
-  CGIAPP *cgi = NULL;
+  CGIAPP *cgi = nullptr;
   if (StrCaseCmp(method, "GET") == 0) {
     cgi = new CGIAPP();
   }
 
   ApiRequest req;
   STRING parse_error;
-  if (!ParseRequest(cgi, method, NULL, req, parse_error)) {
-    if (cgi != NULL) delete cgi;
+  if (!ParseRequest(cgi, method, nullptr, req, parse_error)) {
+    if (cgi != nullptr) delete cgi;
     WriteHttpHeader(400, true);
     WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
                  "Invalid request parameters", parse_error);
@@ -161,7 +177,7 @@ int main(int argc, char **argv)
   std::vector<ApiHit> hits;
   STRING error_detail;
   const int status = ExecuteSearch(req, cfg, meta, hits, error_detail);
-  if (cgi != NULL) delete cgi;
+  if (cgi != nullptr) delete cgi;
 
   if (status != 200) {
     WriteHttpHeader(status, true);

@@ -9893,10 +9893,84 @@ verified with a standalone repro against a real `Iindex`-built
 database before this turn was committed (confirmed `status=200`,
 correct `matching_record_count`, and correct hit filename) — a
 one-time confirmation, not a permanent test, per the scope note in the
-test file itself. `make tests`/`make tests-asan` pass clean (796 test
-cases, 2984 assertions — up from 790/2969, the 15-assertion increase
-being this new file's own coverage). `make isearch-cgi` also confirmed
-to still build clean (`api_search.cxx` links into `isrch_api`); `make
-smoke-test` also re-confirmed clean given the `TEST_ENGINE_SRCS`
-change above.
+test file itself. `make tests`/`make tests-asan` pass clean (798 test
+cases, 2986 assertions — up from 790/2969 in this file's own turn, plus
+2 more assertions from the incidental `src/common.cxx` fix documented
+there). `make isearch-cgi` also confirmed to still build clean
+(`api_search.cxx` links into `isrch_api`); `make smoke-test` also
+re-confirmed clean given the `TEST_ENGINE_SRCS` change above.
+
+## Isearch-cgi/isrch_api.cxx
+
+**Scope note, read first:** same `main()`-only structural limitation as
+[`Isearch-cgi/isrch_srch.cxx`](#isearch-cgiisrch_srchcxx) — no header,
+not linkable into the Catch2 test binary (`main()` conflicts). This is
+the actual JSON API's entry point/router: reads `REQUEST_METHOD`,
+`PATH_INFO`, `HTTP_ACCEPT`; routes `/health`, `/capabilities`,
+`/databases`, `/search` to the corresponding already-processed
+`api_endpoints`/`api_search` handlers; parses the request via
+`ParseRequest()`; and, on a successful search, writes the JSON body and
+builds `prev`/`next` pagination links. Unlike `isrch_srch.cxx`/
+`isrch_html.cxx`, this file is recently-written (matches the rest of
+the `api_*` family's "carefully written" style — every `getenv()`
+result and `GetValueByName()` result is null-checked before use, no
+`strcpy`/`sprintf` anywhere), so the one bug found here isn't a
+null-deref, it's a silent overload-resolution trap.
+
+1. **`BuildSearchLink()`'s `link.Cat((INT)start)` / `link.Cat((INT)
+   req.max_hits)` — confirmed silent data corruption, not a crash.**
+   `STRING` (`src/string.hxx`) has no `Cat(INT)` overload — only
+   `Cat(UCHR)`, `Cat(const CHR*)`, `Cat(const CHR*, STRINGINDEX)`, and
+   `Cat(const STRING&)` (reachable from an `INT` via `STRING`'s own
+   `STRING(const INT)` converting constructor, which correctly
+   `snprintf`s it to decimal — see `src/string.cxx`). Passing an `INT`
+   argument directly makes both `Cat(UCHR)` (a standard integral
+   conversion) and `Cat(const STRING&)` (a user-defined conversion)
+   viable candidates, and C++ overload resolution always prefers the
+   standard conversion — so every call silently picked `Cat(UCHR)`,
+   appending the **raw byte value of the number** (truncated mod 256),
+   not its decimal digits. Confirmed live against the real production
+   `Isearch-cgi/isrch_api` binary (built index, real CGI env vars):
+   `start=65&max_hits=66` produced a `"prev"` link ending in
+   `...start=<0x01>&max_hits=B` instead of `...start=1&max_hits=66` —
+   the raw 0x01 byte, rendered as its `\u0001` JSON escape, comes from a
+   clamped `prev_start` of 1, and `B` is literally ASCII 66. Every
+   pagination link this file has ever emitted was corrupted this way
+   for any `start`/`max_hits` value: 1-31 as unprintable control bytes,
+   32-126 as the wrong printable ASCII character, 256+ wrapping via
+   truncation (256 itself would silently emit a raw NUL byte into the
+   link). Fixed by wrapping each value in an explicit `STRING(...)`
+   constructor call before `Cat()`, which makes `Cat(const STRING&)`
+   the only viable overload. See `BUGFIX #1` in source. Re-verified
+   with the same live repro post-fix: `start=1&max_hits=66` now appears
+   correctly in the `"prev"` link.
+
+   Checked whether this same trap recurs anywhere else in the tree —
+   grepped for `.Cat((INT)`/`.Cat((INT4)`/`.Cat((LONG)` (nothing) and
+   for bare-identifier `.Cat(x)` calls tree-wide (every hit passes a
+   `STRING`/`CHR*`-typed variable, none numeric) — this appears to be
+   the only call site of its kind in `src/`, `doctype/`, or
+   `Isearch-cgi/`.
+
+No other issues found: `NormalizePath()`'s `/api/v1` prefix strip
+correctly uses `STRING::Search()`/`EraseBefore()`'s 1-based convention
+(confirmed against `src/string.cxx`); the `/health`/`/capabilities`/
+`/databases`/`/search` routing, the GET/POST method gate, the
+`application/json` content-type gate for POST, and the `cgi`
+allocate-then-`delete` lifecycle (only ever created for GET, freed on
+every exit path) were all read line-by-line and found sound. Also
+modernized: 10 `NULL` → `nullptr`. No `sprintf` calls to convert.
+
+No test file was written, for the reasons in the scope note above —
+the fix is documented here and at its `BUGFIX #1` comment site in
+source, verified via the real production binary (two independent live
+repros: the control-byte case and the printable-ASCII-character case
+above). `make tests`/`make tests-asan` unaffected (798 test cases, 2986
+assertions, unchanged — this file was never linked into the test
+tree). `make isearch`/`make isearch-cgi`/`make smoke-test` all pass
+clean.
+
+This was also the last `pending` row in `docs/PROCESSING_STATUS.md` —
+every file in `src/`, `doctype/`, and `Isearch-cgi/` has now been
+processed.
 
