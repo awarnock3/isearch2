@@ -1177,6 +1177,20 @@ own beyond `OPERAND`) for concrete search-term operand classes; `STERM`
   and confirmed. This turn's test file documents the finding instead of
   exercising the broken path.
 
+## src/termobj.cxx
+
+`BUGFIX #1-2` above were already applied to this file during
+`termobj.hxx`'s turn, including adding the processed marker — but this
+file's own `docs/PROCESSING_STATUS.md` row was never synced to `done`.
+This turn is that sync: `TERMOBJ()`/`~TERMOBJ()` are both empty bodies
+(the class adds no state of its own beyond `OPERAND`), so there was
+nothing left to re-review beyond confirming this remains true. No
+`NULL`/`sprintf`, zero warnings under `-Wall -Wextra`. No test changes:
+existing coverage in `tests/src/test_termobj.cxx` already exercises
+`GetOperandType`/`GetOpType`/polymorphic assignment. `make tests`/`make
+tests-asan` pass clean (740 test cases, 2842 assertions, unchanged from
+before this turn).
+
 ## src/memcntl.hxx
 
 A standalone C-linkage (`extern "C"`) malloc-style allocator tracking
