@@ -150,7 +150,7 @@
 | 146 | src/md5sum.cxx | done | 2026-08-09 | [src/md5sum.cxx](BUG_CATALOG.md#srcmd5sumcxx) |
 | 147 | src/mdt.cxx | done | 2026-08-09 | [src/mdt.cxx](BUG_CATALOG.md#srcmdtcxx) |
 | 148 | src/mdtrec.cxx | done | 2026-08-07 | [src/mdtrec.cxx](BUG_CATALOG.md#srcmdtreccxx) |
-| 149 | src/memcntl.cxx | pending | | |
+| 149 | src/memcntl.cxx | done | 2026-08-09 | [src/memcntl.cxx](BUG_CATALOG.md#srcmemcntlcxx) |
 | 150 | src/merge.cxx | pending | | |
 | 151 | src/merge.hxx | pending | | |
 | 152 | src/mergeunit.cxx | pending | | |

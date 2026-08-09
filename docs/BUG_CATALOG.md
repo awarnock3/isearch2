@@ -1045,6 +1045,33 @@ parsing) — a single call site each for `AllocSafe`/`FreeSafe`.
 
 Also applied: all `NULL` → `nullptr` (6 occurrences).
 
+## src/memcntl.cxx
+
+`src/memcntl.hxx`'s turn already found, fixed, and tested `BUGFIX #1-3`
+directly in this `.cxx` (see above), including adding the
+`ISEARCH2-CLEANUP: processed 2026-08-06` marker to this file itself —
+`docs/PROCESSING_STATUS.md`'s row for this file just never got synced
+to `done` at the time (this file's `Order` was assigned later than
+`memcntl.hxx`'s, so the row didn't exist yet when that turn ran). This
+turn is that sync, plus the full dedicated re-read: no further bugs
+found. `AllocSafe`'s `size` parameter could in principle go negative
+only through `GetMARC()`'s `copy=1` branch in `src/marclib.cxx`
+(`lrecl+1`, before that function's own `BUGFIX #4` length validation
+runs) — but `copy=1` has no live caller anywhere in this tree (the only
+call site, `MARC::MARC(STRING&)`, always passes `copy=0`), and even if
+reached, `new (std::nothrow)` already returns `nullptr` gracefully
+(checked by the caller) for a bad array length on this platform/
+compiler — the same accepted contract `BUGFIX #2` above already
+documents, not a new gap.
+
+One correction to the record above: `BUGFIX #3`'s note that "the only
+call site in this tree always passes `flag=0`" is now stale —
+`src/marc.cxx`'s destructor (added by that file's own later turn) calls
+`FreeSafe(&RememberKey, nullptr, 1)`, exercising the `flag=1` path for
+real. Doesn't change anything about the fix itself (already correct
+regardless of which path is live), just noted here since a stale
+"unreachable" claim shouldn't stand uncorrected once it no longer holds.
+
 ## src/operator.hxx
 
 `OPERATOR` is `OPERAND`'s sibling in the `OPOBJ` hierarchy (an AND/OR/
