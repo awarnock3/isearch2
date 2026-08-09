@@ -159,7 +159,7 @@
 | 155 | src/nfldmgr.cxx | done | 2026-08-08 | [src/nfldmgr.cxx](BUG_CATALOG.md#srcnfldmgrcxx) |
 | 156 | src/nlatlon.cxx | done | 2026-08-08 | [src/nlatlon.cxx](BUG_CATALOG.md#srcnlatloncxx) |
 | 157 | src/nlist.cxx | done | 2026-08-09 | [src/nlist.cxx](BUG_CATALOG.md#srcnlistcxx) |
-| 158 | src/numsearch.cxx | pending | | |
+| 158 | src/numsearch.cxx | done | 2026-08-09 | [src/numsearch.cxx](BUG_CATALOG.md#srcnumsearchcxx) |
 | 159 | src/operand.cxx | pending | | |
 | 160 | src/operator.cxx | pending | | |
 | 161 | src/opobj.cxx | done | 2026-08-07 | [src/opobj.cxx](BUG_CATALOG.md#srcopobjcxx) |

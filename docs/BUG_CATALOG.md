@@ -8304,3 +8304,59 @@ patterns with the real classes involved. `make tests`/`make tests-asan`
 pass clean (729 test cases, 2823 assertions, unchanged from before this
 turn since no new tests were added).
 
+## src/numsearch.cxx
+
+No separate header (`INDEX::NumericSearch`/`SortNumericFieldData`,
+implemented here, are declared in `src/index.hxx`). Implements
+`INDEX`'s numeric/computed-field search: `NumericSearch()` binary-
+searches an on-disk `NUMERICLIST` for a boundary matching a query
+value under a relation (`=`/`<`/`<=`/`>=`/`>`); `SortNumericFieldData()`
+sorts and rewrites each `NUM`/`COMPUTED`/`DATE`/`DATE-RANGE` field's
+on-disk index by value, then by global pointer (and by end value too,
+for date ranges) as part of indexing.
+
+1. **`NumericSearch()` returned raw `nullptr` when asked to search a
+   non-numeric field — the actual source of a null-return pattern
+   already confirmed to crash 8+ call sites this pass** — this is the
+   function `src/geosearch.cxx`'s `BUGFIX #1` (8 call sites) and
+   `src/datesearch.cxx`'s `BUGFIX #1` were patching call-site symptoms
+   of; this turn fixes the actual root. `if(FieldType == "TEXT") return
+   ((PIRSET)NULL);` fired whenever `NumericSearch()` was asked to
+   search a field that isn't numeric (including the default when no
+   field type is registered at all). Every current caller has since
+   been fixed to guard against a null return — `geosearch.cxx`'s 8 call
+   sites directly, everything reached through `src/index.cxx` by way of
+   its blanket `if (!NewIrset) NewIrset = new IRSET(Parent);` catch-all
+   (confirmed by reading every call path: `src/multiterm.cxx`'s
+   non-TEXT-field fallback, `INDEX::TermSearch`'s `DOUBLE`/`STRING`
+   overloads, all ultimately reach that one guarded assignment) — so
+   this exact `return nullptr` is no longer reachable-and-unguarded
+   anywhere in the tree today. Fixed at the root anyway, matching this
+   codebase's own established convention (every other "can't search
+   this way" boundary condition, including this same function's own
+   `NO_MATCH` path a few lines below, already returns an empty `IRSET`,
+   never `nullptr`) rather than leaving a footgun for any future
+   caller. See `BUGFIX #1` in source. Verified with a new
+   `tests/src/test_numsearch.cxx`: unlike `NumericSearch()`'s main body
+   (which needs a real on-disk numeric index file to exercise
+   meaningfully — the same documented scope boundary
+   `tests/src/test_index.cxx` already draws for this area), this
+   specific path fires before any file I/O — a fresh `TESTIDBOBJ`'s
+   `FieldTypes` `HASH` is empty, so any field name resolves to `TEXT`
+   with no on-disk setup needed — confirmed via revert-and-repro
+   (reverting to `nullptr` fails the new test's `REQUIRE(result !=
+   nullptr)` immediately).
+
+Also checked and found clean: no `NULL`/`sprintf` in live code (one
+`sprintf` exists only inside a large commented-out "rset cache" block,
+left untouched); compiles with zero warnings attributable to this file
+itself under `-Wall -Wextra` (every warning surfaced while compiling it
+comes from other, not-yet-processed headers this file happens to
+include transitively). `NumericSearch()`'s main binary-search body and
+`SortNumericFieldData()` were both read in full and found structurally
+sound — every `fopen()`/`fread()` result is already checked, and
+`NUMERICLIST::LoadTable()`/`Resize()` (this file's own turn,
+`src/nlist.cxx` above) already clamp out-of-range indices internally.
+`make tests`/`make tests-asan` pass clean (730 test cases, 2825
+assertions).
+
