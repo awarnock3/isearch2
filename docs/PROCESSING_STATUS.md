@@ -158,7 +158,7 @@
 | 154 | src/nfield.cxx | done | 2026-08-07 | [src/nfield.cxx](BUG_CATALOG.md#srcnfieldcxx) |
 | 155 | src/nfldmgr.cxx | done | 2026-08-08 | [src/nfldmgr.cxx](BUG_CATALOG.md#srcnfldmgrcxx) |
 | 156 | src/nlatlon.cxx | done | 2026-08-08 | [src/nlatlon.cxx](BUG_CATALOG.md#srcnlatloncxx) |
-| 157 | src/nlist.cxx | pending | | |
+| 157 | src/nlist.cxx | done | 2026-08-09 | [src/nlist.cxx](BUG_CATALOG.md#srcnlistcxx) |
 | 158 | src/numsearch.cxx | pending | | |
 | 159 | src/operand.cxx | pending | | |
 | 160 | src/operator.cxx | pending | | |

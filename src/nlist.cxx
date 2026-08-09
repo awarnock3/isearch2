@@ -511,6 +511,13 @@ NUMERICLIST::Find(DOUBLE Key, INT4 Relation, INT4 *Index)
 SearchState
 NUMERICLIST::MemFind(DOUBLE Key, INT4 Relation, INT4 *Index)
 {
+  // BUGFIX #4 (modernization, docs/BUG_CATALOG.md#srcnlistcxx): the
+  // in-memory search path was never implemented (see this function's
+  // own doc comment) and never called from anywhere in this class --
+  // parameters kept to match the header's declared signature.
+  (void)Key;
+  (void)Relation;
+  (void)Index;
   return NO_MATCH;
 }
 
@@ -547,7 +554,11 @@ NUMERICLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation, INT4 *Index)
     INT         Total, Low, High, X, OX;
     SearchState State;
     INT         Type=0;
-    DOUBLE      Hold;         // This is just a dummy - we don't use it
+    // BUGFIX #3 (modernization, docs/BUG_CATALOG.md#srcnlistcxx):
+    // Hold was declared but never read or written anywhere in this
+    // function -- genuinely dead, not a latent bug. Removed rather
+    // than silenced, matching this project's established "remove
+    // truly dead code" convention.
     INT4        Offset;       // Offset needed to read the element
 
     ElementSize = sizeof(INT4) + sizeof(DOUBLE);
@@ -730,6 +741,10 @@ NUMERICLIST::Find(INT4 Key, INT4 Relation, INT4 *Index)
 SearchState
 NUMERICLIST::MemFind(INT4 Key, INT4 Relation, INT4 *Index)
 {
+  // BUGFIX #4 (continued): see the DOUBLE overload above.
+  (void)Key;
+  (void)Relation;
+  (void)Index;
   return NO_MATCH;
 }
 
@@ -767,7 +782,11 @@ NUMERICLIST::DiskFind(STRING Fn, INT4 Key, INT4 Relation, INT4 *Index)
     INT         Total, Low, High, X, OX;
     SearchState State;
     INT         Type=0;
-    DOUBLE      Hold;         // This is just a dummy - we don't use it
+    // BUGFIX #3 (modernization, docs/BUG_CATALOG.md#srcnlistcxx):
+    // Hold was declared but never read or written anywhere in this
+    // function -- genuinely dead, not a latent bug. Removed rather
+    // than silenced, matching this project's established "remove
+    // truly dead code" convention.
     INT4        Offset;       // Offset needed to read the element
 
     ElementSize = sizeof(INT4) + sizeof(DOUBLE);

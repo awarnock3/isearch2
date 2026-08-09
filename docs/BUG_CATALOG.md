@@ -7435,6 +7435,40 @@ at a deterministic `0` (`BUGFIX #2`), alongside a basic sanity check of
 `GetCoords()`/`GetCount()`. `make tests`/`make tests-asan` pass clean
 (676 test cases, 2292 assertions).
 
+## src/nlist.cxx
+
+`BUGFIX #1-2` above were already applied to this file during
+`nlist.hxx`'s `/reprocess-blocked` turn (this file already carried
+`.hxx`'s own `ISEARCH2-CLEANUP` marker, dated the same day — its
+`docs/PROCESSING_STATUS.md` row just hadn't been synced to `done` yet,
+same shape as `src/memcntl.cxx`'s stale row). This turn's own full
+re-read found two pre-existing `-Wall -Wextra` warnings (not introduced
+by the earlier turn) and nothing else:
+
+3. **`DiskFind()`'s `Hold` local was declared but never read or
+   written** — genuinely dead in both the `DOUBLE`- and `INT4`-keyed
+   overloads, not a latent bug (its own comment already says "this is
+   just a dummy — we don't use it"). Removed. See `BUGFIX #3` in
+   source.
+4. **`MemFind()`'s three parameters are unused in both overloads** —
+   by design: `MemFind()` always returns `NO_MATCH` unconditionally
+   (the in-memory search path documented as "never implemented" was
+   never written), and is never called from anywhere in this class —
+   `Find()` always goes straight to `DiskFind()`. Parameters kept to
+   match the header's declared signature. Silenced with `(void)Key;
+   (void)Relation; (void)Index;`, the same technique already used for
+   `src/merge.cxx`'s `BUGFIX #4`. See `BUGFIX #4` in source.
+
+Checked and found not a live bug, matching the precedent already set
+for `src/intlist.cxx`'s `SortGPCmp` above: `SortCmpGP()` subtracts two
+`NUMERICFLD::GetGlobalStart()` values (`INT4`, signed) directly into a
+`DOUBLE` — signed subtraction is only theoretically UB on extreme
+overflow, unlike the confirmed unsigned-narrowing bug already fixed in
+`src/fct.cxx`'s `FctFcCompare` (which subtracted an *unsigned* `GPTYPE`).
+No new test needed: both fixes are warning-only, no behavior changed;
+`make tests`/`make tests-asan` pass clean (729 test cases, 2823
+assertions, unchanged from before this turn).
+
 ## src/intlist.hxx
 
 Reprocessed via `/reprocess-blocked` (originally blocked at GENERAL
