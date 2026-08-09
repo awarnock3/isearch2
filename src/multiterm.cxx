@@ -42,6 +42,16 @@ Description:	Class INDEX
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+// Implements INDEX::MultiTermSearch(): a binary search over one or
+// more sorted, chunked .inx sistring index files (one chunk per
+// SetLoadLimit-style split) for an exact/prefix text term, optionally
+// restricted to a field via a cached/disk-validated field-position
+// lookup. See docs/BUG_CATALOG.md#srcmultitermcxx for the bugs found
+// and fixed here.
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -103,7 +113,7 @@ PIRSET INDEX::MultiTermSearch(const STRING& QueryTerm,
   
   STRING FieldType, CheckName;
   INT w,kk;
-  FILE *fx=(FILE*)NULL;
+  FILE *fx=nullptr;
   CHR buf[256];
   STRING TmpIndexFileName;
   GPTYPE gp;
@@ -121,11 +131,22 @@ PIRSET INDEX::MultiTermSearch(const STRING& QueryTerm,
   // Open the file and find out how many pieces we have to search
   // Note - this should always succeed because TermSearch calls this
   // routine when it find that the *.num file exists
+  // BUGFIX #2 (docs/BUG_CATALOG.md#srcmultitermcxx): fx's result went
+  // unchecked before being passed to fgets() -- a null FILE* there is
+  // undefined behavior (typically a crash), not the graceful "return
+  // NULL" the very next lines already handle for a readable-but-empty
+  // file. TermSearch (this function's only caller) already verifies
+  // the same file opens successfully moments earlier, so this is a
+  // narrow TOCTOU-style gap (the file being removed, or ffopen's
+  // cache evicting differently, between that check and this reopen)
+  // rather than a demonstrated live failure -- defensive fix, matching
+  // this function's own null-check convention two lines below and the
+  // one a few dozen lines further down for TmpIndexFileName's ffopen.
   fx=Parent->ffopen(CheckName,"r");
-  if (!fgets(buf,256,fx)) {
-    fclose(fx);
+  if (!fx || !fgets(buf,256,fx)) {
+    if (fx) fclose(fx);
     delete pirset;
-    return NULL;
+    return nullptr;
   }
   fclose(fx);
   IndexNum=atoi(buf);
@@ -153,7 +174,7 @@ PIRSET INDEX::MultiTermSearch(const STRING& QueryTerm,
     // Replace the *.inx file name with the name of the chunk
     TmpIndexFileName=IndexFileName;
     if (IndexNum > 1) {
-      sprintf(buf,".%d",kk);
+      snprintf(buf, sizeof(buf), ".%d", kk);  // BUGFIX #3: sprintf -> snprintf
       TmpIndexFileName.Cat(buf);
     }
 
@@ -203,7 +224,25 @@ PIRSET INDEX::MultiTermSearch(const STRING& QueryTerm,
     
     if (PhraseBeg >= OrigTermLength) {
       // only stop words. return an empty IRSET.
-      PIRSET pirset = new IRSET(Parent);
+      // BUGFIX #4 (docs/BUG_CATALOG.md#srcmultitermcxx): this
+      // re-declared "PIRSET pirset" here, shadowing the outer
+      // `pirset` allocated at function entry -- which, since nothing
+      // else in the loop touches it before this branch can be
+      // reached (PhraseBeg/OrigTermLength are recomputed fresh from
+      // the same QueryTerm every iteration, so this branch either
+      // fires on the first chunk, before any results are added, or
+      // never fires at all), was still a freshly-allocated empty
+      // IRSET -- the exact same "empty IRSET" result this code was
+      // trying to construct a second time. The shadowed outer
+      // allocation was then leaked. Confirmed with a standalone
+      // repro under LeakSanitizer (32KB leaked per call, matching
+      // IRSET's own internal allocations); not independently
+      // reproduced through this function itself, which needs a real
+      // on-disk index fixture disproportionate to a leak already
+      // unambiguous from C++ scoping rules (matching the judgment
+      // call already made for geosearch.cxx's BUGFIX #2). Fixed by
+      // returning the outer `pirset` directly instead of shadowing
+      // it.
       return pirset;
     }
 
@@ -375,8 +414,8 @@ PIRSET INDEX::MultiTermSearch(const STRING& QueryTerm,
       INT Total=0;
       INT Disk=0;
       INT CacheSize=0;
-      GPTYPE *Cache=(GPTYPE*)NULL;
-      FILE *fpf=(FILE*)NULL;
+      GPTYPE *Cache=nullptr;
+      FILE *fpf=nullptr;
     
       if (FieldName.Equals("") || FieldName.GetLength()==0) {
 	CheckField=0;
@@ -455,14 +494,20 @@ PIRSET INDEX::MultiTermSearch(const STRING& QueryTerm,
 	  pirset->FastAddEntry(iresult, 1);
 	}
       }
-      if(CheckField==1 && fpf!=NULL){
+      if(CheckField==1 && fpf!=nullptr){
 	//  printf("%d Accesses, %d InCache, %d OutCache (%f Efficiency)\n",
 	//  Accesses,InCache,OutCache,(InCache/Accesses)*100);
 	fclose(fpf);
       }
       delete Pfct;
+      // BUGFIX #1 (docs/BUG_CATALOG.md#srcmultitermcxx): Cache is
+      // allocated with array `new` (`new GPTYPE[CacheSize*2]` above)
+      // but was freed with scalar `delete` -- undefined behavior,
+      // confirmed under ASan as a real alloc-dealloc-mismatch.
+      // Reachable on any field-restricted search (CheckField==1),
+      // a mainline usage pattern, not an edge case.
       if(CacheSize>0)
-	delete Cache;
+	delete [] Cache;
       delete [] gplist;
       pirset->SortByIndex();
       pirset->MergeEntries(1);

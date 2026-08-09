@@ -8201,3 +8201,72 @@ translation unit (clean). Added a short file-level doc comment per
 GENERAL step 7; no test changes needed beyond what
 `tests/src/test_merge.cxx` already covers.
 
+## src/multiterm.cxx
+
+No separate header (`INDEX::MultiTermSearch`, implemented here, is
+declared in `src/index.hxx`). One large function: a binary search over
+one or more sorted, chunked `.inx` sistring index files for an exact/
+prefix text term, optionally field-restricted via a cached/disk field-
+position lookup.
+
+1. **`Cache` allocated with array `new`, freed with scalar `delete` —
+   confirmed alloc-dealloc-mismatch** — `Cache=new GPTYPE[CacheSize*2]`
+   but `delete Cache;` (not `delete [] Cache;`) at cleanup. Confirmed
+   real with a standalone repro under ASan, reproducing the exact
+   allocation/deallocation shape used here (`alloc-dealloc-mismatch
+   (operator new [] vs operator delete)`). Reachable on any field-
+   restricted search (`CheckField==1`, i.e. any search that names a
+   field — a mainline usage pattern, not an edge case). Fixed by
+   changing to `delete [] Cache;`. See `BUGFIX #1` in source.
+
+2. **The `.num` chunk-count file's `ffopen()` result went unchecked
+   before `fgets()`** — `fx=Parent->ffopen(CheckName,"r");` followed
+   directly by `fgets(buf,256,fx)` with no null check; a null `FILE*`
+   there is undefined behavior (typically a crash). `INDEX::TermSearch`
+   (this function's only caller) already verifies the same file opens
+   successfully moments earlier, so this is a narrow TOCTOU-style gap
+   (the file being removed, or `ffopen`'s cache evicting differently,
+   between that check and this reopen) rather than a demonstrated live
+   failure — defensive fix, not independently reproduced, matching this
+   function's own null-check convention two lines below (the "fgets
+   failed" case) and the one a few dozen lines further down for the
+   per-chunk `.inx` file's `ffopen`. See `BUGFIX #2` in source.
+
+3. **`sprintf` for the per-chunk filename suffix** — modernized to
+   `snprintf(buf, sizeof(buf), ...)`. `kk` (an `INT` chunk number) into
+   a 256-byte buffer was never a live overflow, just modernization. See
+   `BUGFIX #3` in source. Also modernized throughout: all `NULL` →
+   `nullptr`.
+
+4. **A nested-scope re-declaration of `pirset` shadowed and leaked the
+   outer allocation — confirmed via LeakSanitizer** (most severe
+   finding in this file): the function allocates
+   `PIRSET pirset = new IRSET(Parent);` once at entry, but the
+   "only stop words, return an empty IRSET" branch inside the
+   per-chunk loop re-declared `PIRSET pirset = new IRSET(Parent);` in
+   its own nested scope — shadowing, not reusing, the outer variable —
+   then returned that new one. The outer `pirset` (itself just an
+   empty `IRSET`, since nothing touches it before this branch can be
+   reached — `PhraseBeg`/`OrigTermLength` are recomputed fresh from the
+   same `QueryTerm` on every chunk, so this branch either fires on the
+   very first chunk, before anything's been added, or never fires at
+   all) was then orphaned. Confirmed with a standalone repro under
+   LeakSanitizer reproducing the exact shadowing shape with the real
+   `IRSET` class: 32KB leaked per call (the `IRSET` object plus its
+   internal `Table`/`ATTRLIST`/`STRING` allocations). Not independently
+   reproduced through `MultiTermSearch` itself, which needs a real
+   on-disk index fixture (`.num`/`.inx` files) disproportionate to a
+   leak already unambiguous from C++ scoping rules alone — the same
+   judgment call already made for `src/geosearch.cxx`'s `BUGFIX #2`.
+   Fixed by returning the outer `pirset` directly instead of shadowing
+   it. See `BUGFIX #4` in source.
+
+No test file added: `MultiTermSearch` is this file's only function,
+and — like `INDEX::Search`/`AddRecordList` per `tests/src/test_index.cxx`'s
+own note — needs a full on-disk index (`DFDT`, `MDT`, postings/`.inx`
+files) to exercise meaningfully; both fixes above were instead verified
+via standalone repros reproducing the exact allocation/deallocation
+patterns with the real classes involved. `make tests`/`make tests-asan`
+pass clean (729 test cases, 2823 assertions, unchanged from before this
+turn since no new tests were added).
+
