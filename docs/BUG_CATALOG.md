@@ -7393,3 +7393,85 @@ This closes out the `/reprocess-blocked` run: all six files that were
 `mergeunit.hxx`, `thesaurus.hxx`, `tokengen.hxx`, `squery.hxx`) are now
 `done`.
 
+## src/Iutil.cxx
+
+**Scope note, read first:** same `main()`-only structural limitation as
+[`src/Iget.cxx`](#srcigetcxx)/[`src/Iindex.cxx`](#srciindexcxx)/
+[`src/Isearch.cxx`](#srcisearchcxx) (can't be linked into the shared
+Catch2 test binary — duplicate `main()`). This is the last of the four
+`main()`-only CLI tools in the queue. Verified via a standalone
+`g++ -c -Wall -Wextra` compile-clean confirmation (diffed against the
+pre-edit file's own warnings: identical set, same 3
+`-Wunused-parameter` and 1 `-Wunused-but-set-variable` warnings, just
+shifted line numbers — no new warnings, none resolved) and manual
+trace-through of every early-return path in `main()`, the same
+methodology as the other three CLI tools.
+
+Four bugs found and fixed, all resource-management issues rather than
+the null-deref-on-missing-flag-argument pattern the other three CLI
+tools had (this file's argument-parsing loop already reads `argv[x]`
+only after each `++x >= argc` check's own `RETURN_ZERO`, so it doesn't
+share `Iget.cxx`'s `BUGFIX #1`):
+
+1. **`pdb` (the open `IDBC`/`IDB` handle) leaked when `-optimize` is
+   given but the database has no `.inx.1` file yet** — `pdb = new
+   IDBC(...)` is allocated well before the `-optimize` branch; when the
+   `stat()` check on `.inx.1` fails, the branch prints "does not need
+   optimizing" and `RETURN_ZERO`s without ever deleting `pdb`, unlike
+   every other exit path in this function. Trivially reachable: this is
+   the exact condition (no merge output yet) that a freshly-indexed or
+   already-optimized database is in, not a contrived edge case. Fixed
+   by adding `delete pdb;` before the `RETURN_ZERO`. See `BUGFIX #1` in
+   source.
+2. **Same `pdb` leak, mirrored in the `-collapse` branch** — identical
+   shape one `if` block down: `stat()` on `.inx.1` failing prints
+   "cannot be collapsed" and `RETURN_ZERO`s without deleting `pdb`.
+   Fixed the same way. See `BUGFIX #2` in source.
+3. **`REGISTRY*` leaks in the `-gilsdocs` per-document metadata loop**
+   — `REGISTRY* metadef = parseMetaDefaults(MetaFn)` is never deleted
+   after the loop that uses it, and inside the loop, `REGISTRY* meta =
+   dtp->GetMetadata(record, "gils", metadef)` (confirmed via
+   `doctype.cxx`'s default `GetMetadata()`: `return defaults->clone();`
+   — a fresh heap allocation, caller-owned) is reassigned every
+   iteration with the previous iteration's `meta` never freed. Unlike
+   the other three bugs here, this one scales with database size — one
+   `REGISTRY` leaked per document indexed, for the whole `-gilsdocs`
+   run. Fixed by adding `delete meta;` at the end of each loop
+   iteration and `delete metadef;` after the loop. See `BUGFIX #3` in
+   source.
+4. **Unchecked `fopen()` result in the `-gilsindex` branch** — `FILE*
+   fp = fopen(GilsFile, "a")` is used immediately afterward
+   (`pdb->WriteCentroid(fp)`, then `fprintf(fp, ...)`, then
+   `fclose(fp)`) with no null check, unlike the sibling `-gilsdocs`
+   block a few lines above it (which does check `if (fp)` before use) —
+   an inconsistency that flagged this as worth a closer look. A failed
+   `fopen()` (unwritable `gils.out`-adjacent directory, full disk, bad
+   permissions on the target `.gils` file) is a **null-pointer
+   dereference**, confirmed by inspection rather than ASan since this
+   file can't be linked into the sanitizer-run test binary — see the
+   scope note above. Fixed by wrapping the three calls in `if (fp)`,
+   with a `perror(GilsFile)` on the else branch matching this file's
+   own established error-reporting style (e.g. the `-replace` block's
+   `perror(fromPath)` on a failed `rename()`). See `BUGFIX #4` in
+   source.
+
+One characteristic observed but deliberately left unfixed:
+
+- **`Skip` is set but never read** — `-debug`'s optional numeric
+  argument is parsed into `Skip` (`Skip = Temp.GetInt();`,
+  confirmed via `-Wunused-but-set-variable`, unchanged from the
+  pre-edit file) but nothing in this file ever reads it back; the
+  `getcwd()`-filled `Cwd` buffer it reuses as scratch space is
+  similarly never read for its original purpose either. Left as-is per
+  this project's "don't restyle code you're not otherwise touching"
+  principle — this is dead bookkeeping from an incomplete feature or
+  refactor, not a correctness defect, the same category as
+  `Isearch.cxx`'s already-documented vestigial `LastUsed`.
+
+No test file was written for the reasons in the scope note above; all
+four fixes are documented in detail here and at their `BUGFIX #n`
+comment sites in source instead, matching `Iget.cxx`/`Iindex.cxx`/
+`Isearch.cxx`'s precedent. This closes out the `main()`-only CLI tool
+group — `Iget.cxx`, `Iindex.cxx`, `Isearch.cxx`, and `Iutil.cxx` are all
+now `done`.
+
