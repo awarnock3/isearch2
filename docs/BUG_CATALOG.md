@@ -53,6 +53,47 @@ processed are left alone:
   the full unsigned 32-bit range without needing any `string.hxx`
   signature change.
 
+## src/fc.cxx
+
+1. **Indeterminate `FieldStart`/`FieldEnd` in the default constructor**
+   — `FC::FC() {}` had an empty body; the same "indeterminate primitive
+   member" category already fixed in `RESULT`'s/`NUMERICFLD`'s/
+   `NUMERICLIST`'s constructors elsewhere in this tree. Fixed by
+   zero-initializing both. See `BUGFIX #1` in source; regression test
+   in `tests/src/test_fc.cxx`.
+2. **`Write()`/`Read()`'s signed/unsigned mismatch, flagged above at
+   `fc.hxx`'s own turn** — fixed as described there (`%u` in `Write()`,
+   `GetLong()` in `Read()`), but with an important correction to that
+   earlier note after actually reproducing it on this turn: it claimed
+   values above `INT_MAX` "would print as negative" and "fail to
+   round-trip." Both are true only in isolation. Tried as a standalone
+   repro (`tests/src/test_fc.cxx`, temporarily reverting first the
+   whole fix, then just `Read()` back to `GetInt()` while leaving
+   `Write()` on `%u`): **the original, never-touched code actually
+   round-trips large values correctly on this platform**, including the
+   "half-fixed" combination. `%d` of an unsigned value reinterprets its
+   bit pattern as negative; `atoi()` (via `strtol()` into a 64-bit
+   `long`, then narrowed to `int`) reinterprets that same bit pattern
+   back the same way; assigning the negative `int` back to the unsigned
+   `GPTYPE` member wraps it a third time — three complementary
+   two's-complement reinterpretations that happen to cancel out
+   losslessly on this specific glibc/x86-64 build. This is genuinely
+   undefined behavior per the C standard either way (`%d` given an
+   unsigned argument; `atoi()` overflowing `INT_MAX`), not guaranteed by
+   any standard to keep working — the same "silent only because of how
+   this specific platform happens to behave, fragile, not guaranteed"
+   category as this file's own header-self-containment fix above — but
+   it is *not* a demonstrated data-corruption bug on this build, and the
+   catalog entry above overstated it as one. Fixed anyway, for
+   portability/standards-correctness rather than a reproduced failure:
+   `%u` in `Write()` and `GetLong()` in `Read()` remove the undefined
+   behavior outright instead of relying on it happening to cancel out.
+   See `BUGFIX #2` in source; regression test in `tests/src/test_fc.cxx`
+   (passes both before and after the fix, for the reasons above — its
+   value is pinning the round-trip contract, not detecting a failure).
+   `make tests`/`make tests-asan` pass clean (707 test cases, 2367
+   assertions).
+
 ## src/fct.hxx
 
 1. **Header not self-contained** — same defect as `src/fc.hxx` `BUGFIX #1`,

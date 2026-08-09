@@ -39,6 +39,36 @@ TEST_CASE("FC Write/Read round-trips both fields through a file", "[fc]") {
 	REQUIRE(restored.GetFieldEnd() == 200u);
 }
 
+TEST_CASE("FC Write/Read round-trips a value above INT_MAX", "[fc]") {
+	// BUGFIX #2 regression: Write() used to format via %d (signed) and
+	// Read() parsed via GetInt() (signed 32-bit atoi()) -- both would
+	// corrupt a GPTYPE (unsigned) value above INT_MAX. %u plus
+	// GetLong() (64-bit) round-trip the full unsigned 32-bit range.
+	FC original;
+	original.SetFieldStart(3000000000u);
+	original.SetFieldEnd(4000000000u);
+
+	FILE* fp = tmpfile();
+	REQUIRE(fp != nullptr);
+	original.Write(fp);
+	rewind(fp);
+
+	FC restored;
+	restored.Read(fp);
+	fclose(fp);
+
+	REQUIRE(restored.GetFieldStart() == 3000000000u);
+	REQUIRE(restored.GetFieldEnd() == 4000000000u);
+}
+
+TEST_CASE("FC default constructor zero-initializes FieldStart/FieldEnd", "[fc]") {
+	// BUGFIX #1 regression: the default constructor used to leave both
+	// members indeterminate.
+	FC fc;
+	REQUIRE(fc.GetFieldStart() == 0u);
+	REQUIRE(fc.GetFieldEnd() == 0u);
+}
+
 TEST_CASE("FC operator<< prints \"start end\"", "[fc]") {
 	FC fc;
 	fc.SetFieldStart(5u);
