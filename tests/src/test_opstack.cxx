@@ -133,6 +133,29 @@ TEST_CASE("OPSTACK operator= drains the destination before deep-copying the sour
 	REQUIRE(count == 1);
 }
 
+TEST_CASE("OPSTACK operator= self-assignment preserves entries", "[opstack]") {
+	// BUGFIX #4 coverage: operator= had no self-assignment guard --
+	// the "drain the destination" loop above ran before OtherOpstack's
+	// state was ever read, so on `x = x;` it drained and deleted the
+	// stack's own entries before the "copy from OtherOpstack" loop saw
+	// an already-emptied Head. Confirmed real with a standalone repro:
+	// self-assigning a 2-entry OPSTACK left it with 0 entries.
+	OPSTACK stack;
+	IRSET a(nullptr), b(nullptr);
+	stack << a;
+	stack << b;
+
+	stack = stack;
+
+	POPOBJ p;
+	INT count = 0;
+	while (stack >> p) {
+		delete p;
+		count++;
+	}
+	REQUIRE(count == 2);
+}
+
 TEST_CASE("OPSTACK Reverse flips pop order", "[opstack]") {
 	OPSTACK s;
 	IRSET* a = new IRSET(nullptr);

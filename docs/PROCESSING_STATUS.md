@@ -163,7 +163,7 @@
 | 159 | src/operand.cxx | done | 2026-08-09 | [src/operand.cxx](BUG_CATALOG.md#srcoperandcxx) |
 | 160 | src/operator.cxx | done | 2026-08-09 | [src/operator.cxx](BUG_CATALOG.md#srcoperatorcxx) |
 | 161 | src/opobj.cxx | done | 2026-08-07 | [src/opobj.cxx](BUG_CATALOG.md#srcopobjcxx) |
-| 162 | src/opstack.cxx | pending | | |
+| 162 | src/opstack.cxx | done | 2026-08-09 | [src/opstack.cxx](BUG_CATALOG.md#srcopstackcxx) |
 | 163 | src/rcache.cxx | pending | | |
 | 164 | src/reclist.cxx | pending | | |
 | 165 | src/record.cxx | pending | | |

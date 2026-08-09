@@ -40,6 +40,9 @@ Description:	Class OPSTACK - Operand/operator Stack
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "defs.hxx"
 #include "string.hxx"
 #include "vlist.hxx"
@@ -82,6 +85,19 @@ OPSTACK::OPSTACK(const OPSTACK& OtherOpstack) {
 }
 
 OPSTACK& OPSTACK::operator=(const OPSTACK& OtherOpstack) {
+	// BUGFIX #4 (docs/BUG_CATALOG.md#srcopstackcxx): no self-assignment
+	// guard -- the "pop everything off this stack" loop below drains
+	// and deletes every node in *this before OtherOpstack.Head is ever
+	// read, so on self-assignment (`x = x;`, where OtherOpstack *is*
+	// *this) it drains and deletes OtherOpstack's own nodes too, and
+	// the "push OtherOpstack's ops" loop then reads an already-emptied
+	// Head. Confirmed real with a standalone repro: self-assigning a
+	// 2-entry OPSTACK left it with 0 entries. The same "drain *this
+	// before reading OtherObj's state" shape already fixed for
+	// ATTRLIST/IRSET/DFT/STERM's operator= this project.
+	if (this == &OtherOpstack) {
+		return *this;
+	}
 	// [faster method using OPSTACK::Reverse()]
 	// pop everything off this stack
 	POPOBJ OpPtr;

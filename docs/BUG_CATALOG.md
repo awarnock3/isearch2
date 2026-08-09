@@ -903,6 +903,56 @@ standard.
   that call site can ever see a non-`IRSET` top-of-stack would require
   tracing `index.cxx`'s full RPN evaluation control flow, which wasn't
   done here. Flagged as a design smell, not a confirmed bug.
+  **Resolved during `src/opstack.cxx`'s own turn below**: traced —
+  confirmed safe, not a live bug.
+
+## src/opstack.cxx
+
+`BUGFIX #1-3` above were already applied to this file during
+`opstack.hxx`'s turn (header-only: includes, the copy constructor
+declaration, and the destructor-leak fix's implementation — see below).
+This file's own dedicated turn found one more, and resolved the
+design-smell question `opstack.hxx`'s own turn left open:
+
+4. **`operator=()` had no self-assignment guard → confirmed silent
+   data loss** — the "pop everything off this stack" loop at the top
+   unconditionally drains and deletes every node in `*this` *before*
+   `OtherOpstack.Head` is ever read. On self-assignment (`x = x;`,
+   where `OtherOpstack` *is* `*this`), that loop drains and deletes
+   the source's own nodes too, so by the time the "push OtherOpstack's
+   ops onto this stack" loop runs, `OtherOpstack.Head` is already
+   `nullptr` — every entry silently vanishes rather than being
+   preserved. The same "drain `*this` before reading `OtherObj`'s
+   state" shape already fixed for `ATTRLIST`/`IRSET`/`DFT`/`STERM`'s
+   `operator=` earlier in this project. Confirmed real with a
+   standalone repro: self-assigning a 2-entry `OPSTACK` (through the
+   same named variable, `stack = stack;` — no polymorphic indirection
+   needed here, since `OPSTACK` isn't itself part of the `OPOBJ`
+   hierarchy) left it with 0 entries. Fixed with an early return when
+   `this == &OtherOpstack`, mirroring every other class's fix. See
+   `BUGFIX #4` in source. Verified fixed: the same repro now preserves
+   both entries, and `tests/src/test_opstack.cxx` has a dedicated
+   self-assignment regression test, passing under `make tests-asan`.
+
+Also resolved (traced, not fixed — nothing to fix): `opstack.hxx`'s own
+"found but out of scope" note above questioned whether
+`operator>>(PIRSET&)`'s C-style `(PIRSET)OpobjPtr` downcast could ever
+see a non-`IRSET` top-of-stack. Traced `INDEX::Search()`
+(`src/index.cxx`), this overload's only real caller
+(`TempStack >> NewIrset;`): everything ever pushed onto `TempStack` is
+either (a) an operand already gated by `GetOperandType() ==
+TypeRset` — and `IRSET::GetOperandType()` is the *only* override
+anywhere in the tree that returns `TypeRset` (`TERMOBJ` returns
+`TypeTerm`, `OPERATOR` returns `0`), so that check alone guarantees the
+object really is an `IRSET` — or (b) a freshly `new IRSET(Parent)`
+result from the `TypeTerm` branch. No path pushes a raw `OPERATOR`/
+`TERMOBJ` node onto `TempStack`. Confirmed safe at this call site;
+left the cast as-is (no behavior to change) rather than adding a
+`dynamic_cast`/runtime check for a scenario that's now confirmed
+unreachable, not just unlikely.
+
+No `NULL`/`sprintf`, zero warnings under `-Wall -Wextra`. `make
+tests`/`make tests-asan` pass clean (732 test cases, 2827 assertions).
 
 ## src/filemap.hxx
 
