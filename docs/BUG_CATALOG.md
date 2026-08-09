@@ -8172,3 +8172,14 @@ covers `GpHsort`/`hsort` correctness across sizes 1-20 (`buildHeap`/
 definition to test). `make tests`/`make tests-asan` pass clean (729
 test cases, 2823 assertions).
 
+## src/merge.hxx
+
+`BUGFIX #2-4` above (the missing `#include`, `buildHeap()`'s signature
+drift, the `GPTYYPE` typo, and the unused `reverse` parameter) were
+already found and fixed directly in this header during `src/merge.cxx`
+(Order 150)'s turn — this file's own turn found nothing further.
+Confirmed self-contained by compiling it as the sole `#include` in a
+translation unit (clean). Added a short file-level doc comment per
+GENERAL step 7; no test changes needed beyond what
+`tests/src/test_merge.cxx` already covers.
+

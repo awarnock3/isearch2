@@ -43,8 +43,20 @@ Author:		Jon Magid, jem@cnidr.org
 #ifndef MERGE_HXX
 #define MERGE_HXX
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "defs.hxx"
 #include "strstack.hxx"
+
+/**
+ * @brief Heapsort utilities used for external/internal merge sorting
+ * (hsort/buildHeap for a generic width-parameterized buffer,
+ * GpHsort/buildGpHeap specialized for a GPTYPE array), plus a MERGE
+ * class that is declared but never implemented or called anywhere in
+ * this tree -- see docs/BUG_CATALOG.md#srcmergecxx for the bugs found
+ * and fixed in this header and its .cxx.
+ */
 
 // BUGFIX #2 (docs/BUG_CATALOG.md#srcmergecxx): merge.cxx never
 // included this header at all, so the compiler never had a chance to
