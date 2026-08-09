@@ -2355,6 +2355,60 @@ were already complete (verified by compiling it standalone).
 `src/fpt.cxx` was added to `TEST_ENGINE_SRCS` in the Makefile so
 `tests/src/test_fpt.cxx` can link against it.
 
+## src/fpt.cxx
+
+No new fixes on this file's own turn (`BUGFIX #1`/`#2` above, along
+with the file-level doc comment, were already applied to this file
+during `fpt.hxx`'s turn — this file itself was just never marked
+processed or flipped to `done`). Independently re-reviewed for
+anything new: one real issue found, investigated at length, and
+ultimately left unfixed rather than shipping an unproven change —
+recorded in full below since the investigation itself is the useful
+part.
+
+### Found but deferred, not fixed
+
+- **`ffopen()`'s eviction can silently leak a `FILE*`/fd when every
+  cached slot is still logically open** — when the table is at
+  `MaximumEntries` and a new file needs a slot, the purge loop picks
+  the slot with the highest priority number (least recently touched)
+  purely by that number, then only physically `fclose()`s it if
+  `GetClosed()` is true; otherwise the slot's old `FilePointer` is
+  silently overwritten by the new entry's, and nobody ever closes the
+  old one. Confirmed real with a standalone repro (a 2-entry `FPT`,
+  two files opened and never `ffclose()`'d, a third file forcing
+  eviction) verified via a precise check (`readlink("/proc/self/fd/N")`
+  before and after, confirming the *same* underlying file stays open
+  under the evicted entry's original fd — plain `fcntl(fd, F_GETFD)`
+  isn't precise enough here, since a reused fd number for the
+  replacement file gives a false negative). AddressSanitizer's
+  LeakSanitizer does *not* catch this class of bug — glibc keeps every
+  open `FILE*`'s backing allocation reachable via its own internal
+  open-file list (for `atexit` flushing), so an unreachable-heap-only
+  leak detector never flags a merely-unclosed file descriptor.
+  **Attempted fix, reverted:** preferring an already-`GetClosed()`
+  entry for eviction over one that isn't seemed like the obvious
+  guard — implemented it, then tried to construct a scenario where it
+  would change the outcome. Every attempt failed to find one: working
+  through `HighPriority()`/`LowPriority()`'s bookkeeping shows closing
+  an entry always promotes it to be the single most-evictable (highest
+  priority number) entry in the table at that moment, and no later
+  operation can let an untouched *open* entry surpass an already-closed
+  one's number without another, more-recent close first taking its
+  place — i.e. the existing purely-priority-based selection already
+  behaves as if it preferred closed entries, as an emergent property of
+  the ranking algorithm, in every case found. Since the attempted fix
+  couldn't be shown to change any reachable outcome, keeping it would
+  mean shipping unproven "defensive" code rather than a confirmed fix —
+  reverted rather than kept on spec. The one case that *does* leak
+  (every competing entry still logically open, none closed at all) has
+  no safe automatic fix either way: forcibly closing a handle the
+  caller still thinks is open just trades a leak for a potential
+  use-after-close somewhere else, the same "no single obviously-correct
+  meaning" reasoning already used to justify `FPT`'s non-copyable
+  choice at its own turn. Left as a documented, confirmed limitation
+  rather than a guessed-at fix.
+
 ## src/nfield.cxx
 
 `NUMERICFLD`: one numeric-field entry, a byte offset paired with a
