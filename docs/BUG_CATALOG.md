@@ -7205,3 +7205,90 @@ isn't exercised (its constructors need real files on disk; see the test
 file's own header comment). `make tests`/`make tests-asan` pass clean
 (687 test cases, 2319 assertions).
 
+## src/tokengen.hxx
+
+Reprocessed via `/reprocess-blocked` (originally blocked at GENERAL
+step 4 on 2026-08-07; see the resolved `docs/AUTOPILOT_LOG.md` entry for
+the original finding). `TOKENGEN` splits a search-query string into
+tokens (`nexttoken()`), owning a single heap-allocated `InCharP` (a
+`NewCString()` duplicate of the input, freed in `~TOKENGEN()`).
+
+1. **No copy semantics — confirmed double-free on copy** — no
+   user-declared copy constructor or `operator=` existed, so the
+   compiler-generated ones shallow-copied `InCharP`; confirmed via a
+   standalone repro (`TOKENGEN b = a;`, let `b` then `a` go out of
+   scope) triggering a real **double-free** in `~TOKENGEN()` under ASan.
+   No live call site copies a `TOKENGEN` (every site either
+   heap-allocates via `new TOKENGEN(...)` or direct-initializes a local
+   from a `STRING`). **Decision (human, via `/reprocess-blocked`): make
+   it non-copyable** — `TOKENGEN(const TOKENGEN&) = delete;` and
+   `TOKENGEN& operator=(const TOKENGEN&) = delete;` added to the header.
+   See `BUGFIX #1` in source.
+2. **`nexttoken()`'s unmatched-quote/brace fallback corrupted the token
+   in two distinct, confirmed ways** (most severe finding in this file
+   — real bugs in live search-query parsing, not edge cases): on a
+   failed quote or brace match, both branches tried to discard whatever
+   was spuriously accumulated during the failed scan via
+   `token->EraseAfter(token->SearchReverse(CLOSING_CHAR))` — but this
+   only works when `token` actually *contains* a literal instance of
+   `CLOSING_CHAR` to search for. For the quote-*stripping* case, the
+   opening quote is deliberately never appended to `token` (it's
+   skipped, not stripped *from* the token), so `SearchReverse('"')`
+   always returned `0` and `EraseAfter(0)` wiped the token completely —
+   not just the failed scan's contents, but any valid text accumulated
+   *before* the quote was even reached. For braces, the code searched
+   for the *closing* `'}'`, which by definition was never found in this
+   branch (that's why the fallback runs at all), instead of the opening
+   `'{'`, which *was* appended — so this always wiped the entire token
+   too. Confirmed with two standalone repros (later re-verified against
+   the actual fixed binary via a small standalone probe program, not
+   just hand-traced): tokenizing `prefix"unmatched rest` with
+   quote-stripping enabled produced `["nmatched", "rest"]` (losing
+   `prefix` entirely *and* misreading `unmatched` as `nmatched` — see
+   `BUGFIX #2`'s second half below); tokenizing `prefix{unmatched rest`
+   produced `["unmatched", "rest"]` (losing `prefix{` entirely). Fixed
+   by remembering the token's length *before* each scan attempt and
+   restoring to that on failure, instead of searching for a
+   possibly-absent delimiter character. See `BUGFIX #2` in source (both
+   the quote and brace cases).
+
+   **Second, related bug found and fixed in the same branch**: the
+   quote-stripping case's fallback also skipped an extra character —
+   `BeginQuote = ++input;` when entering the quote block already
+   advances past the opening quote, but the fallback's `input =
+   ++BeginQuote;` incremented it a *second* time, skipping the first
+   real character after the quote (the `unmatched` → `nmatched` part of
+   the repro above). The non-stripping case doesn't pre-increment
+   `BeginQuote`, so its own `++BeginQuote` in the fallback is correct
+   and was left unchanged; the fix makes the resume position conditional
+   on `DoStripQuotes` instead of applying the same increment
+   unconditionally to both cases.
+3. **Header not self-contained** — `tokengen.hxx` declared
+   `STRING`/`STRLIST`-typed members and parameters with
+   `#include "string.hxx"`/`#include "strlist.hxx"` commented out.
+   Confirmed by compiling `tokengen.hxx` as the sole `#include` in a
+   translation unit: 4 errors before the fix, 0 after (re-verified after
+   applying the fix, not just planned). The same defect already fixed in
+   `src/fc.hxx`'s own `BUGFIX #1` and many other files this project. See
+   `BUGFIX #4` in source (numbered after the parsing fixes above since
+   it was the smaller, mechanical fix of the two originally flagged).
+
+**Verified, not changed**: a pre-existing asymmetry in matched-brace
+handling — the opening `'{'` is kept in the resulting token but the
+closing `'}'` is silently dropped (`if (*input == '}') { input++;
+istoken = 1; }` never appends it). Confirmed via the same standalone
+probe used for `BUGFIX #2`, not assumed. Not flagged by the original
+`docs/AUTOPILOT_LOG.md` finding and not a crash/safety issue, so left
+as-is; the test file documents actual behavior rather than an assumed
+symmetric one.
+
+`tests/src/test_tokengen.cxx` covers: `TOKENGEN` is non-copyable
+(`BUGFIX #1`); plain whitespace-separated words; matched quotes kept as
+one literal token; the unmatched-quote-with-stripping repro from
+`BUGFIX #2` above, confirming both the lost-prefix and skipped-character
+bugs are fixed (`prefix"unmatched rest` → `["prefixunmatched",
+"rest"]`); the analogous unmatched-brace repro; and matched braces
+(documenting the verified `'{'`-kept-`'}'`-dropped asymmetry rather than
+assuming symmetry). `make tests`/`make tests-asan` pass clean (693 test
+cases, 2334 assertions).
+

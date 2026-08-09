@@ -30,21 +30,43 @@ IN NO EVENT SHALL MCNC/CNIDR BE LIABLE FOR ANY SPECIAL, INCIDENTAL,
 INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY KIND, OR ANY DAMAGES WHATSOEVER
 RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER OR NOT ADVISED OF THE
 POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
-IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef TOKENGEN_HXX
 #define TOKENGEN_HXX
 
 #include "gdt.h"
-/*
+// BUGFIX #4 (docs/BUG_CATALOG.md#srctokengenhxx): these were commented
+// out despite TOKENGEN declaring a STRLIST-typed member (TokenList) and
+// a STRING-typed constructor parameter -- this header failed to compile
+// as the sole #include in a translation unit (4 errors) before this
+// fix, the same defect already fixed in src/fc.hxx's own BUGFIX #1 and
+// many other files this project.
 #include "strlist.hxx"
 #include "string.hxx"
-*/
+
+/// Splits a search-query string into tokens (words, quoted literals,
+/// `{...}` groups, and the `( ) !`/`&& ||`-family operator tokens),
+/// lazily parsed on first use (see DoParse()). Non-copyable: no live
+/// call site ever copies one (see BUGFIX #1), so the copy constructor
+/// and operator= are both deleted rather than given deep-copy
+/// semantics.
 class TOKENGEN {
 public:
 	TOKENGEN(const STRING &InString);
+	// BUGFIX #1 (docs/BUG_CATALOG.md#srctokengenhxx): TOKENGEN owned
+	// `InCharP` (a NewCString() duplicate, freed in ~TOKENGEN()) with no
+	// user-declared copy constructor or operator= -- the compiler-
+	// generated ones shallow-copied `InCharP`, confirmed to cause a real
+	// double-free (ASan) on copy. No live call site ever copies a
+	// TOKENGEN, so it's made explicitly non-copyable rather than given
+	// deep-copy semantics.
+	TOKENGEN(const TOKENGEN&) = delete;
+	TOKENGEN& operator=(const TOKENGEN&) = delete;
 	~TOKENGEN();
 	void GetEntry(const SIZE_T Index, STRING* StringEntry);
 	void SetQuoteStripping(GDT_BOOLEAN);

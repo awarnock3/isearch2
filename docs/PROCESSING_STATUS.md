@@ -52,7 +52,7 @@
 | 48 | src/soundex.hxx | done | 2026-08-07 | [src/soundex.cxx](BUG_CATALOG.md#srcsoundexcxx) |
 | 49 | src/mergeunit.hxx | done | 2026-08-09 | [BUG_CATALOG.md#srcmergeunithxx](BUG_CATALOG.md#srcmergeunithxx) |
 | 50 | src/thesaurus.hxx | done | 2026-08-09 | [BUG_CATALOG.md#srcthesaurushxx](BUG_CATALOG.md#srcthesaurushxx) |
-| 51 | src/tokengen.hxx | blocked | 2026-08-07 | [src/tokengen.hxx](AUTOPILOT_LOG.md#srctokengenhxx) |
+| 51 | src/tokengen.hxx | done | 2026-08-09 | [BUG_CATALOG.md#srctokengenhxx](BUG_CATALOG.md#srctokengenhxx) |
 | 52 | src/squery.hxx | blocked | 2026-08-07 | [src/squery.hxx](AUTOPILOT_LOG.md#srcsqueryhxx) |
 | 53 | doctype/doctype.hxx | done | 2026-08-07 | [doctype/doctype.cxx](BUG_CATALOG.md#doctypedoctypecxx) |
 | 54 | src/index.hxx | done | 2026-08-07 | [src/index.cxx](BUG_CATALOG.md#srcindexcxx) |
