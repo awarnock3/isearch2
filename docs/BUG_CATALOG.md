@@ -8184,6 +8184,26 @@ bugs are fixed (`prefix"unmatched rest` → `["prefixunmatched",
 assuming symmetry). `make tests`/`make tests-asan` pass clean (693 test
 cases, 2334 assertions).
 
+## src/tokengen.cxx
+
+`BUGFIX #1-2` above (non-copyable, and the quote/brace fallback-
+corruption fixes) were already applied to this file during
+`tokengen.hxx`'s turn, including adding the processed marker — but this
+file's own `docs/PROCESSING_STATUS.md` row was never synced to `done`.
+This turn is that sync: full re-read of `nexttoken()`/`DoParse()`/
+`GetEntry()`/`GetTotalEntries()`/`SetQuoteStripping()` confirmed all
+prior fixes present and correct, and found nothing new. `SetQuoteStripping()`
+forcing a full reparse (`HaveParsed = GDT_FALSE; DoParse();`) was checked
+for a stale-entry risk if the new parse produced fewer tokens than a
+prior one — it can't: quote-stripping only changes a quoted token's
+*content*, never the total token count for a given input, so `DoParse()`'s
+`TokenList.SetEntry(i, ...)` always overwrites exactly the same index
+range on every reparse. No `NULL`/`sprintf`, zero warnings under `-Wall
+-Wextra`. No test changes: existing coverage in
+`tests/src/test_tokengen.cxx` already exercises every fixed code path.
+`make tests`/`make tests-asan` pass clean (745 test cases, 2850
+assertions, unchanged from before this turn).
+
 ## src/squery.hxx
 
 Reprocessed via `/reprocess-blocked` (originally blocked at GENERAL
