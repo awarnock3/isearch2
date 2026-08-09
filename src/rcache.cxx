@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "gdt.h"
 #include "defs.hxx"
 #include "string.hxx"

@@ -501,6 +501,26 @@ Also applied: file-level and per-method doc comments in `rcache.hxx`,
 including a note on the class's current dormancy so a future reader
 doesn't assume its confirmed bugs were exercised in production.
 
+## src/rcache.cxx
+
+`BUGFIX #2-3` above were already applied to this file during
+`rcache.hxx`'s turn (the eviction fix and `Fetch()`'s bounds check).
+This file's own dedicated turn found nothing further. Specifically
+checked: the constructor doesn't initialize `ResultSet[MAXCACHE]`
+(pointers) or `Relation[MAXCACHE]` (ints), leaving them indeterminate —
+but both are only ever read for indices `< Count`, and `Add()` always
+writes `ResultSet[MinPos]`/`Relation[MinPos]` before `Count` advances
+past that index, so the indeterminate tail is never read before being
+written first (the same `Count`-gated-array invariant already relied
+on throughout this tree, e.g. `IRSET`/`ATTRLIST`). `Term`/`FieldName`/
+`DBName` (`STRING[MAXCACHE]`) don't have this question at all — array
+members of class type are always default-constructed regardless of
+`Count`. No `NULL`/`sprintf`, zero warnings under `-Wall -Wextra`. No
+test changes: existing coverage in `tests/src/test_rcache.cxx` already
+exercises `Check`/`Add`/`Fetch`/eviction. `make tests`/`make
+tests-asan` pass clean (732 test cases, 2827 assertions, unchanged
+from before this turn).
+
 ## src/operand.hxx
 
 1. **Header not self-contained** — same defect as `src/fc.hxx`
