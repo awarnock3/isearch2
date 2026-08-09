@@ -2498,6 +2498,55 @@ opens/creates real on-disk `.mdt`/`.mdg`/`.mdk` files via a file stem —
 so `tests/src/test_mdt.cxx` uses a `TempMdt` fixture, the same pattern
 already established in `tests/src/test_filemap.cxx`.
 
+## src/mdt.cxx
+
+`src/mdt.hxx`'s turn already found and fixed `BUGFIX #2-5` directly in
+this `.cxx` (see above — the two unsigned-subtraction comparators,
+`sprintf`→`snprintf`, the `-Wclass-memaccess` `memset`, and the
+`-Wsign-compare` `Dump()` loop variable); `BUGFIX #1` was header-only
+(deleted copy constructor/`operator=`). This is this file's own
+dedicated turn, closing it out with one more defensive fix found on a
+full re-read.
+
+6. **Constructor's second `fopen()` reopen went unchecked** — when the
+   on-disk `.mdt` file doesn't exist yet, the constructor creates it
+   (`fopen(Fn, "w+b")`), closes it, and reopens it `"r+b"` for normal
+   read/write use — but unlike every other `fopen()` in this same
+   constructor (both siblings either fall through to a further
+   fallback or `perror()`+`exit(1)`), this reopen's result was never
+   checked. A failure here (the file we just created becoming
+   unreadable before the reopen — another process racing to
+   delete/replace it, or a permissions/umask edge case) would leave
+   `MdtFp` null with `ReadOnly` still `GDT_FALSE`, so every subsequent
+   `fseek`/`fread`/`fwrite`/`fileno` call — and the destructor's
+   unconditional `fclose(MdtFp)` — would be a null-`FILE*` dereference.
+   **Defensive fix, not a demonstrated crash**: the window (the file we
+   just successfully created becoming unreadable before we reopen it,
+   moments later, with no intervening code of our own) is narrow
+   enough that it couldn't be forced without mocking `fopen()` or an
+   actual concurrent process racing this exact file, so no standalone
+   repro was attempted — unlike this project's usual "confirmed real"
+   standard. Fixed anyway since the fix is free and exactly matches
+   the `perror()`+`exit(1)` convention already used one branch below
+   for the analogous `"rb"`-fallback failure. See `BUGFIX #6` in
+   source. No new regression test (nothing to assert against without
+   the mocking this repro would require) — the existing
+   `tests/src/test_mdt.cxx` suite continues to pass unchanged, plain
+   and ASan+UBSan.
+
+Also checked and found sound: the constructor's `TotalEntries =
+GetFileSize(Fp) / sizeof(GPREC)` would, in principle, wrap to a huge
+unsigned value if `GetFileSize()` ever returned its `(off_t)-1` error
+sentinel (it calls `fstat()` on an fd we just successfully `fopen()`'d
+moments earlier) — but this requires `fstat()` to fail on a
+freshly-opened, still-valid file descriptor, which isn't something a
+standalone repro can force without mocking the syscall either. Left
+unfixed, noted here rather than silently dropped, per the same
+"don't claim a bug without a reproduced failure" standard. Every other
+function in this file (`RemoveDeleted()`'s compaction indices,
+`Resize()`'s additive growth, `AddEntry()`/`SetEntry()`/`GetEntry()`'s
+bounds checks) was re-read in full and found correct.
+
 ## src/fpt.hxx
 
 Reprocessed via `/reprocess-blocked` after being blocked at GENERAL step

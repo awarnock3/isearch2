@@ -41,6 +41,9 @@ Description:	Class MDT - Multiple Document Table
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -118,6 +121,27 @@ MDT::MDT(const STRING& DbFileStem, const GDT_BOOLEAN WrongEndian)
     if (MdtFp) {
       fclose(MdtFp);
       MdtFp = fopen(Fn, "r+b");
+      // BUGFIX #6: this reopen's result went unchecked -- every other
+      // fopen() in this constructor either falls through to a further
+      // fallback or exit()s, but this one didn't, so a failure here
+      // (the file we just created a moment ago becoming briefly
+      // unreadable -- another process racing to delete/replace it, or
+      // a permissions/umask edge case) left MdtFp null with ReadOnly
+      // still GDT_FALSE. Every subsequent fseek/fread/fwrite/fileno on
+      // a null FILE* is undefined behavior, and so is the destructor's
+      // unconditional fclose(MdtFp). Defensive fix, not a demonstrated
+      // crash: the window (the file we just successfully created
+      // becoming unreadable before we reopen it) is narrow enough that
+      // it couldn't be forced without mocking fopen() or a genuine
+      // race with another process, so this is hardening a real gap,
+      // not a confirmed live bug. Matches the same
+      // perror-then-exit(1) convention already used one branch below
+      // for the analogous "rb" fallback failure. See
+      // docs/BUG_CATALOG.md#srcmdtcxx.
+      if (!MdtFp) {
+	perror(Fn);
+	exit(1);
+      }
     } else {
       MdtFp = fopen(Fn, "rb");
       if (!MdtFp) {
