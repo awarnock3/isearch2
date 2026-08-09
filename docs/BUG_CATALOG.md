@@ -7475,3 +7475,67 @@ comment sites in source instead, matching `Iget.cxx`/`Iindex.cxx`/
 group — `Iget.cxx`, `Iindex.cxx`, `Isearch.cxx`, and `Iutil.cxx` are all
 now `done`.
 
+## src/datesearch.cxx
+
+`INDEX`'s date-search methods (`index.hxx`, already `done`, is frozen —
+no header changes here). Two bugs found and fixed, both the same root
+cause reached through two twin functions.
+
+1. **`SingleDateSearchBefore()`/`SingleDateSearchAfter()` returned a
+   null `PIRSET` for a query date that failed to parse** (most severe
+   finding in this file) — both functions try each of
+   `YEAR_PREC`/`MONTH_PREC`/`DAY_PREC` in a `switch` on
+   `QueryDate.GetPrecision()`, with a `default:` case for anything
+   else. `SRCH_DATE::GetPrecision()` can and does return a fourth
+   value, `BAD_DATE` (`date.hxx`'s `Date_Precision` enum), whenever the
+   query string doesn't parse to a value in any of the three ranges
+   `SetPrecision()` checks (`date.cxx`) — trivially reachable via an
+   ordinary malformed date query term, not a contrived input. Both
+   `default:` cases returned `YYYY`, a local `PIRSET` still at its
+   declaration-time `(PIRSET)NULL`/`nullptr` and never assigned
+   anything else on that path. Several callers in this same file
+   immediately dereference the result with no null check:
+   `DateRangeSearchContains()`'s `pirset->And(*pirset1)`,
+   `DateRangeSearch()`'s `ZRelDuring`/`ZRelDuring_Strict` (`->Or()`/
+   `->And()`) and `ZRelOverlaps` (`->GetTotalEntries()`), and
+   `SingleDateSearch()`'s `ZRelDuring`/`ZRelEQ`/`ZRelDuring_Strict`
+   (`->And()`). Confirmed with a standalone repro under
+   AddressSanitizer + UndefinedBehaviorSanitizer
+   (`tests/src/test_datesearch.cxx`, run against the pre-fix code with
+   the fix temporarily reverted): `SingleDateSearchBefore()`/
+   `SingleDateSearchAfter()` both returned `nullptr` as expected, and
+   `DateRangeSearchContains()` crashed with a real SIGSEGV — UBSan
+   pinpointed it precisely: `src/datesearch.cxx:1020:14: runtime error:
+   member access within null pointer of type 'struct IRSET'`. Fixed by
+   returning `new IRSET(Parent)` (an empty, non-null result set)
+   instead of the null `YYYY` in both `default:` cases — this matches
+   `DateSearch()`'s own contract everywhere else in this file (it never
+   returns null; "no hits" is always a valid empty `IRSET`), and fixes
+   every affected call site at the source rather than patching each one
+   individually. See `BUGFIX #1`/`#2` in source; regression tests in
+   `tests/src/test_datesearch.cxx` (including one exercising
+   `DateRangeSearchContains()` end-to-end, the call path that used to
+   crash). `make tests`/`make tests-asan` pass clean (701 test cases,
+   2351 assertions).
+
+One characteristic observed but deliberately left unfixed:
+
+- **`DateRangeSearch()`'s `ZRelOverlaps` case looks incomplete** — it
+  computes `pirset` via `SingleDateSearchAfter()`, prints a debug
+  `cerr << "Got " << nhits << " with start dates after " ...` line, then
+  has a large commented-out block that would have combined several more
+  `SingleDateSearchBefore()`/`SingleDateSearchAfter()` calls (using the
+  otherwise-unused `other_pirset`/`another_pirset` locals) before a
+  trailing `delete other_pirset;` — harmless post-fix (`other_pirset` is
+  never reassigned on this path, so it's always `nullptr` there, and
+  `delete nullptr` is well-defined), but the case never actually
+  restricts `pirset` to genuine interval-overlap matches the way its own
+  name and comment imply; it just returns the "start dates after
+  QueryStartDate" set unfiltered. Left as-is: completing "Overlaps"
+  semantics would mean guessing intended `SQUERY` matching behavior
+  nothing in this file specifies anymore, which is feature work, not a
+  bug fix, and squarely the kind of judgment call this project's own
+  principles reserve for a human decision rather than an autopilot
+  guess -- the same category as `Isearch.cxx`'s already-documented
+  `-RECT{}` finding.
+

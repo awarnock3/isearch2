@@ -122,7 +122,7 @@
 | 118 | src/attrlist.cxx | done | 2026-08-07 | [src/attrlist.hxx](BUG_CATALOG.md#srcattrlisthxx) |
 | 119 | src/common.cxx | done | 2026-08-07 | [src/common.cxx](BUG_CATALOG.md#srccommoncxx) |
 | 120 | src/date.cxx | done | 2026-08-07 | [src/date.cxx](BUG_CATALOG.md#srcdatecxx) |
-| 121 | src/datesearch.cxx | pending | | |
+| 121 | src/datesearch.cxx | done | 2026-08-09 | [src/datesearch.cxx](BUG_CATALOG.md#srcdatesearchcxx) |
 | 122 | src/defs.cxx | pending | | |
 | 123 | src/df.cxx | done | 2026-08-07 | [src/df.cxx](BUG_CATALOG.md#srcdfcxx) |
 | 124 | src/dfd.cxx | done | 2026-08-07 | [src/dfd.cxx](BUG_CATALOG.md#srcdfdcxx) |
