@@ -7106,3 +7106,102 @@ call already made for `src/Iindex.cxx`'s `AddFile()` —
 aren't exercised directly. `make tests`/`make tests-asan` pass clean
 (681 test cases, 2301 assertions).
 
+## src/thesaurus.hxx
+
+Reprocessed via `/reprocess-blocked` (originally blocked at GENERAL
+step 4 on 2026-08-07; see the resolved `docs/AUTOPILOT_LOG.md` entry for
+the original finding). Both `TH_PARENT_LIST` and `TH_ENTRY_LIST` own a
+heap-allocated `table` (`new TH_PARENT[100]`/`new TH_ENTRY[100]` in each
+constructor).
+
+1. **`AddEntry()` has no bounds check against the hard-coded 100-entry
+   table — confirmed, actively-reachable heap-buffer-overflow** (most
+   severe finding in this file): both `TH_PARENT_LIST::AddEntry()` and
+   `TH_ENTRY_LIST::AddEntry()` wrote `table[Count]` unconditionally
+   against a table allocated once at construction, with no growth
+   anywhere in this file, unlike every sibling table-owning class this
+   project (`ATTRLIST`, `DFDT`, `MDT`, ...). `MaxEntries` was set to
+   `100` in both constructors and never read again. Confirmed as a real
+   **heap-buffer-overflow** via a before/after test-revert under ASan
+   (`TH_PARENT::operator=() src/thesaurus.cxx:82`, called from
+   `TH_PARENT_LIST::AddEntry()` on the 101st entry). **Confirmed
+   actively reachable, not latent**: the index-time `THESAURUS`
+   constructor parses a user-supplied synonym source file and calls
+   `Parents.AddEntry()`/`Children.AddEntry()` once per parent/child term
+   with no upper bound on the source file's size — any real thesaurus
+   with more than 100 distinct parent terms, or more than 100 total
+   child-term entries, corrupts the heap. Fixed by growing `table` when
+   `Count == MaxEntries`, mirroring `ATTRLIST::Resize()`'s body. See
+   `BUGFIX #1` in source (both classes).
+2. **`GetEntry()`'s bounds check is off by one, in all four overloads**
+   — `TH_PARENT_LIST`'s and `TH_ENTRY_LIST`'s `GetEntry(index, ...)` and
+   `GetEntry(index)` all guarded with `if (index <= Count)`, not `index
+   < Count`; `Count` is the 0-based index of the next *unused* slot
+   (`AddEntry()`'s own `table[Count] = ...; Count++;`), so
+   `GetEntry(Count, ...)` silently returned whatever indeterminate/
+   never-written entry happened to be at `table[Count]` instead of
+   leaving the output untouched or signaling "not found." Every live
+   call site (`THESAURUS::LoadParents()`/`LoadChildren()`) only ever
+   calls with `index` in `[0, Count-1]`, so this slack isn't hit today,
+   but it's a real off-by-one in a public method. Fixed by changing all
+   four checks to `index < Count`. See `BUGFIX #2` in source.
+3. **No copy semantics — confirmed heap-use-after-free on copy** — no
+   user-declared copy constructor or `operator=` existed for either
+   class, so the compiler-generated ones shallow-copied `table`;
+   confirmed via a standalone repro (`TH_PARENT_LIST b = a;`, let `b`
+   then `a` go out of scope) triggering a real heap-use-after-free in
+   `~TH_PARENT_LIST()` under ASan (`TH_ENTRY_LIST` has the identical
+   shape, unverified standalone but structurally the same code). No
+   confirmed copy-construction call site was found in the live tree.
+   **Decision (human, via `/reprocess-blocked`): make both
+   non-copyable** — `TH_PARENT_LIST(const TH_PARENT_LIST&) = delete;`/
+   `operator=` and the same pair for `TH_ENTRY_LIST` added to the
+   header. See `BUGFIX #3` in source.
+4. **`TH_PARENT`'s and `TH_ENTRY`'s default constructors leave their
+   `INT4` members indeterminate** — `TH_PARENT::TH_PARENT() {}` didn't
+   initialize `GlobalStart` (`Term`, a `STRING`, self-initializes to
+   empty regardless); `TH_ENTRY::TH_ENTRY() {}` didn't initialize either
+   `GlobalStart` or `ParentPtr`. Same "indeterminate primitive member"
+   category already fixed multiple times this project. Interacts with
+   `BUGFIX #2` above: the one-past-the-end slot it could return was
+   exactly one of these never-explicitly-set entries. Fixed by
+   zero-initializing all three in their respective constructors. See
+   `BUGFIX #4` in source.
+5. **`TH_PARENT::Copy()` was declared and defined but its body was
+   empty** — `void TH_PARENT::Copy(const TH_PARENT& OtherValue) { }` did
+   nothing at all, unlike the adjacent (correct) `operator=` two lines
+   below it, which actually copies `GlobalStart`/`Term`. Not called
+   anywhere in the tree (confirmed by search), so this was dead code
+   rather than an active bug — but clearly an unfinished implementation
+   left behind rather than an intentional no-op, not a design ambiguity
+   requiring a human decision, so completed to match `operator=`'s
+   behavior rather than left as a separate open question. See `BUGFIX
+   #5` in source.
+
+**Found while reading, not fixed — a related but distinct issue from
+`BUGFIX #1` above**: `TH_PARENT_LIST::LoadTable()`/`TH_ENTRY_LIST::
+LoadTable()` read a `Count` value directly from a `.spx`/`.scx` index
+file (`fread((CHR*)&Count, ...)`) and then loop `table[i]` for `i` up to
+that freshly-read `Count`, with no check against `MaxEntries` — if a
+`Count` larger than the table's actual allocated size were ever
+persisted, this would overflow `table[]` too. Left unfixed: unlike
+`AddEntry()`'s direct exposure to arbitrary user-supplied synonym text,
+`LoadTable()` only reads index files this same class itself previously
+wrote via `WriteTable()` — a materially weaker trust/reachability story
+(only reachable via external tampering or corruption of the program's
+own generated files, not normal usage) that wasn't part of what the
+original `docs/AUTOPILOT_LOG.md` finding flagged or what this turn's
+scope was decided against.
+
+`tests/src/test_thesaurus.cxx` covers: `TH_PARENT_LIST`/`TH_ENTRY_LIST`
+are non-copyable (`BUGFIX #3`); both grow past their initial 100-entry
+table when adding 150 entries (`BUGFIX #1`, confirmed as a real bug via
+a before/after test-revert under ASan — see above); `GetEntry()` treats
+`index == Count` as out of range, for both the pointer-returning and
+out-parameter overloads (`BUGFIX #2`); `TH_PARENT::Copy()` actually
+copies now (`BUGFIX #5`); both classes' default constructors start their
+`INT4` members at a deterministic `0` (`BUGFIX #4`). `THESAURUS` itself
+isn't exercised (its constructors need real files on disk; see the test
+file's own header comment). `make tests`/`make tests-asan` pass clean
+(687 test cases, 2319 assertions).
+

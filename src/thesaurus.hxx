@@ -12,6 +12,9 @@ Description:	Class THESAURUS - Thesaurus and synonyms
 Author:		Archie Warnock (warnock@awcubed.com), A/WWW Enterprises
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef THES_HXX
 #define THES_HXX
 
@@ -42,9 +45,22 @@ private:
 typedef TH_PARENT* PTH_PARENT;
 
 
+/// Owns a heap-allocated, growable table of TH_PARENT entries. Grows
+/// automatically in AddEntry() when full (see BUGFIX #1). Non-copyable:
+/// no live call site ever copies one, so the copy constructor and
+/// operator= are both deleted rather than given deep-copy semantics.
 class TH_PARENT_LIST {
 public:
   TH_PARENT_LIST();
+  // BUGFIX #3 (docs/BUG_CATALOG.md#srcthesaurushxx): TH_PARENT_LIST
+  // owned `table` (heap-allocated, freed in ~TH_PARENT_LIST()) with no
+  // user-declared copy constructor or operator= -- the compiler-
+  // generated ones shallow-copied `table`, confirmed to cause a
+  // heap-use-after-free (ASan) on copy. No live call site ever copies a
+  // TH_PARENT_LIST, so it's made explicitly non-copyable rather than
+  // given deep-copy semantics.
+  TH_PARENT_LIST(const TH_PARENT_LIST&) = delete;
+  TH_PARENT_LIST& operator=(const TH_PARENT_LIST&) = delete;
   void AddEntry(const TH_PARENT& NewParent);
   void GetEntry(const INT4 index, TH_PARENT* TheParent);
   TH_PARENT* GetEntry(const INT4 index);
@@ -83,9 +99,15 @@ private:
 typedef TH_ENTRY* PTH_ENTRY;
 
 
+/// Owns a heap-allocated, growable table of TH_ENTRY entries. Grows
+/// automatically in AddEntry() when full (see BUGFIX #1). Non-copyable,
+/// matching TH_PARENT_LIST above: no live call site ever copies one.
 class TH_ENTRY_LIST {
 public:
   TH_ENTRY_LIST();
+  // BUGFIX #3, second class -- see TH_PARENT_LIST above.
+  TH_ENTRY_LIST(const TH_ENTRY_LIST&) = delete;
+  TH_ENTRY_LIST& operator=(const TH_ENTRY_LIST&) = delete;
   void AddEntry(const TH_ENTRY& NewEntry);
   void GetEntry(const INT4 index, TH_ENTRY* TheEntry);
   TH_ENTRY* GetEntry(const INT4 index);

@@ -12,6 +12,9 @@ Description:	Class THESAURUS - Thesaurus and synonyms
 Author:		Archie Warnock (warnock@awcubed.com), A/WWW Enterprises
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "thesaurus.hxx"
 
 extern INT ParentSortCmp(const void* x, const void* y);
@@ -23,7 +26,13 @@ extern INT EntrySearchCmp(const void* x, const void* y);
 // Class: TH_PARENT
 /////////////////////////////////////////////////////////////////
 // Here are the methods for the parent terms
+/// Constructs an unset parent-term entry.
 TH_PARENT::TH_PARENT() {
+  // BUGFIX #4 (docs/BUG_CATALOG.md#srcthesaurushxx): GlobalStart was
+  // left indeterminate (Term, a STRING, self-initializes to empty
+  // regardless). Matches the same "indeterminate primitive member"
+  // category already fixed elsewhere this project.
+  GlobalStart = 0;
 }
 
 
@@ -55,8 +64,16 @@ TH_PARENT::SetString(const STRING& NewTerm) {
 }
 
 
+// BUGFIX #5 (docs/BUG_CATALOG.md#srcthesaurushxx): this body was empty,
+// unlike the adjacent (correct) operator= just below, which actually
+// copies GlobalStart/Term. Not called anywhere in the tree, so this was
+// dead code rather than an active bug, but clearly an unfinished
+// implementation rather than an intentional no-op -- completed to
+// match operator='s behavior.
 void
 TH_PARENT::Copy(const TH_PARENT& OtherValue) {
+  GlobalStart = OtherValue.GlobalStart;
+  Term = OtherValue.Term;
 }
 
 
@@ -100,6 +117,8 @@ ParentSearchCmp(const void* x, const void* y)
 
 
 //  Here are the methods for handling lists of parent terms
+/// Constructs an empty list with room for 100 entries (see AddEntry()
+/// for growth beyond that).
 TH_PARENT_LIST::TH_PARENT_LIST() {
   table = new TH_PARENT[100];
   Count = 0;
@@ -107,27 +126,61 @@ TH_PARENT_LIST::TH_PARENT_LIST() {
 }
 
 
+/// Appends NewParent, growing `table` first if it's already full.
 void
 TH_PARENT_LIST::AddEntry(const TH_PARENT& NewParent) {
+  // BUGFIX #1 (docs/BUG_CATALOG.md#srcthesaurushxx): this used to write
+  // table[Count] unconditionally against the fixed 100-entry table
+  // allocated in the constructor, with no growth anywhere in this
+  // class (unlike every sibling table-owning class this project --
+  // ATTRLIST, DFDT, ...). Confirmed as a real heap-buffer-overflow via
+  // a before/after test-revert under ASan, and confirmed actively
+  // reachable (not just latent): the index-time THESAURUS constructor
+  // parses a user-supplied synonym file and calls AddEntry() once per
+  // parent term with no upper bound on the source file's size. Fixed
+  // by growing `table` when full, mirroring ATTRLIST::Resize()'s body.
+  if (Count == MaxEntries) {
+    INT4 NewMaxEntries = MaxEntries * 2;
+    PTH_PARENT NewTable = new TH_PARENT[NewMaxEntries];
+    for (INT4 i = 0; i < Count; i++) {
+      NewTable[i] = table[i];
+    }
+    delete [] table;
+    table = NewTable;
+    MaxEntries = NewMaxEntries;
+  }
   table[Count] = NewParent;
   Count++;
 }
 
 
+/// Copies the entry at index into *TheParent; a no-op if index is out
+/// of range.
 void
 TH_PARENT_LIST::GetEntry(const INT4 index, TH_PARENT* TheParent) {
-  if (index <= Count) {
+  // BUGFIX #2 (docs/BUG_CATALOG.md#srcthesaurushxx): both GetEntry()
+  // overloads guarded with `index <= Count`, not `index < Count`;
+  // Count is the 0-based index of the next *unused* slot (see
+  // AddEntry() above), so `index == Count` silently returned whatever
+  // indeterminate/never-written entry happened to be at table[Count]
+  // instead of leaving the output untouched. Every live call site
+  // (THESAURUS::LoadParents()/LoadChildren()) only ever passes index in
+  // [0, Count-1], so this wasn't reachable today, but it's a real
+  // off-by-one in a public method.
+  if (index < Count) {
     *TheParent = table[index];
   }
 }
 
 
+/// Returns a pointer to the entry at index, or nullptr if out of range.
 TH_PARENT*
 TH_PARENT_LIST::GetEntry(const INT4 index) {
-  if (index <= Count) {
+  // BUGFIX #2, second overload -- see above.
+  if (index < Count) {
     return(&table[index]);
   }
-  return((TH_PARENT*)NULL);
+  return(nullptr);
 }
 
 
@@ -220,7 +273,11 @@ TH_PARENT_LIST::~TH_PARENT_LIST() {
 // Class: TH_ENTRY
 /////////////////////////////////////////////////////////////////
 // Here are the methods for the child terms
+/// Constructs an unset child-term entry.
 TH_ENTRY::TH_ENTRY() {
+  // BUGFIX #4, second class -- see TH_PARENT's constructor above.
+  GlobalStart = 0;
+  ParentPtr = 0;
 }
 
 
@@ -297,6 +354,8 @@ EntrySearchCmp(const void* x, const void* y)
 
 
 //  Here are the methods for handling lists of parent terms
+/// Constructs an empty list with room for 100 entries (see AddEntry()
+/// for growth beyond that).
 TH_ENTRY_LIST::TH_ENTRY_LIST() {
   table = new TH_ENTRY[100];
   Count = 0;
@@ -304,27 +363,47 @@ TH_ENTRY_LIST::TH_ENTRY_LIST() {
 }
 
 
+/// Appends NewChild, growing `table` first if it's already full.
 void
 TH_ENTRY_LIST::AddEntry(const TH_ENTRY& NewChild) {
+  // BUGFIX #1, second class -- see TH_PARENT_LIST::AddEntry() above.
+  // Confirmed actively reachable via the same THESAURUS constructor,
+  // which calls this once per *child* term parsed from the
+  // user-supplied synonym file (typically several per parent).
+  if (Count == MaxEntries) {
+    INT4 NewMaxEntries = MaxEntries * 2;
+    PTH_ENTRY NewTable = new TH_ENTRY[NewMaxEntries];
+    for (INT4 i = 0; i < Count; i++) {
+      NewTable[i] = table[i];
+    }
+    delete [] table;
+    table = NewTable;
+    MaxEntries = NewMaxEntries;
+  }
   table[Count] = NewChild;
   Count++;
 }
 
 
+/// Copies the entry at index into *TheChild; a no-op if index is out of
+/// range.
 void
 TH_ENTRY_LIST::GetEntry(const INT4 index, TH_ENTRY* TheChild) {
-  if (index <= Count) {
+  // BUGFIX #2, second class -- see TH_PARENT_LIST::GetEntry() above.
+  if (index < Count) {
     *TheChild = table[index];
   }
 }
 
 
+/// Returns a pointer to the entry at index, or nullptr if out of range.
 TH_ENTRY*
 TH_ENTRY_LIST::GetEntry(const INT4 index) {
-  if (index <= Count) {
+  // BUGFIX #2, second class, second overload.
+  if (index < Count) {
     return(&table[index]);
   }
-  return((TH_ENTRY*)NULL);
+  return(nullptr);
 }
 
 
