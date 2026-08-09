@@ -46,11 +46,25 @@ Author:		Jon Magid, jem@cnidr.org
 #include "defs.hxx"
 #include "strstack.hxx"
 
+// BUGFIX #2 (docs/BUG_CATALOG.md#srcmergecxx): merge.cxx never
+// included this header at all, so the compiler never had a chance to
+// catch either of this file's own defects: GPTYYPE (a typo for
+// GPTYPE, the only occurrence of that misspelling anywhere in the
+// tree) and buildHeap()'s declaration below not matching its actual
+// definition (see BUGFIX #3). Neither was reachable since nothing
+// else in this tree includes merge.hxx or calls into MERGE/hsort/
+// buildHeap/buildGpHeap/GpHsort (confirmed via grep), so fixing this
+// header in place -- unlike a header with real external callers --
+// changes no other file's visible contract.
 class MERGE {
 public:
+	// MERGE::AddChunk is declared but has never been defined anywhere
+	// in this tree, and nothing calls it -- vestigial. Left as a
+	// declaration only; implementing it would mean inventing behavior
+	// with no specification and no caller to validate it against.
 	void AddChunk(PCHR MemoryData, INT MemoryDataLength,
 		GPTYPE *MemoryIndex, INT MemoryIndexLength,
-		GPTYYPE GlobalStart);
+		GPTYPE GlobalStart);
 /*	void AppendChunk(MERGEFP mfp, INT MemoryDataLength,
 		GPTYPE *MemoryIndex, INT MemoryIndexLength,
 		GPTYPE GlobalStart);
@@ -66,7 +80,18 @@ void hsort(void *data, size_t nel, size_t width,
 	int (*compar) (const void *, const void *));
 
 
-void buildHeap(int *data, size_t nel, size_t width,
+// BUGFIX #3 (docs/BUG_CATALOG.md#srcmergecxx): declared here as taking
+// `int *data`, but merge.cxx's actual definition takes `void *data`
+// (matching the generic, width-parameterized byte arithmetic the
+// function body does internally -- the same qsort-style contract
+// hsort()/buildGpHeap()'s own declarations already use). Since
+// merge.cxx never included this header (see BUGFIX #2), the two never
+// sat in the same translation unit for the compiler to catch the
+// mismatch. Fixed by matching the header to what's actually
+// implemented, not the other way around: `int *data` would mean
+// reinterpreting arbitrary-width elements as ints, which is wrong for
+// any width other than sizeof(int).
+void buildHeap(void *data, size_t nel, size_t width,
 	int (*compar) (const void *, const void * ), int position, int reverse=0);
 
 

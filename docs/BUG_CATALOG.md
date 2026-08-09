@@ -8079,3 +8079,96 @@ changes here). Two bugs found and fixed.
    `BUGFIX #2` in source. `make tests`/`make tests-asan` pass clean
    (712 test cases, 2378 assertions).
 
+## src/merge.cxx
+
+Heapsort utilities (`hsort`/`buildHeap` for a generic `void*` buffer,
+`GpHsort`/`buildGpHeap` for a `GPTYPE` array) plus a `MERGE` class
+declared but never implemented. `merge.hxx` (Order 151) hadn't been
+processed yet, so this turn read both files fresh — no sibling turn to
+close out.
+
+1. **`buildGpHeap`'s sibling-comparison bound check was off by one →
+   confirmed heap-buffer-overflow** — guarded the `data[childpos+1]`
+   read with `childpos < heapsize` (already true from the enclosing
+   `if`, so redundant as written) instead of `childpos + 1 < heapsize`
+   — the check its sibling `buildHeap()` a few dozen lines below
+   already gets right for the identical "does this node have a second
+   child" question. Whenever `childpos` landed exactly on
+   `heapsize - 1` (its own last valid index), this read one element
+   past `heapsize` — and on `GpHsort()`'s very first pass, `heapsize`
+   equals the full array size, so that was one past the actual
+   allocation. Confirmed with a standalone repro under ASan: an
+   8-element array (the smallest size where this boundary is reached)
+   produced a heap-buffer-overflow read, and — since this is a
+   correctness bug as much as a memory-safety one — a stress test
+   across sizes 1-64 showed the *output* was already wrong (reading
+   adjacent, not-yet-placed heap elements as if they were real sibling
+   values, misordering the sort) even on sizes too small to cross an
+   actual allocation boundary. Fixed by matching `buildHeap()`'s
+   already-correct check. See `BUGFIX #1` in source. Verified fixed:
+   the same repro and stress test now pass cleanly, and
+   `tests/src/test_merge.cxx` has a dedicated regression test sweeping
+   sizes 1-20 including the exact boundary.
+
+2. **`merge.cxx` never included `merge.hxx` at all** — the root cause
+   that let `BUGFIX #3` (below) go undetected: with the two files never
+   sharing a translation unit, the compiler never had a chance to
+   cross-check the header's declarations against what's actually
+   defined here. Fixed by adding the `#include`, the same convention
+   every other file in this tree follows for its own header. See
+   `BUGFIX #2` in source.
+
+3. **`merge.hxx`'s `buildHeap()` declaration didn't match its
+   definition** — declared taking `int *data`, but the actual
+   definition here takes `void *data` and does generic, width-
+   parameterized byte arithmetic internally (the same `qsort`-style
+   contract `hsort()`/`buildGpHeap()`'s own declarations already use)
+   — `int *data` would have meant reinterpreting arbitrary-width
+   elements as `int`s, wrong for any width other than `sizeof(int)`.
+   Only surfaced once `BUGFIX #2` made both declarations visible in the
+   same translation unit. Header change, but safe to apply directly
+   rather than stop-and-ask (the usual GENERAL step 4 concern): `grep`
+   across the whole tree confirms `merge.hxx` has no includer besides
+   `merge.cxx` itself and no external caller of any function it
+   declares, so nothing else's visible contract changes — the same
+   reasoning `src/md5.hxx`'s `BUGFIX #1` used for its in-place
+   `uint32` fix. Fixed by matching the header to what's actually
+   implemented. See `BUGFIX #3` in source (`merge.hxx`).
+
+   Also fixed in the same header, same "no external includer" basis:
+   `AddChunk`'s `GlobalStart` parameter was declared `GPTYYPE` — a
+   typo, the only occurrence of that misspelling anywhere in the tree
+   — corrected to `GPTYPE`. `MERGE::AddChunk` itself is declared but
+   has no definition anywhere in this tree and nothing calls it;
+   left as a declaration only rather than invented from scratch, since
+   there's no specification or caller to validate an implementation
+   against.
+
+4. **`buildGpHeap`'s `reverse` parameter is silently unused** —
+   modernization/hygiene, not a behavioral gap: unlike `buildHeap()`,
+   this function has no reverse-aware branch at all, but every actual
+   call in this tree (both inside `GpHsort()`, its only caller) passes
+   `reverse=0` literally, and nothing outside this file calls
+   `buildGpHeap` at all (confirmed via `grep`) — so there's no
+   observable case where a caller's requested reversal is silently
+   dropped. Kept for signature symmetry with `buildHeap()`. Silenced
+   with `(void)reverse;` rather than removing the parameter (a header
+   signature change) or implementing unused reverse logic (inventing
+   behavior with no caller to validate it against). See `BUGFIX #4` in
+   source.
+
+Also fixed to compile clean under `-Wall -Wextra` (pre-existing
+warnings, not introduced this turn): several `-Wsign-compare`
+comparisons between `int` (`position`/`childpos`) and `size_t`
+(`heapsize`) in both `buildGpHeap()` and `buildHeap()`, resolved with
+casts rather than changing either parameter's type.
+
+`src/merge.cxx` wasn't linked into `TEST_ENGINE_SRCS` before this turn
+(only the real production build, via `src/Makefile`'s legacy `OBJ`
+list reached through the top-level `Makefile`'s `isearch`/`smoke-test`
+targets, ever compiled it) — added, and `tests/src/test_merge.cxx`
+covers `GpHsort`/`hsort` correctness across sizes 1-20 (`buildHeap`/
+`buildGpHeap` are exercised transitively; `MERGE::AddChunk` has no
+definition to test). `make tests`/`make tests-asan` pass clean (729
+test cases, 2823 assertions).
+

@@ -151,7 +151,7 @@
 | 147 | src/mdt.cxx | done | 2026-08-09 | [src/mdt.cxx](BUG_CATALOG.md#srcmdtcxx) |
 | 148 | src/mdtrec.cxx | done | 2026-08-07 | [src/mdtrec.cxx](BUG_CATALOG.md#srcmdtreccxx) |
 | 149 | src/memcntl.cxx | done | 2026-08-09 | [src/memcntl.cxx](BUG_CATALOG.md#srcmemcntlcxx) |
-| 150 | src/merge.cxx | pending | | |
+| 150 | src/merge.cxx | done | 2026-08-09 | [src/merge.cxx](BUG_CATALOG.md#srcmergecxx) |
 | 151 | src/merge.hxx | pending | | |
 | 152 | src/mergeunit.cxx | pending | | |
 | 153 | src/multiterm.cxx | pending | | |
