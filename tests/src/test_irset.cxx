@@ -266,3 +266,81 @@ TEST_CASE("IRSET Concat appends the other set's entries without deduplicating", 
 	a.Concat(b);
 	REQUIRE(a.GetTotalEntries() == 2);
 }
+
+TEST_CASE("IRSET Expand recovers after CleanUp on an empty set", "[irset]") {
+	// BUGFIX #5 coverage: Expand() used to Resize(TotalEntries*2), which
+	// never grows once MaxEntries reaches 0 (reachable via CleanUp() on an
+	// empty IRSET) -- 0*2 is still 0, so the next AddEntry() wrote one
+	// element past a zero-size allocation. Confirmed real with a
+	// standalone repro under ASan (heap-buffer-overflow at the write in
+	// AddEntry()). Falling back to a minimum of 1 when TotalEntries is 0
+	// breaks the stuck-at-zero cycle.
+	IRSET irset(nullptr);
+	irset.CleanUp();
+	REQUIRE(irset.GetTotalEntries() == 0);
+
+	IRESULT r;
+	MakeIresult(&r, 1, 1.0);
+	irset.AddEntry(r, 0);
+	REQUIRE(irset.GetTotalEntries() == 1);
+
+	IRESULT out;
+	irset.GetEntry(1, &out);
+	REQUIRE(out.GetMdtIndex() == 1);
+}
+
+TEST_CASE("IRSET AndNot's TotalEntries matches its Table when OtherIrset has duplicate MdtIndex entries", "[irset]") {
+	// BUGFIX #6 coverage: AndNot() set TotalEntries to `count`, the
+	// pre-MergeEntries() match count, instead of MyResult's actual
+	// post-merge entry count. FastAddEntry() (used internally by
+	// AndNot()) bypasses AddEntry()'s own dedup, so when OtherIrset
+	// contains duplicate MdtIndex entries not present in `a`,
+	// MergeEntries(0) collapses them in Table but TotalEntries kept the
+	// higher pre-merge count -- any GetEntry() past Table's real end then
+	// read out of bounds. Confirmed real with a standalone repro under
+	// ASan (heap-buffer-overflow read in IRESULT::operator= via
+	// GetEntry()).
+	IRSET a(nullptr);
+	IRESULT r1;
+	MakeIresult(&r1, 1, 1.0);
+	a.AddEntry(r1, 0);
+
+	IRSET b(nullptr);
+	IRESULT r2, r3;
+	MakeIresult(&r2, 5, 2.0);
+	MakeIresult(&r3, 5, 3.0);
+	b.FastAddEntry(r2, 0);
+	b.FastAddEntry(r3, 0);
+
+	OPOBJ& bRef = b;
+	a.AndNot(bRef);
+	REQUIRE(a.GetTotalEntries() == 1);
+
+	IRESULT out;
+	a.GetEntry(1, &out);
+	REQUIRE(out.GetMdtIndex() == 5);
+}
+
+TEST_CASE("IRSET And's TotalEntries matches its Table when OtherIrset has duplicate MdtIndex entries", "[irset]") {
+	// BUGFIX #6 coverage: same defect as AndNot() above, in And()'s
+	// mirror-image assignment of TotalEntries=count.
+	IRSET a(nullptr);
+	IRESULT r1;
+	MakeIresult(&r1, 5, 1.0);
+	a.AddEntry(r1, 0);
+
+	IRSET b(nullptr);
+	IRESULT r2, r3;
+	MakeIresult(&r2, 5, 2.0);
+	MakeIresult(&r3, 5, 3.0);
+	b.FastAddEntry(r2, 0);
+	b.FastAddEntry(r3, 0);
+
+	OPOBJ& bRef = b;
+	a.And(bRef);
+	REQUIRE(a.GetTotalEntries() == 1);
+
+	IRESULT out;
+	a.GetEntry(1, &out);
+	REQUIRE(out.GetMdtIndex() == 5);
+}

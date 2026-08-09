@@ -762,6 +762,63 @@ Also applied: 2 remaining `NULL` → `nullptr` in `And()`/`AndNot()`
 (`bsearch()` result comparisons), and a dead `DOUBLE x;` local removed
 from `FastAddEntry()` (another source of a standing warning).
 
+## src/irset.cxx
+
+5. **`Expand()`'s multiplicative doubling gets permanently stuck at
+   zero → confirmed heap-buffer-overflow** — `Expand()` called
+   `Resize(TotalEntries*2)` to grow capacity. Once `MaxEntries` reaches
+   0 (reachable via `CleanUp()`/`Resize()` on an empty `IRSET`, unlike
+   every sibling class's additive `Resize(Count+N)` growth pattern),
+   `0*2` is still `0`, so every subsequent `AddEntry()`/`FastAddEntry()`
+   wrote one element past a zero-size allocation instead of triggering
+   a real grow. Confirmed with a standalone repro under ASan:
+   `CleanUp()` on an empty `IRSET` followed by `AddEntry()` reported a
+   heap-buffer-overflow at the write in `AddEntry()`. Fixed by falling
+   back to a minimum of 1 when `TotalEntries` is 0, breaking the
+   stuck-at-zero cycle; doubling from there recovers in a handful of
+   calls. See `BUGFIX #5` in source. Verified fixed: the same repro now
+   passes cleanly under ASan, and `tests/src/test_irset.cxx` has a
+   dedicated regression test (`IRSET Expand recovers after CleanUp on
+   an empty set`).
+
+6. **`And()`/`AndNot()` set `TotalEntries` from the pre-merge match
+   count, not `Table`'s actual post-merge size → confirmed
+   heap-buffer-overflow** — both functions accumulate matches into a
+   scratch `IRSET MyResult` via `FastAddEntry()` (which, unlike
+   `AddEntry()`, does *not* dedupe by `MdtIndex`), call
+   `MyResult.MergeEntries(0)` to collapse any duplicates into `Table`,
+   then steal that `Table` — but set `this->TotalEntries = count`, the
+   *pre*-merge count of matches added, not `MyResult`'s actual
+   post-merge entry count. Whenever `OtherIrset` contained duplicate
+   `MdtIndex` entries (reachable through its own `FastAddEntry()` calls,
+   which bypass dedup the same way), `MergeEntries()` collapses them in
+   `Table` but `TotalEntries` kept the higher pre-merge count, so any
+   `GetEntry()` at the overstated tail read past `Table`'s real
+   allocation. Confirmed with a standalone repro under ASan: `And()`ing
+   an `IRSET` against another containing two duplicate-`MdtIndex`
+   entries produced a heap-buffer-overflow read in
+   `IRESULT::operator=` via `GetEntry()`. Fixed by using
+   `MyResult.GetTotalEntries()` (captured before `StealTable()` resets
+   it) instead of `count`, in both functions. See `BUGFIX #6` in
+   source. Verified fixed: the same repro now passes cleanly under
+   ASan, and `tests/src/test_irset.cxx` has dedicated regression tests
+   for both `And()` and `AndNot()`.
+
+Also checked and left alone: the `#else`/`#ifdef MULTI` block (lines
+~697–800) contains an older, alternate implementation of `And()`/
+`AndNot()` plus a `CompressTable()`-style compaction loop. `-DMULTI` is
+commented out in the top-level `Makefile` (`#CFLAGS=-O2 -DUNIX
+-DMULTI`), so this branch is genuinely dead code in this build —
+confirmed by grepping the Makefile rather than assumed. Not analyzed
+further; out of scope unless `MULTI` is ever turned on.
+`IrsetScoreCompare()`'s tie-break subtracts two signed `INT`
+`GetMdtIndex()` values directly, the same theoretical-overflow-only
+pattern left alone in `INTLIST::SortGPCmp` (see `src/intlist.cxx`
+above) rather than `FCT::FctFcCompare`'s confirmed unsigned-narrowing
+bug (see `src/fct.cxx` above) — no demonstrated failure, left as-is
+per this project's "don't claim a bug without a reproduced failure"
+standard.
+
 ## src/opstack.hxx
 
 1. **Header not self-contained** — same defect as `src/fc.hxx`

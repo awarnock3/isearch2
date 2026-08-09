@@ -143,7 +143,7 @@
 | 139 | src/intfield.cxx | done | 2026-08-07 | [src/intfield.cxx](BUG_CATALOG.md#srcintfieldcxx) |
 | 140 | src/intlist.cxx | done | 2026-08-09 | [src/intlist.cxx](BUG_CATALOG.md#srcintlistcxx) |
 | 141 | src/iresult.cxx | done | 2026-08-07 | [src/iresult.cxx](BUG_CATALOG.md#srciresultcxx) |
-| 142 | src/irset.cxx | pending | | |
+| 142 | src/irset.cxx | done | 2026-08-09 | [src/irset.cxx](BUG_CATALOG.md#srcirsetcxx) |
 | 143 | src/marc.cxx | done | 2026-08-08 | [src/marc.hxx](BUG_CATALOG.md#srcmarchxx) |
 | 144 | src/marclib.cxx | pending | | |
 | 145 | src/md5.cxx | pending | | |

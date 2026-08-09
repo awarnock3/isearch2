@@ -40,6 +40,9 @@ Description:	Class IRSET - Internal Search Result Set
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdlib.h>
 
 #include "defs.hxx"
@@ -420,11 +423,24 @@ IRSET::Fill(INT Start, INT End, PRSET set)
 }
 
 
-void 
+/**
+ * @brief Grows Table's capacity, doubling it (or seeding a minimum of
+ * 1 if it's currently 0).
+ */
+void
 IRSET::Expand() {
   //  Resize(TotalEntries+1000);
   // Really resize this
-  Resize(TotalEntries*2);
+  // BUGFIX #5 (docs/BUG_CATALOG.md#srcirsetcxx): Resize(TotalEntries*2)
+  // never grows once MaxEntries reaches 0 (reachable via CleanUp()/
+  // Resize() on an empty IRSET) -- 0*2 is still 0, so every subsequent
+  // AddEntry()/FastAddEntry() wrote one element past a zero-size
+  // allocation. Confirmed with a standalone repro under ASan: CleanUp()
+  // on an empty IRSET followed by AddEntry() reported a
+  // heap-buffer-overflow right here. Falling back to a minimum of 1
+  // breaks the stuck-at-zero cycle; doubling from there recovers in a
+  // handful of calls.
+  Resize((TotalEntries > 0) ? (TotalEntries * 2) : 1);
 }
 
 
@@ -570,8 +586,12 @@ IRSET::CharProx(const OPOBJ& OtherIrset, const INT Distance) {
 
 #ifndef MULTI
 // AndNOT added by Glenn MacStravic
-void 
-IRSET::AndNot(const OPOBJ& OtherIrset) 
+/**
+ * @brief Removes from this set every entry whose MdtIndex also appears
+ * in OtherIrset.
+ */
+void
+IRSET::AndNot(const OPOBJ& OtherIrset)
 {
   IRESULT OtherIresult;
   IRSET MyResult(Parent);
@@ -601,15 +621,31 @@ IRSET::AndNot(const OPOBJ& OtherIrset)
   MyResult.SortByIndex();
   MyResult.MergeEntries(0);
   delete [] Table;
-  TotalEntries=count;
+  // BUGFIX #6 (docs/BUG_CATALOG.md#srcirsetcxx): TotalEntries was set to
+  // `count`, the number of entries added to MyResult BEFORE
+  // MergeEntries(0) collapses duplicate MdtIndex entries (reachable
+  // since FastAddEntry(), used just above, bypasses AddEntry()'s own
+  // dedup). Table itself is MyResult's post-merge, deduplicated array,
+  // so whenever OtherIrset contained duplicate entries, TotalEntries
+  // overstated Table's real element count and any later GetEntry() past
+  // the true end read out of bounds. Confirmed with a standalone repro
+  // under ASan: And()'ing against an IRSET with duplicate MdtIndex
+  // entries produced a heap-buffer-overflow read in GetEntry(). Using
+  // MyResult's own post-merge count (captured before StealTable()
+  // resets it) matches Table's actual contents.
+  TotalEntries=MyResult.GetTotalEntries();
   MaxEntries=MyResult.MaxEntries;
   Table = MyResult.StealTable();
 }
 
 
 // Faster AND implementation added by Glenn MacStravic
-void 
-IRSET::And(const OPOBJ& OtherIrset) 
+/**
+ * @brief Reduces this set to only the entries whose MdtIndex also
+ * appears in OtherIrset, combining hit counts and scores for each match.
+ */
+void
+IRSET::And(const OPOBJ& OtherIrset)
 {
   IRESULT OtherIresult;
   IRSET MyResult(Parent);
@@ -654,7 +690,10 @@ IRSET::And(const OPOBJ& OtherIrset)
   MyResult.SortByIndex();
   MyResult.MergeEntries(0);
   delete [] Table;
-  TotalEntries=count;
+  // BUGFIX #6 (docs/BUG_CATALOG.md#srcirsetcxx): see the identical fix
+  // and rationale in AndNot() above -- `count` is the pre-merge match
+  // count, not Table's actual post-merge element count.
+  TotalEntries=MyResult.GetTotalEntries();
   MaxEntries=MyResult.MaxEntries;
   if (MyResult.GetMaxScore() > MaxScore) {
     MaxScore = MyResult.GetMaxScore();
