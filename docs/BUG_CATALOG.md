@@ -8007,9 +8007,95 @@ a before/after test-revert under ASan — see above); `GetEntry()` treats
 out-parameter overloads (`BUGFIX #2`); `TH_PARENT::Copy()` actually
 copies now (`BUGFIX #5`); both classes' default constructors start their
 `INT4` members at a deterministic `0` (`BUGFIX #4`). `THESAURUS` itself
-isn't exercised (its constructors need real files on disk; see the test
-file's own header comment). `make tests`/`make tests-asan` pass clean
+wasn't exercised at the time this section was written (its constructors
+need real files on disk); see `src/thesaurus.cxx` below for the
+`THESAURUS`-level bugs and tests added once that file's own turn built
+the on-disk test fixtures. `make tests`/`make tests-asan` pass clean
 (687 test cases, 2319 assertions).
+
+## src/thesaurus.cxx
+
+Full re-read (942 lines) alongside the already-processed
+`thesaurus.hxx` above (`BUGFIX #1-5`, all confirmed present and correct
+in source). Found two new, confirmed-real bugs in the index-time
+constructor and two more in `GetParent()`/`GetChildren()`.
+
+1. **Index-time constructor dereferences a null `strtok()` result when
+   `SourceFileName` doesn't exist or is empty — confirmed SIGSEGV**:
+   `THESAURUS(const STRING& SourceFileName, ...)` calls
+   `sBuf.ReadFile(SourceFileName)` without checking its return value.
+   If the file doesn't exist (or is genuinely empty), `sBuf` stays
+   empty, `b = sBuf.NewCString()` yields an empty C-string, and
+   `pBuf = strtok(b,"\n")` returns `nullptr` — dereferenced
+   unconditionally by `while (*pBuf == ' ') pBuf++;` at the top of the
+   parsing loop, with no null check anywhere before it. Confirmed via a
+   standalone repro: a nonexistent `SourceFileName` produced a real
+   `SIGSEGV` (`AddressSanitizer: SEGV on unknown address 0x0`) at the
+   `*pBuf` dereference. Fixed by returning early (an empty/missing
+   source file degenerates to an empty thesaurus) when `pBuf` is
+   `nullptr`, matching the "gracefully handle missing input" convention
+   `OpenParentsFile()`/`OpenChildrenFile()`'s own callers already use
+   elsewhere in this class. See `BUGFIX #6` in source.
+2. **`b` (the parsed source buffer) leaked when `OpenSynonymFile("wb")`
+   fails** — found while fixing `BUGFIX #6` above: `b` was only freed
+   (`delete [] b;`) after the parsing `do-while` loop completed
+   normally; the early-return path taken when the output `.syn` file
+   can't be opened (e.g. `DbPathName` not writable or nonexistent)
+   never freed it. A real, if narrow, memory leak on a plausible
+   indexing-time failure mode. Fixed by freeing `b` on that early-return
+   path too. See `BUGFIX #7` in source.
+3. **`GetParent()` and `GetChildren()` both leak a `FILE*` on every
+   successful call — confirmed via `/proc/self/fd` inspection**: both
+   open the synonym file via `OpenSynonymFile("rb")` and read through
+   it, but neither closes it on the success path (only `GetChildren()`'s
+   `fgets()`-failure branch called `fclose()`). Confirmed via a
+   standalone repro that counted this process's open file descriptors
+   before/after 50 `GetParent()`+`GetChildren()` call pairs: reverting
+   the fix showed the count growing by exactly 2 per iteration (100 new
+   fds over 50 iterations); with the fix, the count is unchanged.
+   Reachable through the live `SQUERY::ExpandQuery()` synonym-expansion
+   path (`src/squery.cxx`), which calls both once per query term — a
+   long-running search process doing repeated thesaurus-expanded
+   queries would eventually exhaust its file descriptor limit. Fixed by
+   adding the missing `fclose(fp)` to both functions' success paths.
+   See `BUGFIX #8` in source (both functions).
+4. **`GetChildren()` returns the last child term with an embedded
+   trailing newline — confirmed via standalone repro**: `fgets(buf,
+   MAX_SYN_LENGTH, fp)` reads the full line including its trailing
+   `'\n'`, which was never stripped before `TheEntry.Replace("=","+");
+   Children->Split('+',TheEntry);` — so whichever child term is last on
+   the line comes back as e.g. `"PUPPY\n"` instead of `"PUPPY"`.
+   Confirmed with a standalone repro built from a real two-line synonym
+   file (`DOG=CANINE+PUPPY`); reverting the fix reproduced the exact
+   corrupted last entry (`GetLength() == 6` instead of `5`). Reachable
+   through the same live `SQUERY::ExpandQuery()` path as `BUGFIX #8` —
+   `ExpandQuery()` uses the returned child terms directly to build OR'd
+   query terms, so a newline-suffixed term would silently fail to match
+   anything in the index, corrupting real thesaurus-expanded searches.
+   (The function's own first "child" always being the original parent
+   term itself, e.g. `"DOG"` appearing before `"CANINE"`/`"PUPPY"`, is
+   intentional, documented behavior per the function's own comment —
+   not part of this bug.) Fixed with `TheEntry.Trim();` before the
+   `Replace()`/`Split()` calls, the same convention already used
+   elsewhere in this file (the index-time constructor's
+   `ThisChild.Trim(); ThisChild.TrimLeading();`). See `BUGFIX #9` in
+   source.
+
+`tests/src/test_thesaurus.cxx` was extended with real on-disk
+`THESAURUS` fixtures (a `TempFile` helper following the same
+`mkstemp()` convention as `test_fpt.cxx`/`test_record.cxx`), covering:
+a missing `SourceFileName` degrades to an empty thesaurus instead of
+crashing (`BUGFIX #6`); construction doesn't crash when
+`OpenSynonymFile("wb")` fails (`BUGFIX #7`, not independently
+observable as a leak through the public API, so this is mainly a
+regression smoke test); `GetChildren()`'s last entry has no trailing
+newline and the exact expected length (`BUGFIX #9`); `GetParent()`
+resolves a child to its parent; and 25 iterations of
+`GetParent()`+`GetChildren()` hold the open-fd count steady (`BUGFIX
+#8`). All fixes verified via revert-and-repro under ASan/UBSan: standalone
+scratch repros for `BUGFIX #6`/`#7`/`#9`, and equivalent revert-and-repro
+logic embedded directly in the new Catch2 test for `BUGFIX #8`. `make
+tests`/`make tests-asan` pass clean (745 test cases, 2850 assertions).
 
 ## src/tokengen.hxx
 

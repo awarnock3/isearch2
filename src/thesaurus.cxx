@@ -565,12 +565,38 @@ THESAURUS::THESAURUS(const STRING& SourceFileName, const STRING& DbPathName,
   b = sBuf.NewCString();
   pBuf = strtok(b,"\n");
 
+  // BUGFIX #6 (docs/BUG_CATALOG.md#srcthesaurushxx): pBuf went straight
+  // into the parsing loop below with no null check. strtok() returns
+  // nullptr when there's nothing to tokenize -- reachable whenever
+  // ReadFile() above doesn't populate sBuf (its own return value was
+  // never checked): SourceFileName not existing, or existing but
+  // genuinely empty, both leave sBuf empty. Confirmed real with a
+  // standalone repro: a nonexistent SourceFileName crashed with a
+  // SIGSEGV (null-pointer read) at the very first `*pBuf` below.
+  // Fixed by skipping the parsing loop entirely when there's nothing
+  // to parse -- an empty/missing source file degenerates to an empty
+  // thesaurus, the same "gracefully handle missing input" convention
+  // OpenParentsFile()/OpenChildrenFile()'s own callers already use.
+  if (!pBuf) {
+    delete [] b;
+    return;
+  }
+
   // Now, pBuf points to one synonym definition
   ParentGP = 0;
 
+  // BUGFIX #7 (docs/BUG_CATALOG.md#srcthesaurushxx): found while fixing
+  // BUGFIX #6 just above -- `b` (NewCString()'d, only freed via
+  // `delete [] b;` after the parsing loop completes normally) was never
+  // freed on this early-return path either, leaking it whenever
+  // OpenSynonymFile("wb") fails (e.g. DbPathName not writable/
+  // nonexistent) -- a real, if narrow, memory leak on a plausible
+  // indexing-time failure mode.
   Fp = OpenSynonymFile("wb");
-  if (!Fp)
+  if (!Fp) {
+    delete [] b;
     return;
+  }
 
   do {
     // Skip leading blanks
@@ -642,7 +668,7 @@ THESAURUS::THESAURUS(const STRING& SourceFileName, const STRING& DbPathName,
       // Update to point to the start of the next line in the file
       ParentGP += ParentString.GetLength();
     }
-  } while ( (pBuf = strtok((CHR*)NULL,"\n")) );
+  } while ( (pBuf = strtok(nullptr,"\n")) );
 
   delete [] b;
   fclose(Fp);
@@ -826,7 +852,27 @@ THESAURUS::GetChildren(const STRING& ParentTerm, STRLIST* Children) {
       fclose(fp);
       return;
     }
+    // BUGFIX #8 (docs/BUG_CATALOG.md#srcthesaurushxx): fp was never
+    // closed on this, the normal/success path -- only the fgets()
+    // failure branch above closed it. Every successful GetChildren()
+    // call leaked a FILE* (confirmed via /proc/self/fd inspection);
+    // since ExpandQuery() (src/squery.cxx) calls this once per query
+    // term during synonym expansion, a long-running search process
+    // doing repeated thesaurus-expanded queries would eventually
+    // exhaust its file descriptor limit.
+    fclose(fp);
     TheEntry = buf;
+    // BUGFIX #9 (docs/BUG_CATALOG.md#srcthesaurushxx): fgets() reads the
+    // trailing '\n' into buf, and it was never stripped before the
+    // Replace/Split below -- so the last child term in the list came
+    // back with an embedded newline (e.g. "PUPPY\n" instead of "PUPPY").
+    // Confirmed via a standalone repro. Reachable through the live
+    // SQUERY::ExpandQuery() synonym-expansion path, which uses the
+    // returned child terms directly to build OR'd query terms -- a
+    // newline-suffixed term would silently fail to match anything in
+    // the index. Same Trim() convention already used elsewhere in this
+    // file (see the index-time constructor) to strip fgets()'s newline.
+    TheEntry.Trim();
     TheEntry.Replace("=","+");
     Children->Split('+',TheEntry);
   } else {
@@ -870,6 +916,11 @@ THESAURUS::GetParent(const STRING& ChildTerm, STRING* TheParent) {
     if (!fp)
       return;
     GetIndirectString(fp,ptr,TheParent);
+    // BUGFIX #8 (docs/BUG_CATALOG.md#srcthesaurushxx): same missing
+    // fclose() as GetChildren() above -- fp was opened but never closed
+    // on this path. GetIndirectString() only reads through the FILE*,
+    // it doesn't own or close it.
+    fclose(fp);
   } else {
     *TheParent=ChildTerm;
   }

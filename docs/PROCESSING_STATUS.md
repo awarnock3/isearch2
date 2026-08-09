@@ -178,7 +178,7 @@
 | 174 | src/strlist.cxx | done | 2026-08-07 | [src/strlist.cxx](BUG_CATALOG.md#srcstrlistcxx) |
 | 175 | src/strstack.cxx | done | 2026-08-07 | [src/strstack.hxx](BUG_CATALOG.md#srcstrstackhxx) |
 | 176 | src/termobj.cxx | done | 2026-08-09 | [src/termobj.cxx](BUG_CATALOG.md#srctermobjcxx) |
-| 177 | src/thesaurus.cxx | pending | | |
+| 177 | src/thesaurus.cxx | done | 2026-08-09 | [src/thesaurus.cxx](BUG_CATALOG.md#srcthesauruscxx) |
 | 178 | src/tokengen.cxx | pending | | |
 | 179 | src/vidb.cxx | done | 2026-08-08 | [src/vidb.hxx](BUG_CATALOG.md#srcvidbhxx) |
 | 180 | src/vlist.cxx | pending | | |
