@@ -1423,6 +1423,55 @@ than deferring), all bugs below were found and fixed in
 Also modernized throughout `marclib.cxx`: every code-position `NULL` →
 `nullptr` (comments describing "returns NULL" behavior left as prose).
 
+## src/marclib.cxx
+
+`src/marclib.hxx`'s turn already found and fixed `BUGFIX #1-3` directly
+in this `.cxx` (see above); this is this file's own dedicated turn,
+closing it out with one more confirmed defect found on a full re-read.
+
+4. **`GetMARC()` trusted the caller's `lrecl` with no floor, reading
+   past a too-short record in two places → confirmed
+   heap-buffer-overflow** — `GetMARC()` immediately treats `record` as
+   a full `MARC_LEADER_OVER` (24 bytes) and reads its `BaseAddr` field
+   (offset 12-16) with no check that `lrecl` is even that large, then
+   starts a directory-scan loop (`for (; isdigit(dir->tag[0]); dir++)`)
+   with no check that `dir` stays within `record + lrecl` either —
+   relying entirely on a well-formed record's own terminator bytes
+   being present to naturally stop the scan. `MARC::MARC(STRING&)` in
+   `src/marc.cxx` (Order 143, still pending) passes a document's raw
+   length straight through with no minimum-size check of its own, so
+   any truncated or malformed record being indexed as MARC reaches this
+   directly. Confirmed real with two standalone repros under ASan: a
+   10-byte record crashed inside `GetNum()` reading the leader's
+   `BaseAddr`; a 24-byte (leader-only, no directory) record crashed one
+   line later at the directory scan's first byte. Fixed by rejecting
+   anything shorter than a full leader up front (matching `SetField()`'s
+   existing "return `nullptr` on bad input" convention from `BUGFIX #2`
+   above), and bounding the directory-scan loop's `dir` pointer against
+   `record + lrecl` before every dereference so a truncated or
+   unterminated directory can't walk past it either. See `BUGFIX #4` in
+   source. Verified fixed: both repros now safely print an error and
+   return `nullptr` (for the leader case) or stop the scan cleanly with
+   `nfields == 0` (for the directory case) instead of reading out of
+   bounds; the pre-existing "well-formed record" test in
+   `tests/src/test_marclib.cxx` still passes unchanged, confirming
+   nothing legitimate regressed.
+
+Also checked and left alone: `ReadMARC()` computes `read(file, buffer+5,
+lrecl-5L)`, which underflows to a huge `size_t` if a record claims a
+length under 5 bytes -- looks like the same class of bug as `BUGFIX #4`
+at first glance, but a standalone repro (a record whose length field
+reads `00000`, backed by a large real file) did **not** reproduce a
+memory-safety failure: glibc's `read()` rejects any count exceeding
+`SSIZE_MAX` with `EINVAL` before touching the buffer, and any `lrecl`
+under 5 underflows to a `size_t` far above that ceiling. Also, neither
+`ReadMARC()` nor `SeekMARC()` has any caller anywhere in this tree
+(confirmed via `grep` — only `GetMARC()`, called with `copy=0` from
+`marc.cxx`, is actually used). Left unfixed per this project's "don't
+claim a bug without a reproduced failure" standard — noted here rather
+than silently dropped in case a future caller (or a different libc)
+changes either fact.
+
 ## src/md5.hxx
 
 Classic public-domain MD5 (RFC 1321) implementation by Colin Plumb,

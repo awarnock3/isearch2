@@ -162,6 +162,33 @@ TEST_CASE("GetMARC rejects a field whose directory offset points outside the rec
 	free(record);
 }
 
+TEST_CASE("GetMARC rejects a record too short to hold a leader", "[marclib]") {
+	// BUGFIX #4 coverage: before the fix, a record shorter than
+	// MARC_LEADER_OVER (24 bytes) still had its leader's BaseAddr field
+	// (offset 12-16) read unconditionally, walking past the buffer.
+	// Confirmed originally via a standalone ASan repro (heap-buffer-
+	// overflow READ inside GetNum(), called from GetMARC()).
+	char record[10];
+	memset(record, '0', sizeof(record));
+
+	MARC_REC* m = GetMARC(record, sizeof(record), 0);
+	REQUIRE(m == nullptr);
+}
+
+TEST_CASE("GetMARC rejects a leader-only record with no directory terminator", "[marclib]") {
+	// BUGFIX #4 coverage: a record just long enough to pass the leader
+	// check above, but truncated before any directory terminator,
+	// walked the directory-scan loop's `dir` pointer past the buffer
+	// reading dir->tag[0]. Confirmed originally via a standalone ASan
+	// repro (heap-buffer-overflow READ at the directory scan).
+	char record[24];
+	memset(record, '0', sizeof(record));
+
+	MARC_REC* m = GetMARC(record, sizeof(record), 0);
+	REQUIRE(m != nullptr);
+	REQUIRE(m->nfields == 0);
+}
+
 TEST_CASE("normalize formats a call number and rejects malformed input", "[marclib]") {
 	char in[] = "QA76.73 .C153";
 	char out[64];

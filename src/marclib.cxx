@@ -35,6 +35,9 @@
  * SUCH DAMAGE.
  */
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdio.h>
 #include <ctype.h>
 #include <fcntl.h>
@@ -384,6 +387,23 @@ MARC_REC *GetMARC(char *buffer,INT4 lrecl,int copy)
   else
     record = buffer;
 
+  // BUGFIX #4: lrecl came from the caller with no floor -- a truncated
+  // or malformed record shorter than a MARC leader (24 bytes) let the
+  // leader field read below (`GetNum(m->leader->BaseAddr,5)`, offset
+  // 12-16) walk past the end of `record`. Confirmed real with a
+  // standalone repro under ASan: a 10-byte record crashed inside
+  // GetNum() with a heap-buffer-overflow read. Reachable live from
+  // MARC::MARC(STRING&) in marc.cxx, which passes a document's raw
+  // length straight through with no minimum-size check of its own.
+  // Fixed by rejecting anything too short to hold a full leader here,
+  // matching this function's existing "return nullptr on bad input"
+  // convention (see BUGFIX #2 in SetField() above). See
+  // docs/BUG_CATALOG.md#srcmarclibcxx.
+  if (lrecl < (INT4)sizeof(MARC_LEADER_OVER)) {
+    fprintf(stderr,"marc record too short for a leader in GetMARC\n");
+    return(nullptr);
+  }
+
   if ((m = (MARC_REC *)AllocSafe(&RememberKey,
 		 (INT4)sizeof(MARC_REC), MEMF_PUBLIC | MEMF_CLEAR,
 		 GENERALMEM)) == nullptr) {
@@ -395,14 +415,25 @@ MARC_REC *GetMARC(char *buffer,INT4 lrecl,int copy)
   m->leader = (MARC_LEADER_OVER *)record;
   m->BaseAddr = record + GetNum(m->leader->BaseAddr,5);
   dir = (MARC_DIRENTRY_OVER *)(record + sizeof(MARC_LEADER_OVER));
-  for (; isdigit(dir->tag[0]); dir++)
+  // BUGFIX #4 (continued): a well-formed record's directory is always
+  // terminated by a non-digit (FIELDTERM) before field data begins, so
+  // the original `isdigit(dir->tag[0])` alone was enough -- *if* that
+  // terminator is actually present within `record`. A record just long
+  // enough to pass the leader check above but truncated or missing its
+  // directory terminator kept walking `dir` past the buffer instead.
+  // Confirmed real with a standalone repro: a 24-byte (leader-only, no
+  // directory) record crashed reading `dir->tag[0]` one byte past the
+  // allocation. Bounding `dir` against `record + lrecl` before every
+  // dereference closes this the same way the leader check above does.
+  for (; (char *)dir + (INT4)sizeof(MARC_DIRENTRY_OVER) <= record + lrecl &&
+	 isdigit(dir->tag[0]); dir++)
     if ( SetField(m,dir) == nullptr) {
       FreeSafe(&RememberKey,(char *)m,0);
       fprintf(stderr,"could not setfield in getmarc\n");
       return(nullptr);
     }
   return (m);
-}     
+}
  
 
 /*********************************************************************/
