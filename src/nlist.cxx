@@ -46,19 +46,51 @@ Description:	Class NUMERICLIST
 Author:		Jim Fullton, Jim.Fullton@cnidr.org
 @@@*/
 
+/**
+ * @file nlist.cxx
+ * @brief Implements NUMERICLIST, a heap-allocated growable table of
+ * NUMERICFLD entries used for numeric-attribute range search.
+ *
+ * Each entry pairs a numeric value with a global pointer (byte offset
+ * into the document stream). Entries can be sorted by value (Sort())
+ * or by global pointer (SortByGP()), and searched via Find(), which
+ * always delegates to a binary search over the on-disk index file
+ * (DiskFind()) — the in-memory fast path implied by Find()'s own
+ * comments (MemFind()) was never implemented and unconditionally
+ * returns NO_MATCH. DiskFind() reads either a value-sorted block
+ * (the DOUBLE-keyed Find() overloads) or a separate global-pointer-
+ * sorted block (the INT4-keyed overloads) from the same file, and
+ * classifies each probed entry via Matcher() into a SearchState
+ * (MATCH / TOO_LOW / TOO_HIGH / NO_MATCH). LoadTable()/WriteTable()
+ * move the whole table to/from disk in one pass; ResetHitPosition()/
+ * GetNextHitPosition() iterate the [StartIndex, EndIndex] hit window
+ * left behind by a prior Find().
+ *
+ * NUMERICLIST is non-copyable (BUGFIX #1,
+ * docs/BUG_CATALOG.md#srcnlisthxx) since it owns `table` and no call
+ * site ever copied one. `src/intlist.hxx`'s INTERVALLIST derives from
+ * this class and repeats the same shape one level up.
+ */
 #include <stdlib.h>
 #include <iostream>
 
 #include "nlist.hxx"
 
-static INT 
+static INT
 SortCmp(const void* x, const void* y);
 
-static INT 
+static INT
 SortCmpGP(const void* x, const void* y);
 
 
-/// Constructs an empty list with the default 2-coordinate entry shape.
+/**
+ * @brief Constructs an empty list with the default 2-coordinate entry
+ * shape.
+ *
+ * Allocates an initial 50*Ncoords-entry table (Ncoords = 2) and leaves
+ * FileName empty; Attribute/Relation are zero-initialized (BUGFIX #2)
+ * and StartIndex/EndIndex start at -1 (no hit window yet).
+ */
 NUMERICLIST::NUMERICLIST()
 {
   Ncoords    = 2;
@@ -78,7 +110,14 @@ NUMERICLIST::NUMERICLIST()
 }
 
 
-/// Constructs an empty list whose entries hold n coordinate values.
+/**
+ * @brief Constructs an empty list whose entries hold @p n coordinate
+ * values.
+ * @param n Number of coordinate values per table entry (Ncoords).
+ *
+ * Same initialization as the default constructor otherwise, including
+ * the BUGFIX #2 zero-initialization of Attribute/Relation.
+ */
 NUMERICLIST::NUMERICLIST(INT n)
 {
   Ncoords    = n;
@@ -94,7 +133,15 @@ NUMERICLIST::NUMERICLIST(INT n)
 }
 
 
-void 
+/**
+ * @brief Resets the hit-iteration cursor to the start of the current
+ * hit window.
+ *
+ * Points Pointer at StartIndex, except when Relation == 1 (LT), where
+ * it starts the cursor at 0 instead — see GetNextHitPosition() for how
+ * the two cases are walked.
+ */
+void
 NUMERICLIST::ResetHitPosition()
 {
   if (Relation != 1)
@@ -104,7 +151,19 @@ NUMERICLIST::ResetHitPosition()
 }
 
 
-INT4 
+/**
+ * @brief Returns the next hit's global pointer from the current window
+ * and advances the cursor, or -1 once exhausted.
+ * @return table[Pointer].GetGlobalStart() for the hit at the old
+ * cursor position, or -1 if there is no current window
+ * (StartIndex == -1) or the cursor has run past it.
+ *
+ * For Relation == 1 (LT), the cursor first skips forward past
+ * [StartIndex, EndIndex] before returning anything, so hits are drawn
+ * from entries after EndIndex up to Count - 1 rather than from the
+ * [StartIndex, EndIndex] window itself.
+ */
+INT4
 NUMERICLIST::GetNextHitPosition()
 {
   INT4 Value;
@@ -130,8 +189,16 @@ NUMERICLIST::GetNextHitPosition()
 }
 
 
-static INT 
-SortCmp(const void* x, const void* y) 
+/**
+ * @brief qsort() comparator ordering NUMERICFLD entries by ascending
+ * numeric value.
+ * @param x Pointer to the first NUMERICFLD (as `const void*`, per qsort()).
+ * @param y Pointer to the second NUMERICFLD (as `const void*`, per qsort()).
+ * @return Negative if x's value is less than y's, positive if greater,
+ * 0 if equal.
+ */
+static INT
+SortCmp(const void* x, const void* y)
 {
   DOUBLE a;
   a=((*((PNUMERICFLD)x)).GetNumericValue()) -
@@ -144,8 +211,16 @@ SortCmp(const void* x, const void* y)
 }
 
 
-static INT 
-SortCmpGP(const void* x, const void* y) 
+/**
+ * @brief qsort() comparator ordering NUMERICFLD entries by ascending
+ * global pointer.
+ * @param x Pointer to the first NUMERICFLD (as `const void*`, per qsort()).
+ * @param y Pointer to the second NUMERICFLD (as `const void*`, per qsort()).
+ * @return Negative if x's global pointer is less than y's, positive if
+ * greater, 0 if equal.
+ */
+static INT
+SortCmpGP(const void* x, const void* y)
 {
   DOUBLE a;
   a=((*((PNUMERICFLD)x)).GetGlobalStart()) -
@@ -158,7 +233,14 @@ SortCmpGP(const void* x, const void* y)
 }
 
 
-void 
+/**
+ * @brief Reallocates table to hold exactly @p Entries slots, copying
+ * over as many existing entries as still fit.
+ * @param Entries The new table capacity. If less than the current
+ * Count, Count itself is lowered to match (excess entries are
+ * dropped).
+ */
+void
 NUMERICLIST::Resize(INT4 Entries)
 {
   PNUMERICFLD temp=new NUMERICFLD[Entries];
@@ -181,20 +263,34 @@ NUMERICLIST::Resize(INT4 Entries)
 }
 
 
-void 
+/**
+ * @brief Sorts the first Count table entries in place by ascending
+ * numeric value, via SortCmp().
+ */
+void
 NUMERICLIST::Sort()
 {
   qsort((void *)table, Count, sizeof(NUMERICFLD),SortCmp);
 }
 
 
-void 
+/**
+ * @brief Sorts the first Count table entries in place by ascending
+ * global pointer, via SortCmpGP().
+ */
+void
 NUMERICLIST::SortByGP()
 {
   qsort((void *)table, Count, sizeof(NUMERICFLD),SortCmpGP);
 }
 
 
+/**
+ * @brief Returns the largest numeric value among the first Count table
+ * entries.
+ * @return The maximum GetNumericValue() found; the value at table[0]
+ * if Count <= 1.
+ */
 DOUBLE
 NUMERICLIST::GetMaxValue()
 {
@@ -210,6 +306,12 @@ NUMERICLIST::GetMaxValue()
 }
 
 
+/**
+ * @brief Returns the smallest numeric value among the first Count
+ * table entries.
+ * @return The minimum GetNumericValue() found; the value at table[0]
+ * if Count <= 1.
+ */
 DOUBLE
 NUMERICLIST::GetMinValue()
 {
@@ -225,8 +327,26 @@ NUMERICLIST::GetMinValue()
 }
 
 
+/**
+ * @brief Classifies @p Key against the (A, B, C) neighborhood read
+ * from disk during DiskFind()'s binary search.
+ * @param Key The value being searched for.
+ * @param A The value just below the candidate entry (meaningless when
+ * @p Type is AT_START).
+ * @param B The candidate entry's own value.
+ * @param C The value just above the candidate entry (meaningless when
+ * @p Type is AT_END).
+ * @param Relation Which comparison is being satisfied (see ZRelGE /
+ * ZRelGT / ZRelLE / ZRelLT in defs.hxx).
+ * @param Type Where the candidate sits in the on-disk block: AT_START,
+ * INSIDE, or AT_END.
+ * @return MATCH if @p Key falls on the boundary DiskFind() is
+ * currently probing for @p Relation, otherwise TOO_LOW or TOO_HIGH to
+ * steer the next probe; NO_MATCH (after printing an error) if
+ * @p Relation isn't one of the four handled cases.
+ */
 SearchState
-NUMERICLIST::Matcher(DOUBLE Key, DOUBLE A, DOUBLE B, DOUBLE C, 
+NUMERICLIST::Matcher(DOUBLE Key, DOUBLE A, DOUBLE B, DOUBLE C,
 	INT4 Relation, INT4 Type)
 {
 	
@@ -269,8 +389,24 @@ NUMERICLIST::Matcher(DOUBLE Key, DOUBLE A, DOUBLE B, DOUBLE C,
 }
 
 
+/**
+ * @brief Integer-keyed overload of Matcher(DOUBLE, ...); same
+ * classification logic over INT4 values.
+ * @param Key The value being searched for.
+ * @param A The value just below the candidate entry (meaningless when
+ * @p Type is AT_START).
+ * @param B The candidate entry's own value.
+ * @param C The value just above the candidate entry (meaningless when
+ * @p Type is AT_END).
+ * @param Relation Which comparison is being satisfied (see ZRelGE /
+ * ZRelGT / ZRelLE / ZRelLT in defs.hxx).
+ * @param Type Where the candidate sits in the on-disk block: AT_START,
+ * INSIDE, or AT_END.
+ * @return MATCH, TOO_LOW, or TOO_HIGH as for the DOUBLE overload;
+ * NO_MATCH if @p Relation isn't one of the four handled cases.
+ */
 SearchState
-NUMERICLIST::Matcher(INT4 Key, INT4 A, INT4 B, INT4 C, 
+NUMERICLIST::Matcher(INT4 Key, INT4 A, INT4 B, INT4 C,
 		     INT4 Relation, INT4 Type)
 {
 	
@@ -316,6 +452,20 @@ NUMERICLIST::Matcher(INT4 Key, INT4 A, INT4 B, INT4 C,
 // Ultimately, this routine will try to load the table in one chunk of
 // memory.  If it succeeds, it'll call MemFind to do the search in memory.
 // Otherwise, it'll call DiskFind to do the search on disk.
+/**
+ * @brief Sets FileName to @p Fn and searches it on disk for @p Key
+ * under @p Relation.
+ * @param Fn On-disk numeric-index file name to search.
+ * @param Key The value being searched for.
+ * @param Relation Which comparison to satisfy (see ZRelGE / ZRelGT /
+ * ZRelLE / ZRelLT in defs.hxx).
+ * @param Index Out param: set to the matching table position, or -1 if
+ * DiskFind() found no match.
+ * @return The SearchState DiskFind() returned (MATCH, TOO_LOW,
+ * TOO_HIGH, or NO_MATCH). The comment above describes an in-memory
+ * fast path via MemFind() that was never implemented (see MemFind()'s
+ * own doc comment) — this always goes straight to DiskFind().
+ */
 SearchState
 NUMERICLIST::Find(STRING Fn, DOUBLE Key, INT4 Relation, INT4 *Index)
 {
@@ -329,6 +479,15 @@ NUMERICLIST::Find(STRING Fn, DOUBLE Key, INT4 Relation, INT4 *Index)
 }
 
 
+/**
+ * @brief Searches the already-set FileName on disk for @p Key under
+ * @p Relation.
+ * @param Key The value being searched for.
+ * @param Relation Which comparison to satisfy.
+ * @param Index Out param: set to the matching table position, or -1 if
+ * no match.
+ * @return The SearchState DiskFind() returned.
+ */
 SearchState
 NUMERICLIST::Find(DOUBLE Key, INT4 Relation, INT4 *Index)
 {
@@ -340,6 +499,15 @@ NUMERICLIST::Find(DOUBLE Key, INT4 Relation, INT4 *Index)
 }
 
 
+/**
+ * @brief Always returns NO_MATCH; the in-memory search path was never
+ * implemented.
+ * @param Key Unused.
+ * @param Relation Unused.
+ * @param Index Unused.
+ * @return NO_MATCH, unconditionally. Never called from anywhere in
+ * this class — Find() always goes straight to DiskFind().
+ */
 SearchState
 NUMERICLIST::MemFind(DOUBLE Key, INT4 Relation, INT4 *Index)
 {
@@ -347,6 +515,21 @@ NUMERICLIST::MemFind(DOUBLE Key, INT4 Relation, INT4 *Index)
 }
 
 
+/**
+ * @brief Binary-searches @p Fn's on-disk float-keyed table for the
+ * boundary matching @p Key under @p Relation.
+ * @param Fn On-disk numeric-index file to search; opened read-only for
+ * the duration of the call.
+ * @param Key The value being searched for.
+ * @param Relation Which comparison to satisfy (passed through to
+ * Matcher()).
+ * @param Index Out param: set to the matching table position on
+ * MATCH, or -1 on any other outcome (file-open/read failure, TOO_HIGH
+ * at the last entry, TOO_LOW at the first entry, or the search space
+ * exhausted without a match).
+ * @return MATCH, TOO_LOW, TOO_HIGH, or NO_MATCH, per Matcher()'s
+ * classification of each probed entry during the binary search.
+ */
 SearchState
 NUMERICLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation, INT4 *Index)
 {
@@ -493,6 +676,16 @@ NUMERICLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation, INT4 *Index)
 // Ultimately, this routine will try to load the table in one chunk of
 // memory.  If it succeeds, it'll call MemFind to do the search in memory.
 // Otherwise, it'll call DiskFind to do the search on disk.
+/**
+ * @brief Sets FileName to @p Fn and searches it on disk for @p Key (a
+ * global pointer) under @p Relation.
+ * @param Fn On-disk numeric-index file name to search.
+ * @param Key The global-pointer value being searched for.
+ * @param Relation Which comparison to satisfy.
+ * @param Index Out param: set to the matching table position, or -1 if
+ * DiskFind() found no match.
+ * @return The SearchState DiskFind() returned.
+ */
 SearchState
 NUMERICLIST::Find(STRING Fn, INT4 Key, INT4 Relation, INT4 *Index)
 {
@@ -506,6 +699,15 @@ NUMERICLIST::Find(STRING Fn, INT4 Key, INT4 Relation, INT4 *Index)
 }
 
 
+/**
+ * @brief Searches the already-set FileName on disk for @p Key (a
+ * global pointer) under @p Relation.
+ * @param Key The global-pointer value being searched for.
+ * @param Relation Which comparison to satisfy.
+ * @param Index Out param: set to the matching table position, or -1 if
+ * no match.
+ * @return The SearchState DiskFind() returned.
+ */
 SearchState
 NUMERICLIST::Find(INT4 Key, INT4 Relation, INT4 *Index)
 {
@@ -517,6 +719,14 @@ NUMERICLIST::Find(INT4 Key, INT4 Relation, INT4 *Index)
 }
 
 
+/**
+ * @brief Always returns NO_MATCH; the in-memory search path was never
+ * implemented.
+ * @param Key Unused.
+ * @param Relation Unused.
+ * @param Index Unused.
+ * @return NO_MATCH, unconditionally.
+ */
 SearchState
 NUMERICLIST::MemFind(INT4 Key, INT4 Relation, INT4 *Index)
 {
@@ -524,6 +734,23 @@ NUMERICLIST::MemFind(INT4 Key, INT4 Relation, INT4 *Index)
 }
 
 
+/**
+ * @brief Binary-searches @p Fn's on-disk global-pointer-keyed table
+ * for the boundary matching @p Key under @p Relation.
+ * @param Fn On-disk numeric-index file to search; opened read-only for
+ * the duration of the call.
+ * @param Key The global-pointer value being searched for.
+ * @param Relation Which comparison to satisfy (passed through to
+ * Matcher()).
+ * @param Index Out param: set to the matching table position on
+ * MATCH, or -1 on any other outcome.
+ * @return MATCH, TOO_LOW, TOO_HIGH, or NO_MATCH, per Matcher()'s
+ * classification of each probed entry.
+ *
+ * Reads from the file's second (global-pointer-sorted) block —
+ * offsets here are computed relative to `Total + X`, not `X` as in the
+ * float-keyed overload above, to land past the first block.
+ */
 SearchState
 NUMERICLIST::DiskFind(STRING Fn, INT4 Key, INT4 Relation, INT4 *Index)
 {
@@ -666,11 +893,15 @@ NUMERICLIST::DiskFind(STRING Fn, INT4 Key, INT4 Relation, INT4 *Index)
 }
 
 
-void 
+/**
+ * @brief Prints every table entry's global pointer and numeric value
+ * to stdout.
+ */
+void
 NUMERICLIST::Dump()
 {
   INT4 x;
-  
+
   for(x=0; x<Count; x++) {
     printf("start: %i", table[x].GetGlobalStart());
     printf(" value: %.2f\n", table[x].GetNumericValue());
@@ -678,7 +909,14 @@ NUMERICLIST::Dump()
 }
 
 
-void 
+/**
+ * @brief Prints table entries [start, end) to stdout, clamped to the
+ * table's actual bounds.
+ * @param start First index to print; clamped up to 0 if negative.
+ * @param end One past the last index to print; clamped down to Count
+ * if larger.
+ */
+void
 NUMERICLIST::Dump(INT4 start, INT4 end)
 {
   INT4 x;
@@ -695,6 +933,15 @@ NUMERICLIST::Dump(INT4 start, INT4 end)
 }
 
 
+/**
+ * @brief Loads entries [Start, End] from FileName's single-block
+ * on-disk table into table, growing the table as needed.
+ * @param Start First index to load; -1 means "from the beginning" (0).
+ * @param End Last index to load (inclusive); -1 means "to the end"
+ * (capped at a large sentinel, so the read loop runs until fread()
+ * hits EOF).
+ * @return The number of entries actually read.
+ */
 INT4
 NUMERICLIST::LoadTable(INT4 Start, INT4 End)
 {
@@ -737,6 +984,17 @@ NUMERICLIST::LoadTable(INT4 Start, INT4 End)
 }
 
 
+/**
+ * @brief Loads entries [Start, End] from FileName's VAL_BLOCK- or
+ * GP_BLOCK-sorted on-disk table into table, growing the table as
+ * needed.
+ * @param Start First index to load; clamped up to 0 if negative.
+ * @param End Last index to load (inclusive); clamped to the file's own
+ * entry count (read from the file) if out of range.
+ * @param Offset Which of the file's two sorted blocks to read from
+ * (VAL_BLOCK or GP_BLOCK).
+ * @return The number of entries actually read.
+ */
 INT4
 NUMERICLIST::LoadTable(INT4 Start, INT4 End, NumBlock Offset)
 {
@@ -817,7 +1075,11 @@ NUMERICLIST::LoadTable(INT4 Start, INT4 End, NumBlock Offset)
 }
 
 
-void 
+/**
+ * @brief Overwrites FileName with the table's (global pointer,
+ * numeric value) pairs, in current table order.
+ */
+void
 NUMERICLIST::WriteTable()
 {
   PFILE  fp;
@@ -842,7 +1104,14 @@ NUMERICLIST::WriteTable()
 }
 
 
-void 
+/**
+ * @brief Appends the table's (global pointer, numeric value) pairs to
+ * FileName, seeking to the given block @p Offset first.
+ * @param Offset Block index within the file to seek to before writing;
+ * if 0, the table's Count is also written first (as the block's
+ * header).
+ */
+void
 NUMERICLIST::WriteTable(INT Offset)
 {
   FILE  *fp;
@@ -887,6 +1156,9 @@ NUMERICLIST::WriteTable(INT Offset)
 }
 
 
+/**
+ * @brief Destroys the list and frees its table.
+ */
 NUMERICLIST::~NUMERICLIST()
 {
   if (table)
@@ -895,7 +1167,13 @@ NUMERICLIST::~NUMERICLIST()
 
 
 #ifdef NEVER
-void 
+/**
+ * @brief Disabled scratch/test routine — compiled only under
+ * `#ifdef NEVER`, so it is not part of the live API despite its
+ * header declaration. Writes and reads back a small fixed test file
+ * ("test.62") to exercise the on-disk format by hand.
+ */
+void
 NUMERICLIST::TempLoad()
 {
   INT4 x,y=0;
@@ -921,6 +1199,9 @@ NUMERICLIST::TempLoad()
 }
 
 
+// Disabled ad hoc test driver (compiled only under #ifdef NEVER) for
+// exercising TempLoad()/DiskFind()/LoadTable() by hand; not part of
+// the library's API.
 main()
 {
   NUMERICLIST list;
