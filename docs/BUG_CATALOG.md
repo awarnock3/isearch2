@@ -7592,6 +7592,24 @@ call already made for `src/Iindex.cxx`'s `AddFile()` —
 aren't exercised directly. `make tests`/`make tests-asan` pass clean
 (681 test cases, 2301 assertions).
 
+`src/mergeunit.cxx` (Order 152)'s own turn (a stale-tracking-row sync,
+same shape as `src/memcntl.cxx`'s: this file's `Order` was assigned
+after the reprocessing above already landed and marked it) found
+nothing further on a full re-read. Checked and found not actionable:
+`Initialize()`'s `stat(Tmp,&sb)` return value goes unchecked, so a
+failed `stat()` would leave `ItemsToMerge` reading indeterminate
+`sb.st_size` — but that value is only ever used in a `VERBOSE`-gated
+progress `printf`, and the very next statement (`fp=Parent->ffopen(...)`
+plus a null check) already catches the primary real-world failure mode
+(the file not existing) before anything else depends on it. Also
+checked: `Smallest()` indexes `sistrings[CachePosition]` with no bounds
+check of its own, which would be a real out-of-bounds read if ever
+called before `SetLoadLimit()`/`Initialize()`/`Load()` populate that
+array — but both live call sites (`src/index.cxx:856` and `:2569`)
+only call it inside a loop already gated by `Empty()==GDT_FALSE` on a
+unit that's already been through `SetLoadLimit()`+`Initialize()`, so
+this isn't reachable today.
+
 ## src/thesaurus.hxx
 
 Reprocessed via `/reprocess-blocked` (originally blocked at GENERAL

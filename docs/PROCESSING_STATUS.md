@@ -153,7 +153,7 @@
 | 149 | src/memcntl.cxx | done | 2026-08-09 | [src/memcntl.cxx](BUG_CATALOG.md#srcmemcntlcxx) |
 | 150 | src/merge.cxx | done | 2026-08-09 | [src/merge.cxx](BUG_CATALOG.md#srcmergecxx) |
 | 151 | src/merge.hxx | done | 2026-08-09 | [src/merge.hxx](BUG_CATALOG.md#srcmergehxx) |
-| 152 | src/mergeunit.cxx | pending | | |
+| 152 | src/mergeunit.cxx | done | 2026-08-09 | [src/mergeunit.cxx](BUG_CATALOG.md#srcmergeunithxx) |
 | 153 | src/multiterm.cxx | pending | | |
 | 154 | src/nfield.cxx | done | 2026-08-07 | [src/nfield.cxx](BUG_CATALOG.md#srcnfieldcxx) |
 | 155 | src/nfldmgr.cxx | done | 2026-08-08 | [src/nfldmgr.cxx](BUG_CATALOG.md#srcnfldmgrcxx) |
