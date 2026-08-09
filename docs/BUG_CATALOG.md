@@ -136,6 +136,56 @@ its public behavior is left alone until then:
   `STRING::GetInt()` (signed 32-bit). A table with more than
   `INT_MAX` entries would fail to round-trip.
 
+## src/fct.cxx
+
+**Correction to the `Write()`/`Read()` note above, checked on this
+file's own turn:** `TotalEntries` here can never actually reach
+`INT_MAX` in the first place — `VLIST::GetTotalEntries()` (the only
+source of this value; `FCT` keeps no counter of its own, just `Next`/
+`Prev` links) is itself declared to return `INT`, not `SIZE_T`, so the
+count is signed-32-bit-bounded before `Write()` ever widens it into a
+`SIZE_T` local. Unlike `FieldStart`/`FieldEnd` (`GPTYPE`, genuinely
+capable of spanning the full unsigned 32-bit range as byte offsets into
+a large corpus), a table's *entry count* can't reach a value `GetInt()`
+would mishandle, so no fix was needed here — left as-is rather than
+adding a check for a state the code can't reach.
+
+Two bugs found and fixed, both already flagged as deferred findings at
+other files' turns:
+
+1. **`operator=` had no self-assignment guard**, already flagged as
+   deferred at `src/df.cxx`'s turn
+   (`docs/BUG_CATALOG.md#srcdfcxx`) with an explicit recommendation to
+   pick it up via `/process src/fct.cxx` — `Clear()` ran before
+   `OtherFct.GetTotalEntries()` was read, so `fct = fct;` cleared
+   itself and then "copied" its own now-empty contents back, silently
+   losing every entry. Same shape as `DF`'s/`ATTRLIST`'s/`DFDT`'s/
+   `DFT`'s own fixes for this pattern elsewhere in this tree. Confirmed
+   with a standalone repro (temporarily reverting the fix, then
+   rerunning `tests/src/test_fct.cxx`'s new self-assignment test): the
+   table dropped from 2 entries to 0 after `fct = fct;`. Fixed with a
+   `this == &OtherFct` guard. See `BUGFIX #1` in source; regression
+   test in `tests/src/test_fct.cxx`.
+2. **`FctFcCompare` (the `qsort` comparator `SortByFc()` uses) silently
+   misorders on large field offsets**, already flagged as a
+   found-but-out-of-scope note at `fct.hxx`'s own turn
+   (`docs/BUG_CATALOG.md#srcfcthxx`) — `((FC*)x)->GetFieldStart() -
+   ((FC*)y)->GetFieldStart()` subtracts two `GPTYPE` (unsigned) values
+   and narrows the result to the `int` `qsort` expects. Unlike
+   `src/fc.cxx`'s `Write()`/`Read()` finding above (which turned out to
+   round-trip correctly on this platform via complementary
+   two's-complement reinterpretation at each step), this one has no
+   cancelling second step and is a real, confirmed misordering: a
+   standalone repro (`0u - 3000000000u`, narrowed to `int`) came out as
+   `+1294967296` — positive, the wrong sign for `0 < 3000000000` — and
+   `tests/src/test_fct.cxx`'s new large-offset `SortByFc()` test failed
+   the same way against the pre-fix code (a 3-billion-offset entry
+   sorted before a 0-offset one). Fixed by comparing `GetFieldStart()`
+   directly (`<`/`>`) instead of subtracting, avoiding the overflow
+   entirely regardless of offset magnitude. See `BUGFIX #2` in source;
+   regression test in `tests/src/test_fct.cxx`. `make tests`/`make
+   tests-asan` pass clean (709 test cases, 2372 assertions).
+
 ## src/dft.hxx
 
 1. **Header not self-contained** — same defect as `src/fc.hxx`

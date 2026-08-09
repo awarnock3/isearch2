@@ -129,7 +129,7 @@
 | 125 | src/dfdt.cxx | done | 2026-08-09 | [src/dfdt.hxx](BUG_CATALOG.md#srcdfdthxx) |
 | 126 | src/dft.cxx | done | 2026-08-09 | [src/dft.hxx](BUG_CATALOG.md#srcdfthxx) |
 | 127 | src/fc.cxx | done | 2026-08-09 | [src/fc.cxx](BUG_CATALOG.md#srcfccxx) |
-| 128 | src/fct.cxx | pending | | |
+| 128 | src/fct.cxx | done | 2026-08-09 | [src/fct.cxx](BUG_CATALOG.md#srcfctcxx) |
 | 129 | src/filemap.cxx | pending | | |
 | 130 | src/fprec.cxx | done | 2026-08-07 | [src/fprec.cxx](BUG_CATALOG.md#srcfpreccxx) |
 | 131 | src/fpt.cxx | pending | | |

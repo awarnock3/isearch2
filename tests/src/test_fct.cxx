@@ -130,3 +130,41 @@ TEST_CASE("FCT operator= deep-copies entries independently of the source", "[fct
 	original.GetEntry(1, &out);
 	REQUIRE(out.GetFieldStart() == 7u);
 }
+
+TEST_CASE("FCT operator= survives self-assignment", "[fct]") {
+	// BUGFIX #1 regression: Clear() used to run before
+	// OtherFct.GetTotalEntries() was read, so `fct = fct;` (this ==
+	// &OtherFct) cleared itself and then copied nothing back, silently
+	// losing every entry.
+	FCT fct;
+	fct.AddEntry(MakeFc(1u, 2u));
+	fct.AddEntry(MakeFc(3u, 4u));
+
+	fct = fct;
+
+	REQUIRE(fct.GetTotalEntries() == 2);
+	FC out;
+	fct.GetEntry(1, &out);
+	REQUIRE(out.GetFieldStart() == 1u);
+	fct.GetEntry(2, &out);
+	REQUIRE(out.GetFieldStart() == 3u);
+}
+
+TEST_CASE("FCT SortByFc orders entries whose FieldStart differs by more than INT_MAX", "[fct]") {
+	// BUGFIX #2 regression: FctFcCompare used to subtract two GPTYPE
+	// (unsigned) values and narrow the result to the int qsort expects,
+	// which silently misorders once two field offsets in the same
+	// table differ by more than ~2GB. 0u - 3000000000u narrowed to int
+	// used to come out positive (the wrong sign for 0 < 3000000000).
+	FCT fct;
+	fct.AddEntry(MakeFc(3000000000u, 3000000001u));
+	fct.AddEntry(MakeFc(0u, 1u));
+
+	fct.SortByFc();
+
+	FC out;
+	fct.GetEntry(1, &out);
+	REQUIRE(out.GetFieldStart() == 0u);
+	fct.GetEntry(2, &out);
+	REQUIRE(out.GetFieldStart() == 3000000000u);
+}

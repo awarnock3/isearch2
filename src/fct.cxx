@@ -5,6 +5,9 @@ Description:	Class FCT - Field Coordinate Table
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /**
  * @file fct.cxx
  * @brief Implementation of the Field Coordinate Table (FCT) class.
@@ -45,6 +48,16 @@ FCT::FCT() : VLIST() {
  * @return A reference to this FCT instance.
  */
 FCT& FCT::operator=(const FCT& OtherFct) {
+	// BUGFIX #1 (docs/BUG_CATALOG.md#srcfctcxx): no self-assignment
+	// guard -- Clear() ran before OtherFct.GetTotalEntries() was read,
+	// so `fct = fct;` cleared itself and then "copied" its own
+	// now-empty contents back, silently losing every entry. Same shape
+	// as DF's/ATTRLIST's/DFDT's/DFT's own fixes for this pattern
+	// elsewhere in this tree; already flagged here as deferred, not
+	// fixed, at DF's own turn (docs/BUG_CATALOG.md#srcdfcxx).
+	if (this == &OtherFct) {
+		return *this;
+	}
 	Clear();
 	SIZE_T x;
 	SIZE_T y = OtherFct.GetTotalEntries();
@@ -98,7 +111,19 @@ void FCT::GetEntry(const INT Index, FC* FcRecord) const {
  * @return Difference of field start positions (for qsort ordering).
  */
 int FctFcCompare(const void* x, const void* y) {
-	return ( ((FC*)x)->GetFieldStart() - ((FC*)y)->GetFieldStart() );
+	// BUGFIX #2 (docs/BUG_CATALOG.md#srcfctcxx): subtracting two GPTYPE
+	// (unsigned) values and narrowing the result to the int qsort
+	// expects silently misorders once two field offsets in the same
+	// table differ by more than ~2GB -- confirmed with a standalone
+	// repro (0u - 3000000000u narrowed to int came out positive, the
+	// wrong sign for 0 < 3000000000). Comparing directly instead of
+	// subtracting avoids the overflow entirely, regardless of offset
+	// magnitude.
+	GPTYPE xStart = ((FC*)x)->GetFieldStart();
+	GPTYPE yStart = ((FC*)y)->GetFieldStart();
+	if (xStart < yStart) return -1;
+	if (xStart > yStart) return 1;
+	return 0;
 }
 
 /**
