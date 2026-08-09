@@ -171,7 +171,7 @@
 | 167 | src/result.cxx | done | 2026-08-07 | [src/result.cxx](BUG_CATALOG.md#srcresultcxx) |
 | 168 | src/rset.cxx | done | 2026-08-09 | [src/rset.cxx](BUG_CATALOG.md#srcrsetcxx) |
 | 169 | src/soundex.cxx | done | 2026-08-07 | [src/soundex.cxx](BUG_CATALOG.md#srcsoundexcxx) |
-| 170 | src/squery.cxx | pending | | |
+| 170 | src/squery.cxx | done | 2026-08-09 | [src/squery.cxx](BUG_CATALOG.md#srcsquerycxx) |
 | 171 | src/sterm.cxx | pending | | |
 | 172 | src/stopword.cxx | done | 2026-08-08 | [src/stopword.cxx](BUG_CATALOG.md#srcstopwordcxx) |
 | 173 | src/string.cxx | done | 2026-08-05 | [src/string.cxx](BUG_CATALOG.md#srcstringcxx) |

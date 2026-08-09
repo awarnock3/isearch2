@@ -42,6 +42,46 @@
 #include "thesaurus.hxx"
 #include "squery.hxx"
 
+TEST_CASE("SQUERY SetTerm/GetTerm round-trips a single term", "[squery]") {
+	SQUERY q;
+	q.SetTerm("dolphin");
+	STRING term;
+	q.GetTerm(&term);
+	REQUIRE(term == "dolphin");
+}
+
+TEST_CASE("SQUERY SetTerm/GetTerm round-trips a field-qualified, right-truncated term", "[squery]") {
+	SQUERY q;
+	q.SetTerm("TITLE/whale*");
+	STRING term;
+	q.GetTerm(&term);
+	REQUIRE(term == "TITLE/whale*");
+}
+
+TEST_CASE("SQUERY SetTerm/GetTerm round-trips multiple OR-joined terms", "[squery]") {
+	// Terms come back in reverse of input order: SetTerm() pushes each
+	// term onto the (LIFO) Opstack, and GetTerm() pops them back off.
+	SQUERY q;
+	q.SetTerm("dolphin whale");
+	STRING term;
+	q.GetTerm(&term);
+	REQUIRE(term == "whale dolphin");
+}
+
+TEST_CASE("SQUERY SetOpstack/GetOpstack round-trips the underlying stack", "[squery]") {
+	SQUERY q;
+	q.SetTerm("porpoise");
+
+	OPSTACK stack;
+	q.GetOpstack(&stack);
+
+	SQUERY q2;
+	q2.SetOpstack(stack);
+	STRING term;
+	q2.GetTerm(&term);
+	REQUIRE(term == "porpoise");
+}
+
 TEST_CASE("SQUERY's copy constructor copies term/KWAQS state but starts with no thesaurus", "[squery]") {
 	SQUERY Source;
 	Source.SetTerm("spatial");

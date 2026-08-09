@@ -8160,6 +8160,39 @@ path that doesn't exist rather than building real `.syn`/`.spx`/`.scx`
 files on disk. `make tests`/`make tests-asan` pass clean (698 test
 cases, 2343 assertions).
 
+## src/squery.cxx
+
+`BUGFIX #1-4` above were already applied to this file during
+`squery.hxx`'s `/reprocess-blocked` turn (this file already carried
+`.hxx`'s own `ISEARCH2-CLEANUP` marker, dated the same day — its
+`docs/PROCESSING_STATUS.md` row just hadn't been synced to `done` yet,
+same shape as `src/memcntl.cxx`/`src/mergeunit.cxx`/`src/operator.cxx`'s
+stale rows). This turn's own full re-read of `SetTerm()`/`SetRpnTerm()`/
+`GetTerm()`/`ExpandQuery()`/the accessors found nothing further —
+`GetTerm()`/`ExpandQuery()` both correctly operate on a *local* copy of
+`Opstack` (via `GetOpstack()`, which deep-copies), draining and
+deleting that local copy without touching the member; `operator=`'s
+lack of an explicit self-assignment guard is harmless, since every
+sub-assignment it performs (`Opstack = Opstack` — safe since
+`src/opstack.cxx`'s own `BUGFIX #4`, fixed earlier this batch;
+`c_kwaqs_term = c_kwaqs_term` — `STRING`, safe) and the unconditional
+"free then null `Thesaurus`" step match this class's own documented
+"copies always start with no thesaurus" semantics regardless of
+self-assignment. No `NULL`/`sprintf`, zero warnings under `-Wall
+-Wextra`.
+
+Test coverage gap found and closed: the existing
+`tests/src/test_squery.cxx` only covered the `Thesaurus`-lifecycle
+bugs above — `SetTerm()`/`GetTerm()`, this class's actual query-parsing
+core, had no dedicated tests at all (only incidentally exercised via a
+single plain term in the copy-constructor/`operator=` tests). Added
+tests for a single term, a field-qualified right-truncated term
+(`TITLE/whale*`), multiple OR-joined terms (confirmed reversed on
+round-trip — `Opstack` is LIFO by design, not a bug: `SetTerm()`
+pushes each term, `GetTerm()` pops them back off), and a direct
+`SetOpstack`/`GetOpstack` round-trip. `make tests`/`make tests-asan`
+pass clean (739 test cases, 2840 assertions).
+
 ---
 
 This closes out the `/reprocess-blocked` run: all six files that were
