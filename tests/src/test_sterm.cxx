@@ -1,17 +1,6 @@
 // Tests for src/sterm.hxx / src/sterm.cxx (class STERM - String Search
 // Term). Linked against the real implementation via TEST_ENGINE_OBJS in
 // the top-level Makefile, not reimplemented here.
-//
-// No self-assignment test for operator=: STERM::operator= calls
-// OPERAND::operator=, which copies Attributes via
-// OtherOp.GetAttributes(&Attributes) -- on self-assignment that's
-// ATTRLIST::operator= self-assigning, which (unlike STRING::operator=)
-// has no self-assignment guard and silently clears itself. Confirmed
-// real with a standalone repro (self-assigning an STERM preserves Term
-// but wipes Attributes). The root cause is in src/attrlist.hxx (not yet
-// processed) and src/operand.cxx (already processed, Order 6, before
-// this was discovered) -- not fixed here since it isn't this file's
-// bug to own. See BUG_CATALOG.md under src/sterm.hxx.
 
 #include "catch_amalgamated.hpp"
 
@@ -94,4 +83,35 @@ TEST_CASE("STERM operator= copies term and attributes through the polymorphic OP
 	STRING Name;
 	out.AttrGetFieldName(&Name);
 	REQUIRE(Name == "AUTHOR");
+}
+
+TEST_CASE("STERM operator= self-assignment preserves both term and attributes", "[sterm]") {
+	// This was previously unsafe to test (see docs/BUG_CATALOG.md under
+	// src/sterm.hxx): STERM::operator= calls OPERAND::operator=, which
+	// copies Attributes via OtherOp.GetAttributes(&Attributes) -- on
+	// self-assignment that's ATTRLIST::operator= self-assigning, which
+	// (unlike STRING::operator=, why Term already survived) had no
+	// self-assignment guard and silently cleared itself. Confirmed real
+	// at the time with a standalone repro. Now safe: ATTRLIST::operator=
+	// was fixed (BUGFIX #2, docs/BUG_CATALOG.md#srcattrlisthxx), and this
+	// confirms the fix holds all the way up through STERM's own
+	// operator=.
+	STERM s;
+	s.SetTerm(STRING("myterm"));
+	ATTRLIST attrs;
+	attrs.AttrSetFieldName(STRING("SUBJECT"));
+	s.SetAttributes(attrs);
+
+	OPOBJ& ref = s;
+	ref = ref;
+
+	STRING Term;
+	s.GetTerm(&Term);
+	REQUIRE(Term == "myterm");
+
+	ATTRLIST out;
+	s.GetAttributes(&out);
+	STRING Name;
+	out.AttrGetFieldName(&Name);
+	REQUIRE(Name == "SUBJECT");
 }

@@ -1346,19 +1346,37 @@ single word/phrase) operand, storing the query text in a `STRING Term`.
    Confirmed fixed by recompiling the same standalone reproduction,
    which no longer triggers the warning.
 
-Also confirmed (not fixed here — see the cross-reference under
-`src/operand.hxx` above): self-assigning an `STERM` through its
-`OPOBJ&` interface silently discards its `Attributes` while correctly
-preserving its `Term`. `STERM::operator=` calls `OPERAND::operator=`
-(already processed, `src/operand.cxx`, Order 6, before this was
-discovered), which copies `Attributes` via `OtherOp.GetAttributes
-(&Attributes)` — on self-assignment that's `ATTRLIST::operator=`
-self-assigning, and unlike `STRING::operator=` (which is why `Term`
-survives), it has no self-assignment guard. The actual fix belongs to
-`src/attrlist.hxx` (add a guard) or a `src/operand.cxx` reprocess (skip
-the call when `&OtherOp == this`) — not `sterm.hxx`, which merely
-inherits the behavior. `tests/src/test_sterm.cxx` deliberately has no
-self-assignment test for the same reason `test_operand.cxx` doesn't.
+Also confirmed at the time (not fixed here — see the cross-reference
+under `src/operand.hxx` above): self-assigning an `STERM` through its
+`OPOBJ&` interface silently discarded its `Attributes` while correctly
+preserving its `Term`. `STERM::operator=` calls `OPERAND::operator=`,
+which copies `Attributes` via `OtherOp.GetAttributes(&Attributes)` —
+on self-assignment that's `ATTRLIST::operator=` self-assigning, and
+unlike `STRING::operator=` (which is why `Term` survived), it had no
+self-assignment guard at the time. **Resolved during `src/sterm.cxx`'s
+own turn below**: `ATTRLIST::operator=` was fixed in the meantime
+(`BUGFIX #2`, `docs/BUG_CATALOG.md#srcattrlisthxx`), and `sterm.cxx`'s
+turn confirmed via a standalone repro that self-assignment now
+preserves both `Term` and `Attributes`.
+
+## src/sterm.cxx
+
+`BUGFIX #1-2` above were already applied to this file during
+`sterm.hxx`'s turn (self-containment, hidden virtual `operator=`),
+including adding the processed marker — but this file's own
+`docs/PROCESSING_STATUS.md` row was never synced to `done`, same shape
+as several other stale rows this batch. This turn's own full re-read
+of all five methods (`STERM()`, `Duplicate()`, `operator=()`,
+`SetTerm()`/`GetTerm()`, `~STERM()`) found nothing new — closes out the
+deferred self-assignment finding above instead: confirmed via a
+standalone repro that self-assigning an `STERM` (through its `OPOBJ&`
+interface) now preserves both `Term` and `Attributes`, now that
+`ATTRLIST::operator=` has its own guard. Removed the "deliberately no
+self-assignment test" note from `tests/src/test_sterm.cxx` and added
+that test, matching the same resolution already applied to
+`src/operand.cxx`'s turn. No `NULL`/`sprintf`, zero warnings under
+`-Wall -Wextra`. `make tests`/`make tests-asan` pass clean (740 test
+cases, 2842 assertions).
 
 ## Isearch-cgi/config.hxx
 
