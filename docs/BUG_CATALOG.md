@@ -8888,3 +8888,98 @@ pass clean; `make tests`/`make tests-asan` (unaffected by this file,
 which isn't part of `TEST_ENGINE_SRCS`) still pass clean (745 test
 cases, 2850 assertions).
 
+## src/zsearch.cxx
+
+**Scope note, read first:** same `main()`-only structural limitation as
+[`src/Iget.cxx`](#srcigetcxx)/[`src/Isearch.cxx`](#srcisearchcxx)/
+[`src/zpresent.cxx`](#srczpresentcxx) (can't be linked into the shared
+Catch2 test binary). Verified with a mix of runtime confirmation
+(building the real production binary and library, `make isearch`, and
+triggering each bug directly) and AddressSanitizer against a standalone
+build linked against the real `libIsearch.a` — stronger than
+`Iget.cxx`/`Isearch.cxx`'s inspection-only verification, matching
+`zpresent.cxx`'s precedent from this same batch.
+
+Two bugs found and fixed:
+
+1. **Missing-argument-value null-pointer dereference on all six value-
+   taking flags** (most severe finding in this file, and trivially
+   reachable from an ordinary command-line typo) — the exact same
+   defect as `src/Iget.cxx`'s `BUGFIX #1`, but present at six sites
+   here instead of four (`-o`, `-d`, `-p`, `-f`, `-prefix`, `-suffix`):
+   `if (++x >= argc) { Error=GDT_TRUE; error_message.Cat(...); }`
+   followed *unconditionally* by an `argv[x]` read, no `else`. When the
+   flag is the last argument, `x == argc` and `argv[argc]` is guaranteed
+   `nullptr` by the C++ standard, dereferenced via
+   `STRING::operator=(const CHR*)`'s `strlen()` call. Confirmed with the
+   real production binary, not just inspection: `./bin/zsearch -d <db>
+   -o` (and the same for each of the other five flags) segfaulted
+   (`SIGSEGV`, exit 139) before this fix; after moving each `argv[x]`
+   read into an `else` branch (six sites), all six now exit cleanly
+   (exit 0) with the proper XML error message instead. See `BUGFIX #1`
+   in source (all six sites).
+2. **Use of `WordList`/`pdb` after they're freed, when the database is
+   incompatible — confirmed heap-use-after-free** — `if
+   (!pdb->IsDbCompatible()) { Error=GDT_TRUE; error_message.Cat(...);
+   delete [] WordList; delete pdb; }` frees both, sets `Error`, but
+   (unlike every other error path in this file) never exits — execution
+   falls straight through into code that unconditionally reads
+   `WordList[z]` (building `QueryString`, a few lines below) and, later,
+   calls methods through `pdb` again (`Search()`/`AndSearch()`) if
+   `Error` didn't get checked before then. Confirmed real with
+   AddressSanitizer: hand-edited a real indexed database's `.dbi` file
+   (`MagicNumber` line, which `IDB::IsDbCompatible()` reads and compares
+   against `IsearchMagicNumber` in `src/idb.cxx`) to force
+   `IsDbCompatible()` to return false, then ran a standalone ASan build
+   linked against the real `libIsearch.a` — a genuine
+   **heap-use-after-free READ** at the `WordList[z]` access, freed a few
+   lines earlier by the same function. Fixed by printing the same
+   error/exit XML block already used (twice) elsewhere in this file and
+   exiting immediately, instead of falling through past the just-freed
+   pointers. Re-verified clean under the same ASan build after the fix
+   (no error, proper XML error response, exit 0), and confirmed a
+   restored/compatible database still searches normally. See `BUGFIX #2`
+   in source.
+
+Also noted, not changed:
+- `PRSET prset=(PRSET)NULL; PIRSET pirset=(PIRSET)NULL;` modernized to
+  `nullptr` (dropping the now-redundant C-style casts).
+- **Vestigial flags matching `Isearch.cxx`'s already-documented
+  finding** — `QuitFlag`, `ByteRangeFlag`, `TerseFlag` (all "set but not
+  used"), and `SpatialRectFlag`/`-RECT{...}` (declared, "used" only in
+  its own `=0` initializer, unimplemented) are the same shape of
+  incomplete-removal/never-implemented leftovers already found and
+  deliberately left alone in `src/Isearch.cxx`'s own turn. Confirmed via
+  `-Wall -Wextra`, diffed against the pre-edit committed file (identical
+  warning set before and after this turn's two fixes, just shifted line
+  numbers) — nothing here is new.
+- **`INFIX2RPN* Parser` isn't `delete`d on the parse-failure branch** —
+  found while reading the `-infix` handling (`Parser = new
+  INFIX2RPN(...)`; `delete Parser;` only runs inside `if
+  (Parser->InputParsedOK())`, not the `else`). Looked like a leak on
+  first read, and the identical code exists un-flagged in the
+  already-processed `src/Isearch.cxx` too — but verified with
+  LeakSanitizer against a real invalid-infix-query invocation
+  (`zsearch -d <db> -infix '((( unbalanced'`) that it is **not**
+  actually flagged as a leak: `Parser`'s value is still sitting in a
+  live stack slot inside `main()` at the moment `exit(0)` runs a few
+  lines later (this file, like every CLI tool in this project, calls
+  `exit()` from inside `main()` rather than returning), so LSan's
+  reachability scan finds it "still reachable," not leaked — matching
+  (and explaining the mechanism behind) the same pre-existing 852-byte
+  "leak" this file already shows on an ordinary successful search
+  (`SQUERY`/`ATTRLIST`/`STRING` internals, also never explicitly freed
+  before `exit()`, also not LSan-flagged for the same reason). Since the
+  process terminates immediately after either way, there's no practical
+  resource impact to fix, and "fix" here would mean adding a `delete`
+  that a leak checker itself confirms is inert in this control flow —
+  left unchanged, matching `Isearch.cxx`'s identical, already-reviewed
+  code.
+
+No test file was written for the reasons in the scope note above; both
+fixes are documented in detail here and at their `BUGFIX #n` comment
+sites in source instead, plus the runtime/ASan confirmation above.
+`make isearch`/`make smoke-test` both pass clean; `make tests`/`make
+tests-asan` (unaffected by this file, which isn't part of
+`TEST_ENGINE_SRCS`) still pass clean (745 test cases, 2850 assertions).
+
