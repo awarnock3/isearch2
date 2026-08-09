@@ -109,6 +109,25 @@ TEST_CASE("DFT operator= deep-copies entries independently of the source", "[dft
 	REQUIRE(NameOf(copy, 1) == "ONE");
 }
 
+TEST_CASE("DFT operator= survives self-assignment", "[dft]") {
+	// BUGFIX #3 regression: delete [] Table; Init(); used to run before
+	// OtherDft.GetTotalEntries() was read, so `dft = dft;` (this ==
+	// &OtherDft) saw an already-emptied table and copied nothing back,
+	// silently wiping it.
+	DFT dft;
+	DF one, two;
+	MakeDf(&one, "ONE");
+	MakeDf(&two, "TWO");
+	dft.AddEntry(one);
+	dft.AddEntry(two);
+
+	dft = dft;
+
+	REQUIRE(dft.GetTotalEntries() == 2);
+	REQUIRE(NameOf(dft, 1) == "ONE");
+	REQUIRE(NameOf(dft, 2) == "TWO");
+}
+
 TEST_CASE("DFT CleanUp shrinks capacity without losing entries", "[dft]") {
 	DFT dft;
 	DF a, b;

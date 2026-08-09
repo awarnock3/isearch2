@@ -127,7 +127,7 @@
 | 123 | src/df.cxx | done | 2026-08-07 | [src/df.cxx](BUG_CATALOG.md#srcdfcxx) |
 | 124 | src/dfd.cxx | done | 2026-08-07 | [src/dfd.cxx](BUG_CATALOG.md#srcdfdcxx) |
 | 125 | src/dfdt.cxx | done | 2026-08-09 | [src/dfdt.hxx](BUG_CATALOG.md#srcdfdthxx) |
-| 126 | src/dft.cxx | pending | | |
+| 126 | src/dft.cxx | done | 2026-08-09 | [src/dft.hxx](BUG_CATALOG.md#srcdfthxx) |
 | 127 | src/fc.cxx | pending | | |
 | 128 | src/fct.cxx | pending | | |
 | 129 | src/filemap.cxx | pending | | |

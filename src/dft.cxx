@@ -5,6 +5,9 @@ Description:	Class DFT - Data Field Table
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "defs.hxx"
 #include "string.hxx"
 #include "vlist.hxx"
@@ -35,7 +38,22 @@ DFT::DFT(const DFT& OtherDft) {
 	}
 }
 
+/**
+ * @brief Deep-copies OtherDft's entries into this DFT, replacing
+ * whatever this table already held.
+ * @param OtherDft The source table to copy from.
+ * @return A reference to this DFT.
+ */
 DFT& DFT::operator=(const DFT& OtherDft) {
+	// BUGFIX #3 (docs/BUG_CATALOG.md#srcdfthxx): no self-assignment
+	// guard -- delete [] Table; Init(); ran before OtherDft.GetTotalEntries()
+	// was read, so `x = x;` saw an already-emptied table (the same
+	// object) and copied nothing back, silently wiping it. Same shape
+	// of bug already found and fixed in ATTRLIST's/DFDT's/STRLIST's
+	// operator='s.
+	if (this == &OtherDft) {
+		return *this;
+	}
 	if (Table) {
 		delete [] Table;
 	}

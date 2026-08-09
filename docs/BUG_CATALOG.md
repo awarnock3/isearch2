@@ -135,6 +135,22 @@ its public behavior is left alone until then:
    cleanly — and by `tests/src/test_dft.cxx`'s copy-constructor test,
    which passes under `make tests-asan`.
 
+3. **`operator=` had no self-assignment guard** (found on `dft.cxx`'s
+   own later turn — missed during the copy-constructor fix above,
+   unlike `ATTRLIST`'s/`DFDT`'s sibling turns, which caught this same
+   pattern in their own `operator=`s at the time) — `delete [] Table;
+   Init();` ran before `OtherDft.GetTotalEntries()` was read, so `dft =
+   dft;` (`this == &OtherDft`, the same object) saw an already-emptied
+   table and copied nothing back, silently wiping it. Confirmed with a
+   standalone repro (temporarily reverting the fix, then rerunning
+   `tests/src/test_dft.cxx`'s new self-assignment test): the table
+   dropped from 2 entries to 0 after `dft = dft;` — a real, silent
+   data-loss bug, not a crash. Fixed with a `this == &OtherDft` guard,
+   identical to `ATTRLIST`'s/`DFDT`'s own fix for this pattern. See
+   `BUGFIX #3` in source; regression test in `tests/src/test_dft.cxx`.
+   `make tests`/`make tests-asan` pass clean (705 test cases, 2362
+   assertions).
+
 ### Found but out of scope for this file (deferred to their own turns)
 
 - **`src/df.hxx`'s `DF` and `src/fct.hxx`'s `FCT`** (the latter already
