@@ -9182,3 +9182,17 @@ No test file was written for the reasons in the scope note above (a
 verified via `-Wall -Wextra` compile-clean and the isolated-sandbox
 regeneration-diff confirmation described above.
 
+## Isearch-cgi/config.cxx
+
+`BUGFIX #1` above (self-containment) was already applied to the paired
+header during `config.hxx`'s own turn, but this `.cxx`'s
+`docs/PROCESSING_STATUS.md` row was never synced to `done`. This turn
+is that sync: the file is a single line, `const CHR *IsearchCGIVersion
+= VERS;`, matching the header's `extern` declaration exactly — nothing
+to find. No `NULL`/`sprintf`, zero warnings under `-Wall -Wextra`. No
+test changes: `tests/Isearch-cgi/test_config.cxx` (written during
+`config.hxx`'s turn) already covers this exactly —
+`IsearchCGIVersion != nullptr` and `IsearchCGIVersion == VERS`. `make
+tests`/`make tests-asan` pass clean (745 test cases, 2850 assertions,
+unchanged from before this turn).
+
