@@ -114,7 +114,7 @@
 | 110 | doctype/uspat.hxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypeuspatcxx](BUG_CATALOG.md#doctypeuspatcxx) |
 | 111 | src/Debug.h | done | 2026-08-09 | [BUG_CATALOG.md#srcdebugh](BUG_CATALOG.md#srcdebugh) |
 | 112 | src/Firewall.h | done | 2026-08-09 | [BUG_CATALOG.md#srcfirewallh](BUG_CATALOG.md#srcfirewallh) |
-| 113 | src/Iget.cxx | pending | | |
+| 113 | src/Iget.cxx | done | 2026-08-09 | [BUG_CATALOG.md#srcigetcxx](BUG_CATALOG.md#srcigetcxx) |
 | 114 | src/Iindex.cxx | pending | | |
 | 115 | src/Isearch.cxx | pending | | |
 | 116 | src/Iutil.cxx | pending | | |

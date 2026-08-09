@@ -6744,3 +6744,65 @@ crash via a before/after test-revert under ASan before being fixed (see
 above); `BUGFIX #2` and `BUGFIX #3` are inherently confirmed by the
 test file compiling at all.
 
+## src/Iget.cxx
+
+**Scope note, read first:** this is the first `main()`-only CLI entry
+point processed this session (a command-line record-retrieval tool, one
+function, no header). It structurally cannot be linked into the shared
+Catch2 test binary — its `main(int, char**)` would collide with
+`catch_amalgamated.cpp`'s own `main()` (a duplicate-definition link
+error) — and there is no other function to unit test in isolation.
+Building it as a real standalone executable for black-box/subprocess
+testing would require the legacy per-directory `src/Makefile` build (or
+`make smoke-test`, itself explicitly manual/on-demand and not run by
+`/process-next`/`/process-5`/`/process-10`), which is a materially
+bigger undertaking than any other file processed this batch and was
+judged out of scope for one file's turn in an otherwise `make
+tests`/`make tests-asan`-driven pipeline. Verified instead via a full
+manual trace-through of both bugs below (shown in detail) plus a
+standalone `g++ -c` compile-clean confirmation (`-Isrc -Idoctype`,
+`-Wall -Wextra`: no warnings on any of this file's own lines, matching
+its state before these edits).
+
+Two bugs found and fixed:
+
+1. **Null-pointer dereference on a flag given without its required
+   argument** (most severe finding in this file, and trivially
+   reachable from ordinary command-line typos) — all four flag branches
+   in the argument-parsing loop (`-d`, `-id`, `-p`, `-f`) follow the
+   same pattern: `if (++x >= argc) { Error=GDT_TRUE; error_message.Cat(
+   ...); }` followed unconditionally by `<Field> = argv[x];`, with no
+   `else`. When the check fires (the flag was the last argument, e.g.
+   running `Iget -d` with nothing after it), `x == argc` at that point,
+   and `argv[argc]` is guaranteed `nullptr` by the C++ standard — which
+   `STRING::operator=(const CHR*)` (`src/string.cxx:374`) dereferences
+   unconditionally via `strlen(CString)`, a **null-pointer dereference**
+   (confirmed by inspection of `string.cxx`, not by ASan, since this
+   file can't be linked into the sanitizer-run test binary — see the
+   scope note above). Fixed by moving the `argv[x]` read into an `else`
+   branch at all four sites, so the `Error` flag set by the missing-
+   argument check is left to reach the existing `if (Error) {
+   error_message.Print(stderr); EXIT_ERROR; }` check further down
+   instead of crashing first. See `BUGFIX #1` in source.
+
+2. **Dead "unrecognized arguments" check (wrong comparison direction)**
+   — `x = LastUsed + 1; if (x > argc) { ... "Unrecognized arguments" ...
+   }`. `LastUsed` is only ever assigned a valid `argv` index (always `<
+   argc`, doubly so after `BUGFIX #1` above), so `x = LastUsed + 1` can
+   never exceed `argc` — `x > argc` is permanently false, and this
+   validation has never fired. Traced through both a correct-usage case
+   (`Iget -d db -id 123`, ends with `x == argc`, no error either way)
+   and a broken-usage case (`Iget -d db extra_garbage`, ends with `x ==
+   3, argc == 4`: the existing `x > argc` check misses it, while `x <
+   argc` correctly flags it) to confirm the fix doesn't regress valid
+   usage while it does catch the case the error message is clearly
+   meant to catch. Fixed by changing `x > argc` to `x < argc`. See
+   `BUGFIX #2` in source.
+
+No test file was written for the reasons in the scope note above; both
+fixes are documented in detail here and at their `BUGFIX #n` comment
+sites in source instead. `/smoke-test` (manual, on-demand — see
+CLAUDE.md) would be one way to get broader integration coverage across
+`Iget` and the other `main()`-only CLI tools still in the queue
+(`Iindex.cxx`, `Isearch.cxx`, `Iutil.cxx`) if that's ever wanted.
+
