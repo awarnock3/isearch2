@@ -9605,3 +9605,46 @@ up from 745/2850, the 16-assertion increase being this new file's own
 coverage). `make isearch-cgi` also confirmed to still build clean
 (`api_config.cxx` links into `isrch_api`).
 
+## Isearch-cgi/api_response.hxx, Isearch-cgi/api_response.cxx
+
+**Processed together**, same pairing convention as
+[`Isearch-cgi/api_config.hxx`](#isearch-cgiapi_confighxx-isearch-cgiapi_configcxx)
+above. Declares `ApiSearchMeta`/`ApiHit`/`ApiLinks` (plain data structs
+for the JSON API's response shape) and a set of `Write*`/`Begin*`/`End*`
+functions that stream a JSON search response or an
+[RFC 7807](https://www.rfc-editor.org/rfc/rfc7807)-style "problem"
+error body straight to `cout`. Confirmed self-contained. Same
+"noticeably newer, more carefully written" character as
+`api_config.cxx` and `isrch_srch.cxx`'s JSON path — every raw pointer
+argument (`type`/`title`/`detail` in `WriteProblem()`) is already
+null-checked before use, and `WriteJsonEscaped()` is a byte-for-byte
+match of the already-reviewed, already-correct implementation in
+`Isearch-cgi/isrch_srch.cxx`.
+
+**Zero bugs found** after a full line-by-line read plus a new,
+comprehensive Catch2 test suite (`tests/Isearch-cgi/
+test_api_response.cxx`, 14 test cases — the file's `cout`-writing
+functions needed a small `CoutCapture` RAII helper, redirecting
+`std::cout`'s streambuf to an `ostringstream` for the duration of each
+test, to make their output assertable). Modernized the one `NULL` use
+(`time(NULL)` → `time(nullptr)`); no `sprintf` calls present (already
+uses `snprintf`).
+
+`tests/Isearch-cgi/test_api_response.cxx` (new, wired into
+`TEST_ENGINE_CGI_SRCS`) covers: `WriteHttpHeader()`'s status line,
+content-type switching (`problem_json` true/false), and blank-line
+header terminator; every branch of `HttpStatusText()`'s `switch`
+including the `default: "Unknown"` case; `WriteJsonEscaped()`'s quote/
+backslash/whitespace escaping and `\uXXXX` control-character encoding;
+`BeginSearchResponse()`/`WriteSearchHit()`/`EndSearchResponse()`'s full
+JSON structure, including `WriteSearchHit()`'s comma-before-non-first-
+hit logic and both files' null-vs-populated optional fields (`url`,
+`next`, `prev`); `WriteProblem()`'s `nullptr`-argument fallbacks
+(`about:blank`, the status's own text, an omitted `detail` field) and
+its normal all-arguments-given path; and default-constructed
+`ApiSearchMeta`/`ApiHit`/`ApiLinks` values. `make tests`/`make
+tests-asan` pass clean (768 test cases, 2903 assertions — up from
+754/2866, the 37-assertion increase being this new file's own
+coverage). `make isearch-cgi` also confirmed to still build clean
+(`api_response.cxx` links into `isrch_api`).
+

@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-10
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "api_response.hxx"
 
 #include <stdio.h>
@@ -40,7 +43,7 @@ static void EnsureRequestId()
   }
 
   CHR idbuf[64];
-  const LONG now = (LONG)time(NULL);
+  const LONG now = (LONG)time(nullptr);
   ++g_request_counter;
   snprintf(idbuf, sizeof(idbuf), "req-%ld-%ld", now, g_request_counter);
   g_request_id = idbuf;
