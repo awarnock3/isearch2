@@ -6806,3 +6806,60 @@ CLAUDE.md) would be one way to get broader integration coverage across
 `Iget` and the other `main()`-only CLI tools still in the queue
 (`Iindex.cxx`, `Isearch.cxx`, `Iutil.cxx`) if that's ever wanted.
 
+## src/Iindex.cxx
+
+**Scope note, read first:** same `main()`-only structural limitation as
+[`src/Iget.cxx`](#srcigetcxx) (can't be linked into the shared Catch2
+test binary — duplicate `main()`), compounded here by size: at 913
+lines this is the largest non-`doctype/` file processed this session.
+`AddFile()` — the one function with real logic worth testing in
+isolation — only sinks into `IDB::AddRecord()`, which requires a fully
+constructed `IDB` backed by real on-disk index files
+(`IDB::Initialize()` in `src/idb.cxx` explicitly "Opens (creating on
+first use) the on-disk database..."), a disproportionate fixture to
+build for one file's turn in a per-file cleanup pass. The deep audit
+was scoped to `AddFile()` (the core per-file record-splitting logic,
+and the most complex/critical-for-correctness code in the file) and the
+argument-parsing loop (confirmed *not* to share `src/Iget.cxx`'s
+`BUGFIX #1` pattern — every `++x >= argc` check here correctly
+`RETURN_ZERO`/`RETURN_ERROR`s before reading `argv[x]`); a lighter pass
+covered the file-listing/GILS-metadata-generation tail of `main()`.
+Verified via a standalone `g++ -c` compile-clean confirmation (no
+warnings on this file's own lines, matching its state before these
+edits) and manual trace-through, the same methodology as `Iget.cxx`.
+
+Two bugs found and fixed, both in `AddFile()`'s `mmap()`-backed
+separator-splitting path (`#ifndef NO_MMAP`, the branch actually
+compiled on this Linux target):
+
+1. **Unchecked `mmap()` return value** (most severe finding in this
+   file) — `Buffer = (CHR*) mmap(...)` is used immediately afterward
+   (`EndOfBuffer = Buffer + FileSize`, then a scanning loop
+   dereferencing `*Position` starting at `Buffer`) with no check for
+   `MAP_FAILED` (`(void*)-1`, *not* `nullptr`, per the `mmap(2)`
+   contract). A failed mmap therefore doesn't null-deref-crash in the
+   usual sense — it dereferences whatever `(CHR*)-1` plus small offsets
+   resolves to, an almost-certain **segfault**, confirmed by inspection
+   of the `mmap(2)` contract rather than ASan (this file can't be linked
+   into the sanitizer-run test binary — see the scope note above).
+   Realistically reachable, not just theoretical: `mmap()` rejects a
+   zero-length mapping with `EINVAL`, so indexing a genuinely empty file
+   with `-s <separator>` set hits this on every run. Fixed by checking
+   `Buffer == (CHR*)MAP_FAILED` immediately after the call, logging via
+   `perror()` and returning (skipping just that file) instead of
+   proceeding. See `BUGFIX #1` in source.
+
+2. **Missing `munmap()`** — `Buffer` is mapped once per file (when a
+   separator is set) and never unmapped on any path through this
+   function — a straightforward resource leak, but a meaningful one
+   here specifically: `Iindex`'s entire purpose is indexing potentially
+   thousands of files in a single process run, so this leaks one file
+   mapping per input file for the whole run's lifetime. Fixed by adding
+   `munmap(Buffer, FileSize);` after the mapping's last use, alongside
+   the existing `delete [] Sep;`/`fclose(Fp);` cleanup. See `BUGFIX #2`
+   in source.
+
+No test file was written for the reasons in the scope note above; both
+fixes are documented in detail here and at their `BUGFIX #n` comment
+sites in source instead, matching `src/Iget.cxx`'s precedent.
+

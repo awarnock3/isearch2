@@ -42,6 +42,22 @@ Description:	Command-line indexer
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+// NOTE: this is a `main()`-only CLI entry point (like src/Iget.cxx), so
+// it cannot be linked into the shared Catch2 test binary (its `main()`
+// would collide with catch_amalgamated.cpp's own), and AddFile() -- the
+// one function with real logic worth testing in isolation -- only sinks
+// into IDB::AddRecord(), which requires a fully constructed IDB backed
+// by real on-disk index files (src/idb.cxx's IDB::Initialize()), a
+// disproportionate fixture for a single per-file cleanup pass. At 913
+// lines this is also the largest non-doctype file processed so far;
+// the deep audit was scoped to AddFile() (the core per-file
+// record-splitting logic) and the argument-parsing loop, with a lighter
+// pass over the file-listing/GILS-generation tail of main(). Verified
+// via compile-clean confirmation and manual trace-through instead of an
+// automated test; see docs/BUG_CATALOG.md for the full note.
+
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
@@ -154,7 +170,13 @@ static GDT_BOOLEAN IsSafeSystemArg(const CHR* value, const GDT_BOOLEAN allowWild
 }
 
 
-void 
+/// Adds PathName/FileName to IdbPtr as one or more records. With no
+/// Separator set, the whole file is one record. With a Separator set,
+/// splits the file at each occurrence of Separator into multiple
+/// records (mmap-backed on platforms with mmap, read()-based
+/// otherwise), each spanning from just after the previous separator to
+/// just before the next one.
+void
 AddFile(PIDB IdbPtr, STRING& PathName, STRING& FileName) {
   RECORD Record;
   Record.SetPathName(PathName);
@@ -178,6 +200,18 @@ AddFile(PIDB IdbPtr, STRING& PathName, STRING& FileName) {
     
     Buffer = (CHR*) mmap((caddr_t)0, FileSize, PROT_READ, MAP_PRIVATE,
 			 FileDesc, 0);
+    // BUGFIX #1 (docs/BUG_CATALOG.md#srciindexcxx): mmap()'s return
+    // value was never checked. On failure it returns MAP_FAILED
+    // ((void*)-1), not nullptr, and the scanning loop below would
+    // dereference that as a real address -- an almost-certain crash.
+    // Reachable by simply indexing a genuinely empty file with a
+    // separator set (mmap rejects a zero-length mapping with EINVAL), a
+    // realistic scenario, not just a defensive guess.
+    if (Buffer == (CHR*)MAP_FAILED) {
+      perror("mmap");
+      fclose(Fp);
+      return;
+    }
     Record.SetRecordStart(0);
     CHR* Position = Buffer;
     CHR* Found=(CHR*)NULL;
@@ -240,6 +274,12 @@ AddFile(PIDB IdbPtr, STRING& PathName, STRING& FileName) {
       IdbPtr->AddRecord(Record);
     }
     delete [] Sep;
+    // BUGFIX #2 (docs/BUG_CATALOG.md#srciindexcxx): Buffer was never
+    // munmap()'d -- a real resource leak (unmapping the file page-cache
+    // mapping) on every single file indexed with a separator set, which
+    // for a large indexing run (Iindex's whole purpose) can mean
+    // thousands of leaked mappings in one process lifetime.
+    munmap(Buffer, FileSize);
     fclose(Fp);
 #else
     GPTYPE Start = 0;
@@ -305,7 +345,10 @@ AddFile(PIDB IdbPtr, STRING& PathName, STRING& FileName) {
 
 
 
-int 
+/// Parses indexing flags (-d/-t/-s/-r/-f/-m/-meta/-gils/-merge/-syn/...),
+/// builds or appends to the named database from the given files (or
+/// file list / recursive glob), then indexes and flushes it.
+int
 main(int argc, char** argv) {
   fprintf(stderr,"Iindex v%s\n", IsearchVersion);
   if (argc < 2) {
