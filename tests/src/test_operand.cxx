@@ -63,3 +63,29 @@ TEST_CASE("OPERAND operator= copies the other operand's attributes", "[operand]"
 	out.AttrGetFieldName(&Name);
 	REQUIRE(Name == "AUTHOR");
 }
+
+TEST_CASE("OPERAND operator= self-assignment preserves attributes", "[operand]") {
+	// OPERAND::operator=() has no self-assignment guard of its own --
+	// `OtherOp.GetAttributes(&Attributes);` relies entirely on
+	// ATTRLIST::operator=()'s own guard underneath. This was previously
+	// unsafe to test (see docs/BUG_CATALOG.md#srcoperandhxx: self-
+	// assigning a live STERM through this exact path was confirmed to
+	// silently wipe Attributes, back when ATTRLIST::operator= had no
+	// self-assignment check of its own) -- now that ATTRLIST::operator=
+	// has been fixed (BUGFIX #2, docs/BUG_CATALOG.md#srcattrlisthxx),
+	// this confirms the fix holds all the way up through OPERAND's own
+	// operator=.
+	TESTOPERAND op;
+	ATTRLIST attrs;
+	attrs.AttrSetFieldName(STRING("SUBJECT"));
+	op.SetAttributes(attrs);
+
+	OPOBJ& ref = op;
+	ref = ref;
+
+	ATTRLIST out;
+	op.GetAttributes(&out);
+	STRING Name;
+	out.AttrGetFieldName(&Name);
+	REQUIRE(Name == "SUBJECT");
+}

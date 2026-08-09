@@ -558,6 +558,31 @@ reached its own turn:
 
 Also applied: file-level and per-method doc comments in `operand.hxx`.
 
+## src/operand.cxx
+
+`BUGFIX #1` above (header self-containment) needed no change here.
+This file's own dedicated turn: a full re-read of all four methods
+(`OPERAND()`, `operator=()`, `SetAttributes()`, `GetAttributes()`,
+`~OPERAND()`) found no new bug. Specifically checked and confirmed
+sound: `operator=()` has no self-assignment guard of its own
+(`OtherOp.GetAttributes(&Attributes);` unconditionally), but this is
+safe now — it relies entirely on `ATTRLIST::operator=()`'s own guard
+underneath, which was latent/unfixed when `operand.hxx`'s own turn
+flagged this exact chain as a deferred risk (and which `src/sterm.hxx`'s
+turn went on to confirm was reachable and real, self-assigning a live
+`STERM` through the identical path), but has since been fixed
+(`src/attrlist.cxx`'s `BUGFIX #2`). `OPOBJ`'s own `Next` member (used
+for `OPSTACK`'s intrusive linked-list bookkeeping) is deliberately not
+touched by this `operator=` — it's `private` to `OPOBJ` (not even
+visible to `OPERAND`), so copying it isn't just skipped, it's
+inaccessible by design, which is the correct behavior for a member
+that represents an object's position in an unrelated data structure,
+not its value. No `NULL`/`sprintf`, zero warnings under `-Wall
+-Wextra` attributable to this file. Added the previously-deferred
+self-assignment regression test now that it's safe to write (see
+`tests/src/test_operand.cxx`'s own comment for the history). `make
+tests`/`make tests-asan` pass clean (731 test cases, 2826 assertions).
+
 ## src/rset.hxx
 
 1. **Header not self-contained** — same defect as `src/fc.hxx`
