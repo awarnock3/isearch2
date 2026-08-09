@@ -263,14 +263,14 @@ TEST_CXXFLAGS_ASAN := $(TEST_CXXFLAGS) -fsanitize=address,undefined -g
 # as each file's turn adds tests that need more of the engine; compiled
 # separately from the production build (tests/obj/, TEST_CXXFLAGS) so the
 # two builds never fight over the same .o.
-TEST_ENGINE_SRCS := src/fc.cxx src/fct.cxx src/vlist.cxx src/df.cxx src/dft.cxx src/string.cxx src/common.cxx src/record.cxx src/rcache.cxx src/irset.cxx src/operand.cxx src/opobj.cxx src/rset.cxx src/result.cxx src/iresult.cxx src/attr.cxx src/attrlist.cxx src/mdtrec.cxx src/mdt.cxx src/dfd.cxx src/dfdt.cxx src/strlist.cxx src/defs.cxx src/opstack.cxx src/filemap.cxx src/hash.cxx src/termobj.cxx src/memcntl.cxx src/operator.cxx src/sterm.cxx src/marclib.cxx src/md5.cxx src/md5sum.cxx src/merge.cxx src/registry.cxx src/fprec.cxx src/reclist.cxx src/fpt.cxx src/nfield.cxx src/date.cxx src/intfield.cxx src/soundex.cxx src/squery.cxx src/mergeunit.cxx src/index.cxx src/numsearch.cxx src/datesearch.cxx src/geosearch.cxx src/multiterm.cxx src/tokengen.cxx src/thesaurus.cxx src/nlist.cxx src/intlist.cxx src/strstack.cxx src/infix2rpn.cxx src/glist.cxx src/marc.cxx src/gstack.cxx src/nfldmgr.cxx src/nlatlon.cxx src/stopword.cxx
+TEST_ENGINE_SRCS := src/fc.cxx src/fct.cxx src/vlist.cxx src/df.cxx src/dft.cxx src/string.cxx src/common.cxx src/record.cxx src/rcache.cxx src/irset.cxx src/operand.cxx src/opobj.cxx src/rset.cxx src/result.cxx src/iresult.cxx src/attr.cxx src/attrlist.cxx src/mdtrec.cxx src/mdt.cxx src/dfd.cxx src/dfdt.cxx src/strlist.cxx src/defs.cxx src/opstack.cxx src/filemap.cxx src/hash.cxx src/termobj.cxx src/memcntl.cxx src/operator.cxx src/sterm.cxx src/marclib.cxx src/md5.cxx src/md5sum.cxx src/merge.cxx src/registry.cxx src/fprec.cxx src/reclist.cxx src/fpt.cxx src/nfield.cxx src/date.cxx src/intfield.cxx src/soundex.cxx src/squery.cxx src/mergeunit.cxx src/index.cxx src/numsearch.cxx src/datesearch.cxx src/geosearch.cxx src/multiterm.cxx src/tokengen.cxx src/thesaurus.cxx src/nlist.cxx src/intlist.cxx src/strstack.cxx src/infix2rpn.cxx src/glist.cxx src/marc.cxx src/gstack.cxx src/nfldmgr.cxx src/nlatlon.cxx src/stopword.cxx src/vidb.cxx src/idb.cxx src/dtreg.cxx
 TEST_ENGINE_OBJS      := $(patsubst src/%.cxx,tests/obj/%.o,$(TEST_ENGINE_SRCS))
 TEST_ENGINE_OBJS_ASAN := $(patsubst src/%.cxx,tests/obj-asan/%.o,$(TEST_ENGINE_SRCS))
 
 # Same idea as TEST_ENGINE_SRCS above, for engine sources living outside
 # src/ (e.g. Isearch-cgi/). Kept as a separate list/pattern rule because
 # TEST_ENGINE_OBJS's patsubst assumes a src/ prefix.
-TEST_ENGINE_CGI_SRCS := Isearch-cgi/config.cxx Isearch-cgi/cgi-util.cxx Isearch-cgi/api_config.cxx Isearch-cgi/api_response.cxx Isearch-cgi/api_request.cxx Isearch-cgi/api_endpoints.cxx
+TEST_ENGINE_CGI_SRCS := Isearch-cgi/config.cxx Isearch-cgi/cgi-util.cxx Isearch-cgi/api_config.cxx Isearch-cgi/api_response.cxx Isearch-cgi/api_request.cxx Isearch-cgi/api_endpoints.cxx Isearch-cgi/api_search.cxx
 TEST_ENGINE_CGI_OBJS      := $(patsubst Isearch-cgi/%.cxx,tests/obj/cgi-%.o,$(TEST_ENGINE_CGI_SRCS))
 TEST_ENGINE_CGI_OBJS_ASAN := $(patsubst Isearch-cgi/%.cxx,tests/obj-asan/cgi-%.o,$(TEST_ENGINE_CGI_SRCS))
 

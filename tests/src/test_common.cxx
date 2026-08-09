@@ -48,6 +48,26 @@ TEST_CASE("AddTrailingSlash is a no-op when already present", "[common]") {
 	REQUIRE(s == "/some/dir/");
 }
 
+TEST_CASE("AddTrailingSlash appends a slash to a single-character path like \".\"", "[common]") {
+	// BUGFIX #7 (docs/BUG_CATALOG.md#srccommoncxx): the length guard used
+	// to be `> 1`, so a single-character path never got a trailing slash
+	// at all -- confirmed via Isearch-cgi/api_search.cxx's own "." db_path
+	// fallback silently concatenating into ".mydb.mdt" instead of
+	// "./mydb.mdt".
+	STRING s(".");
+	AddTrailingSlash(&s);
+	REQUIRE(s == "./");
+}
+
+TEST_CASE("AddTrailingSlash leaves an empty path empty", "[common]") {
+	// Not the same as the single-character case above: appending a slash
+	// to "" would change "no path" into "root directory", a real,
+	// deliberate behavior difference -- confirmed this stays untouched.
+	STRING s("");
+	AddTrailingSlash(&s);
+	REQUIRE(s.GetLength() == 0);
+}
+
 TEST_CASE("RemovePath keeps only the last path component", "[common]") {
 	STRING s("/some/dir/file.txt");
 	RemovePath(&s);

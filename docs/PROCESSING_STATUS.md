@@ -120,7 +120,7 @@
 | 116 | src/Iutil.cxx | done | 2026-08-09 | [src/Iutil.cxx](BUG_CATALOG.md#srciutilcxx) |
 | 117 | src/attr.cxx | done | 2026-08-07 | [src/attr.cxx](BUG_CATALOG.md#srcattrcxx) |
 | 118 | src/attrlist.cxx | done | 2026-08-07 | [src/attrlist.hxx](BUG_CATALOG.md#srcattrlisthxx) |
-| 119 | src/common.cxx | done | 2026-08-07 | [src/common.cxx](BUG_CATALOG.md#srccommoncxx) |
+| 119 | src/common.cxx | done | 2026-08-10 | [src/common.cxx](BUG_CATALOG.md#srccommoncxx) |
 | 120 | src/date.cxx | done | 2026-08-07 | [src/date.cxx](BUG_CATALOG.md#srcdatecxx) |
 | 121 | src/datesearch.cxx | done | 2026-08-09 | [src/datesearch.cxx](BUG_CATALOG.md#srcdatesearchcxx) |
 | 122 | src/defs.cxx | done | 2026-08-07 | [src/defs.hxx](BUG_CATALOG.md#srcdefshxx) |
@@ -245,10 +245,10 @@
 | 241 | Isearch-cgi/api_response.hxx | done | 2026-08-10 | [Isearch-cgi/api_response.hxx](BUG_CATALOG.md#isearch-cgiapi_responsehxx-isearch-cgiapi_responsecxx) |
 | 242 | Isearch-cgi/api_request.hxx | done | 2026-08-10 | [Isearch-cgi/api_request.hxx](BUG_CATALOG.md#isearch-cgiapi_requesthxx-isearch-cgiapi_requestcxx) |
 | 243 | Isearch-cgi/api_endpoints.hxx | done | 2026-08-10 | [Isearch-cgi/api_endpoints.hxx](BUG_CATALOG.md#isearch-cgiapi_endpointshxx-isearch-cgiapi_endpointscxx) |
-| 244 | Isearch-cgi/api_search.hxx | pending | | |
+| 244 | Isearch-cgi/api_search.hxx | done | 2026-08-10 | [Isearch-cgi/api_search.hxx](BUG_CATALOG.md#isearch-cgiapi_searchhxx-isearch-cgiapi_searchcxx) |
 | 245 | Isearch-cgi/api_config.cxx | done | 2026-08-10 | [Isearch-cgi/api_config.cxx](BUG_CATALOG.md#isearch-cgiapi_confighxx-isearch-cgiapi_configcxx) |
 | 246 | Isearch-cgi/api_endpoints.cxx | done | 2026-08-10 | [Isearch-cgi/api_endpoints.cxx](BUG_CATALOG.md#isearch-cgiapi_endpointshxx-isearch-cgiapi_endpointscxx) |
 | 247 | Isearch-cgi/api_request.cxx | done | 2026-08-10 | [Isearch-cgi/api_request.cxx](BUG_CATALOG.md#isearch-cgiapi_requesthxx-isearch-cgiapi_requestcxx) |
 | 248 | Isearch-cgi/api_response.cxx | done | 2026-08-10 | [Isearch-cgi/api_response.cxx](BUG_CATALOG.md#isearch-cgiapi_responsehxx-isearch-cgiapi_responsecxx) |
-| 249 | Isearch-cgi/api_search.cxx | pending | | |
+| 249 | Isearch-cgi/api_search.cxx | done | 2026-08-10 | [Isearch-cgi/api_search.cxx](BUG_CATALOG.md#isearch-cgiapi_searchhxx-isearch-cgiapi_searchcxx) |
 | 250 | Isearch-cgi/isrch_api.cxx | pending | | |

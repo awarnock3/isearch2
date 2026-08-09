@@ -41,7 +41,7 @@ Version:	$Revision: 1.21 $
 Description:	Common functions
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
-// ISEARCH2-CLEANUP: processed 2026-08-07
+// ISEARCH2-CLEANUP: processed 2026-08-10
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <stdlib.h>
@@ -81,11 +81,27 @@ panic(const char *filename, long line)
 }
 
 
-void 
-AddTrailingSlash(STRING* PathName) 
+// BUGFIX #7 (docs/BUG_CATALOG.md#srccommoncxx): found 2026-08-10 while
+// processing Isearch-cgi/api_search.hxx (a pending file, not part of
+// this file's original turn) -- the length guard was `> 1`, so a
+// single-character path like "." (a very ordinary "use the current
+// directory" value -- e.g. Isearch-cgi/api_search.cxx's own
+// ExecuteSearch() falls back to it when ISEARCH_DB_PATH isn't
+// configured) never got a trailing slash appended at all. Confirmed
+// with a standalone repro: AddTrailingSlash(".") left it as "." (not
+// "./"), while AddTrailingSlash("/tmp") correctly produced "/tmp/".
+// Concatenating a database filename onto the un-slashed result
+// (".mydb.mdt" instead of "./mydb.mdt") makes every database lookup
+// against a "." path fail even when the database genuinely exists --
+// confirmed live via Isearch-cgi/api_search.cxx's own JSON API path.
+// Fixed by changing the guard to `> 0`, so only a truly empty path (for
+// which appending a slash would change "no path" into "root
+// directory", a real, deliberate behavior difference) is left alone.
+void
+AddTrailingSlash(STRING* PathName)
 {
   STRINGINDEX x;
-  if ( ((x=PathName->GetLength()) > 1) &&
+  if ( ((x=PathName->GetLength()) > 0) &&
        (PathName->GetChr(x) != DIR_SLASH) ) {
     PathName->Cat(DIR_SLASH);
   }

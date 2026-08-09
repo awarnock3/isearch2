@@ -2070,6 +2070,38 @@ the normalized `YYYY-MM-DD` digits) is now `snprintf`, bounded by the
 `NewCString()`-allocated buffer's actual size
 (`TmpDate.GetLength() + 1`). No `NULL` usages were present.
 
+7. **Added 2026-08-10, while processing
+   [`Isearch-cgi/api_search.hxx`](#isearch-cgiapi_searchhxx-isearch-cgiapi_searchcxx)
+   (a `pending` file, not part of this section's original turn):
+   `AddTrailingSlash()`'s length guard excluded single-character paths
+   — confirmed via a standalone repro, and independently via a live
+   crash-free-but-wrong result through the JSON API.** The guard was
+   `(x=PathName->GetLength()) > 1`, so a path exactly one character
+   long — the single most ordinary case being `"."`, "use the current
+   directory" — never got a trailing slash appended at all, unlike
+   every longer path. Confirmed with a standalone repro:
+   `AddTrailingSlash(".")` left it as `"."` (not `"./"`), while
+   `AddTrailingSlash("/tmp")` correctly produced `"/tmp/"`. Concatenating
+   a database filename directly onto the un-slashed result silently
+   produces a malformed path (`".mydb.mdt"` instead of `"./mydb.mdt"`)
+   — confirmed live through `Isearch-cgi/api_search.cxx`'s own
+   `ExecuteSearch()`, which falls back to exactly `db_path = "."` when
+   `ISEARCH_API_MAX_HITS`'s sibling setting `ISEARCH_DB_PATH` isn't
+   configured: a real deployment relying on that fallback would have
+   every database lookup fail even for a database that genuinely
+   exists relative to the server's working directory. Fixed by
+   changing the guard to `> 0`, so only a truly empty path (for which
+   appending a slash would be a real, deliberate behavior change — "no
+   path" becoming "root directory" — not a bug fix) is left alone. See
+   `BUGFIX #7` in source. `tests/src/test_common.cxx` gained two new
+   cases (the `"."` fix, and confirming `""` is deliberately left
+   untouched) alongside the existing `AddTrailingSlash` coverage.
+   Checked every call site tree-wide (`src/idb.cxx`, `src/vidb.cxx`,
+   `src/record.cxx` ×2, `src/Iutil.cxx`) — the fix only changes
+   behavior for the previously-broken single-character case, so it's
+   strictly additive for all of them. `make tests`/`make tests-asan`
+   pass clean (798 test cases, 2986 assertions).
+
 ## src/strlist.cxx
 
 `STRLIST`: an ordered list of `STRING` entries, each entry its own
@@ -9778,4 +9810,93 @@ tests-asan` pass clean (790 test cases, 2969 assertions — up from
 784/2949, the 20-assertion increase being this new file's own
 coverage). `make isearch-cgi` also confirmed to still build clean
 (`api_endpoints.cxx` links into `isrch_api`).
+
+## Isearch-cgi/api_search.hxx, Isearch-cgi/api_search.cxx
+
+**Processed together**, same pairing convention as the other JSON-API
+files above. The file that actually ties the whole JSON API together —
+`ExecuteSearch()` builds an `SQUERY` from the parsed `ApiRequest`
+(handling `q` directly or joining `terms[]` with the request's
+operator), opens a `VIDB`, runs `Search()`/`AndSearch()`, and maps the
+result into `ApiSearchMeta`/`ApiHit`. Confirmed self-contained.
+
+**Zero bugs found in this file itself** — but writing its test suite
+surfaced a real, confirmed bug in the already-`done`
+[`src/common.cxx`](#srccommoncxx) (see `BUGFIX #7` there for the full
+explanation): `AddTrailingSlash()` silently failed to add a separator
+for single-character paths like `"."`, which is exactly what
+`ExecuteSearch()`'s own `db_path = "."` fallback produces when
+`ISEARCH_DB_PATH` isn't configured. Fixed directly in `common.cxx` (a
+`.cxx` file, not header-frozen) as part of this turn, matching this
+batch's established precedent for `src/vidb.cxx`'s analogous discovery
+during `Isearch-cgi/isrch_srch.cxx`'s own turn.
+
+This file itself is the payoff from this batch's earlier VIDB fix
+becoming directly visible: unlike the older
+`Isearch-cgi/isrch_html.cxx`/`isrch_srch.cxx` (both fixed earlier this
+batch), `ExecuteSearch()` already has its own explicit `if (pirset ==
+nullptr)` check after `Search()`/`AndSearch()` — its author was clearly
+aware of, and independently guarded against, the exact null-return
+class of bug those older files were missing. It also independently
+guards the "query resolves to nothing" case via `BuildSquery()`'s own
+`query_text.GetLength() == 0` check after both the `q` and `terms[]`
+paths, closing off the SQUERY-with-zero-operands path before it can
+even reach the search call. Verified all of this with real, live
+repros against the actual production binary/library (not just
+inspection): a genuine successful search against a real `Iindex`-built
+database (confirmed matching hit count/filename); a whitespace-only
+query correctly returning `422` without touching any database; and a
+nonexistent database correctly returning `404`. That last repro is
+also what led to the `common.cxx` discovery above — the `db_path="."`
+variant of it initially left a stray, oddly-named `.mdt` file in the
+repository root (`AddTrailingSlash()`'s bug meant the path joined
+without a separator, producing a leading-dot hidden filename); tracing
+*why* led straight to the root cause instead of just papering over the
+symptom.
+
+Two harmless, confirmed-dead checks noted but left alone, matching
+already-established precedent for the identical pattern in
+`Isearch-cgi/isrch_srch.cxx`'s own turn: `if (pdb == nullptr)` right
+after `new VIDB(...)` can never be true (a throwing, non-`nothrow`
+`new` either succeeds or throws — it never silently returns null), and
+`BuildResultUrl()`'s `if (name == nullptr) return;` right after
+`NewCString()` is likewise a defensive check for something that never
+actually returns null, though harmless either way since `delete []
+nullptr` is a no-op.
+
+Also modernized: the 12 code-level `NULL` uses converted to `nullptr`.
+
+**Build note**: this is the first file in the whole `Isearch-cgi/`
+tree that needed `VIDB` linked into the Catch2 test binary — added
+`src/vidb.cxx`, `src/idb.cxx`, and the generated `src/dtreg.cxx` to
+`TEST_ENGINE_SRCS` in the top-level `Makefile` (previously only
+`Isearch-cgi/isrch_srch.cxx`/`Isearch.cxx` used `VIDB`, and neither is
+linkable into the test binary at all, being `main()`-only). Confirmed
+`make smoke-test` still passes after the addition.
+
+`tests/Isearch-cgi/test_api_search.cxx` (new, wired into
+`TEST_ENGINE_CGI_SRCS`) covers the parts of `ExecuteSearch()` that
+don't need a real on-disk index — no existing test in this suite
+builds one programmatically, confirmed by checking; this project's own
+`make smoke-test` is what exercises full end-to-end indexing, and
+that's a Makefile target, not a Catch2 fixture: a whitespace-only query
+rejected as `422` with no database touched; an entirely empty request
+(`q` and `terms[]` both empty) also `422`; a nonexistent database
+`404`; the empty-`db_path`-falls-back-to-`"."` branch; a query built
+from `terms[]` when `q` is empty (confirmed via the resulting
+`interpreted_query`, since a broken join would either 422 on an empty
+result or produce the wrong string); and that `ApiSearchMeta`'s
+request-independent fields (`request_id`, `database`, `search_type`,
+`start`, `max_hits`) are populated before validation can reject the
+request. The successful-search-with-real-hits path was instead
+verified with a standalone repro against a real `Iindex`-built
+database before this turn was committed (confirmed `status=200`,
+correct `matching_record_count`, and correct hit filename) — a
+one-time confirmation, not a permanent test, per the scope note in the
+test file itself. `make tests`/`make tests-asan` pass clean (796 test
+cases, 2984 assertions — up from 790/2969, the 15-assertion increase
+being this new file's own coverage). `make isearch-cgi` also confirmed
+to still build clean (`api_search.cxx` links into `isrch_api`); `make
+smoke-test` also re-confirmed clean given the `TEST_ENGINE_SRCS`
+change above.
 

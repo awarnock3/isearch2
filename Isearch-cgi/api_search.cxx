@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-10
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "api_search.hxx"
 
 #include <string.h>
@@ -32,7 +35,7 @@ static const CHR *OperatorToken(const BoolOperator op)
 
 static void BuildQueryFromTerms(const ApiRequest& req, STRING *query)
 {
-  if (query == NULL || req.terms.empty()) {
+  if (query == nullptr || req.terms.empty()) {
     return;
   }
 
@@ -85,7 +88,7 @@ static bool HasBooleanTokens(const STRING& query_text)
 static bool BuildSquery(const ApiRequest& req, SQUERY *search_query,
                         STRING *interpreted_query, STRING& error_detail)
 {
-  if (search_query == NULL || interpreted_query == NULL) {
+  if (search_query == nullptr || interpreted_query == nullptr) {
     error_detail = "Internal error building query.";
     return false;
   }
@@ -139,20 +142,20 @@ static bool BuildSquery(const ApiRequest& req, SQUERY *search_query,
 
 static void BuildResultUrl(const STRING& full_name, STRING *url_out)
 {
-  if (url_out == NULL) {
+  if (url_out == nullptr) {
     return;
   }
   *url_out = "";
 
   CHR *name = full_name.NewCString();
-  if (name == NULL) {
+  if (name == nullptr) {
     return;
   }
 
   CHR *http_path = (CHR *)getenv("DOCUMENT_ROOT");
-  if (http_path != NULL) {
+  if (http_path != nullptr) {
     CHR *url = strstr(name, http_path);
-    if (url != NULL) {
+    if (url != nullptr) {
       url += strlen(http_path);
       *url_out = url;
     }
@@ -188,7 +191,7 @@ int ExecuteSearch(const ApiRequest& req, const ApiConfig& cfg,
   meta.interpreted_query = interpreted_query;
 
   VIDB *pdb = new VIDB(db_path, req.database);
-  if (pdb == NULL) {
+  if (pdb == nullptr) {
     error_detail = "Failed to open database.";
     return 500;
   }
@@ -199,16 +202,16 @@ int ExecuteSearch(const ApiRequest& req, const ApiConfig& cfg,
     return 404;
   }
 
-  const time_t start_time = time(NULL);
-  PIRSET pirset = NULL;
+  const time_t start_time = time(nullptr);
+  PIRSET pirset = nullptr;
   if (req.op == OP_AND && req.search_type == SEARCH_SIMPLE) {
     pirset = pdb->AndSearch(query);
   } else {
     pirset = pdb->Search(query);
   }
-  const time_t end_time = time(NULL);
+  const time_t end_time = time(nullptr);
 
-  if (pirset == NULL) {
+  if (pirset == nullptr) {
     error_detail = "Search execution failed.";
     delete pdb;
     return 500;
