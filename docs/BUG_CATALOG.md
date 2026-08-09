@@ -9648,3 +9648,92 @@ tests-asan` pass clean (768 test cases, 2903 assertions — up from
 coverage). `make isearch-cgi` also confirmed to still build clean
 (`api_response.cxx` links into `isrch_api`).
 
+## Isearch-cgi/api_request.hxx, Isearch-cgi/api_request.cxx
+
+**Processed together**, same pairing convention as the other JSON-API
+files above. By far the largest and most sophisticated of the four —
+764 lines, including a hand-rolled recursive-descent `JsonReader` class
+that parses both the POST body's top-level object and the GET/POST
+query-parameter shapes into a shared `ApiRequest`. Confirmed self-
+contained. `ValidateRequest()` is a genuinely thorough validation layer
+— it's exactly the kind of check that was *missing*, causing real
+crashes, in the older `isrch_html.cxx`/`isrch_srch.cxx` files earlier
+this batch (e.g. its `req.q.GetLength() == 0 && req.terms.empty()`
+check is precisely the "empty query" guard those two files lacked).
+The `JsonReader`'s own bounds-checking is careful throughout — every
+`isspace()`/`tolower()` call already casts to `unsigned char` first
+(avoiding the signed-`char`-UB pattern flagged elsewhere this session),
+and every parsing loop was traced to confirm it always either advances
+its position or returns, ruling out an infinite-loop-on-malformed-input
+class of bug before even looking for one.
+
+Two bugs found and fixed, both confirmed with live repros through the
+public `ParseRequest()` API (not just inspection), the second also
+via a full revert-and-repro against the new test suite:
+
+1. **`strtol()`'s `long` result cast straight to `INT` with no range
+   check — confirmed a real validation bypass, not just truncation**
+   (most severe finding in this file) — the same defect as
+   [`Isearch-cgi/api_config.hxx`](#isearch-cgiapi_confighxx-isearch-cgiapi_configcxx)'s
+   own `BUGFIX #1`, but here it parses `start`/`max_hits`/`score_scale`
+   directly from **untrusted GET query parameters or POST JSON body**,
+   not just a server-side environment variable — a meaningfully wider
+   attack surface. Confirmed with a live repro through
+   `ParseRequest()`: `max_hits=4294967297` (2^32+1) truncated to
+   `max_hits=1` via the 64-bit-to-32-bit cast, and — because `1` is a
+   perfectly ordinary, in-range value — sailed straight through
+   `ValidateRequest()`'s `max_hits < 1` and `max_hits >
+   API_HARD_MAX_HITS` checks with no error at all. An attacker-supplied
+   value far outside any sane range silently aliased to a "valid-
+   looking" one instead of being rejected — a genuine validation
+   bypass via integer truncation, not merely a wrong-number bug. Fixed
+   by rejecting (not clamping, unlike `api_config.cxx`'s server-side-
+   default context) any value that doesn't fit in `INT`, consistent
+   with this file's own "return false, let the caller report a precise
+   error" convention used by every other invalid-input case already in
+   `ParsePositiveInt()`. See `BUGFIX #1` in source.
+2. **The `\uXXXX` JSON string escape handler didn't decode its hex
+   digits at all — confirmed silent data corruption, not a crash** —
+   `JsonReader::ParseString()`'s `case 'u':` branch skipped the 4 hex
+   digits and pushed a literal `'?'` placeholder character, for *every*
+   `\uXXXX` escape, while still reporting the overall parse as
+   successful. `\uXXXX` is an entirely ordinary way to encode an
+   accented character (or even just a `"` or control character) in
+   JSON — not an exotic edge case. Confirmed with a live repro:
+   `{"q":"café"}` (café) parsed successfully but produced
+   `q="caf?"` instead of the correct 4-byte string ending in the
+   Latin-1 byte `0xE9`. Fixed by actually decoding the 4 hex digits: for
+   codepoints `0x00`-`0xFF`, push the matching Latin-1 byte (this
+   codebase is single-byte/`ISO-8859-1` throughout, per every CGI
+   file's own `Content-Type`/HTML `charset` declaration processed this
+   batch); for anything higher, where no lossless single-byte
+   representation exists, **fail the parse** rather than silently
+   substituting a placeholder — loud failure over silent corruption,
+   matching every other error path already in this class. Verified
+   both directions with the new test suite, including a full revert-
+   and-repro: temporarily reverted just this fix, reran the exact
+   `café` test, watched it correctly detect the fix's absence, then
+   restored it. See `BUGFIX #2` in source.
+
+Also modernized: 55 code-level `NULL` uses converted to `nullptr`
+throughout the file.
+
+`tests/Isearch-cgi/test_api_request.cxx` (new, wired into
+`TEST_ENGINE_CGI_SRCS`) covers both the GET path (via a real `CGIAPP`
+constructed from `REQUEST_METHOD`/`QUERY_STRING`, matching
+`tests/Isearch-cgi/test_cgi-util.cxx`'s own convention) and the POST/
+JSON path (passing `method`/`body` directly to `ParseRequest()`,
+sidestepping `stdin` entirely): a minimal valid GET request; missing-
+database and missing-query rejections; multi-term
+`TERM_N`/`FIELD_N`/`WEIGHT_N`/`PHRASE_N` collection; unrecognized
+`search_type`/`operator` rejection; the `BUGFIX #1` overflow-rejection
+for both `max_hits` and `start`; a minimal valid POST/JSON request; a
+non-JSON `Content-Type` rejection; malformed-JSON rejection; a JSON
+`terms[]` array with mixed string/numeric `weight`; the `BUGFIX #2`
+`é`-decodes-correctly and `☃`-(above `0xFF`)-gets-rejected
+cases; an unsupported-HTTP-method rejection; and `ApiRequest`/`ApiTerm`
+default values. `make tests`/`make tests-asan` pass clean (784 test
+cases, 2949 assertions — up from 768/2903, the 46-assertion increase
+being this new file's own coverage). `make isearch-cgi` also confirmed
+to still build clean (`api_request.cxx` links into `isrch_api`).
+

@@ -1,5 +1,9 @@
+// ISEARCH2-CLEANUP: processed 2026-08-10
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "api_request.hxx"
 
+#include <climits>
 #include <ctype.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -26,7 +30,7 @@ static LONG g_request_counter = 0;
 
 static bool IsMethod(const CHR *method, const CHR *target)
 {
-  if (method == NULL || target == NULL) {
+  if (method == nullptr || target == nullptr) {
     return false;
   }
   return StrCaseCmp(method, target) == 0;
@@ -34,17 +38,31 @@ static bool IsMethod(const CHR *method, const CHR *target)
 
 static void SetError(STRING& error_detail, const CHR *message)
 {
-  error_detail = (message != NULL) ? message : "Invalid request.";
+  error_detail = (message != nullptr) ? message : "Invalid request.";
 }
 
 static bool ParsePositiveInt(const CHR *raw, INT *value_out)
 {
-  if (raw == NULL || raw[0] == '\0' || value_out == NULL) {
+  if (raw == nullptr || raw[0] == '\0' || value_out == nullptr) {
     return false;
   }
-  CHR *endptr = NULL;
+  CHR *endptr = nullptr;
   const long parsed = strtol(raw, &endptr, 10);
   if (endptr == raw || *endptr != '\0' || parsed < 1) {
+    return false;
+  }
+  // BUGFIX #1 (docs/BUG_CATALOG.md#isearch-cgiapi_requesthxx): the same
+  // defect as Isearch-cgi/api_config.cxx's own BUGFIX #1, but more
+  // severely reachable here -- this parses start/max_hits/score_scale
+  // directly from untrusted GET query parameters or POST JSON body,
+  // not just server-side environment variables. Confirmed via a live
+  // repro through the public ParseRequest() API: max_hits=4294967297
+  // (2^32+1) truncated to max_hits=1 and passed ValidateRequest()'s
+  // range checks completely unnoticed -- an attacker-supplied
+  // out-of-range value silently aliased to a "valid-looking" one
+  // instead of being rejected. Fixed by rejecting values that don't
+  // fit in INT instead of truncating them.
+  if (parsed > INT_MAX) {
     return false;
   }
   *value_out = (INT)parsed;
@@ -53,7 +71,7 @@ static bool ParsePositiveInt(const CHR *raw, INT *value_out)
 
 static bool ParseBoolean(const CHR *raw, bool *value_out)
 {
-  if (raw == NULL || value_out == NULL) {
+  if (raw == nullptr || value_out == nullptr) {
     return false;
   }
 
@@ -74,41 +92,41 @@ static bool ParseBoolean(const CHR *raw, bool *value_out)
 
 static const CHR *GetValue(CGIAPP *cgi, const CHR *primary, const CHR *alias)
 {
-  if (cgi == NULL) {
-    return NULL;
+  if (cgi == nullptr) {
+    return nullptr;
   }
 
-  PCHR value = NULL;
-  if (primary != NULL && primary[0] != '\0') {
+  PCHR value = nullptr;
+  if (primary != nullptr && primary[0] != '\0') {
     value = cgi->GetValueByName(primary);
-    if (value != NULL && value[0] != '\0') {
+    if (value != nullptr && value[0] != '\0') {
       return value;
     }
   }
-  if (alias != NULL && alias[0] != '\0') {
+  if (alias != nullptr && alias[0] != '\0') {
     value = cgi->GetValueByName(alias);
-    if (value != NULL && value[0] != '\0') {
+    if (value != nullptr && value[0] != '\0') {
       return value;
     }
   }
-  return NULL;
+  return nullptr;
 }
 
 static void GenerateRequestId(STRING *request_id)
 {
-  if (request_id == NULL || request_id->GetLength() > 0) {
+  if (request_id == nullptr || request_id->GetLength() > 0) {
     return;
   }
   CHR idbuf[64];
   ++g_request_counter;
   snprintf(idbuf, sizeof(idbuf), "req-%ld-%ld",
-           (LONG)time(NULL), g_request_counter);
+           (LONG)time(nullptr), g_request_counter);
   *request_id = idbuf;
 }
 
 static bool ParseSearchType(const CHR *raw, SearchType *out)
 {
-  if (raw == NULL || out == NULL) {
+  if (raw == nullptr || out == nullptr) {
     return true;
   }
   if (StrCaseCmp(raw, "simple") == 0) {
@@ -128,7 +146,7 @@ static bool ParseSearchType(const CHR *raw, SearchType *out)
 
 static bool ParseOperator(const CHR *raw, BoolOperator *out)
 {
-  if (raw == NULL || out == NULL) {
+  if (raw == nullptr || out == nullptr) {
     return true;
   }
   if (StrCaseCmp(raw, "or") == 0) {
@@ -152,20 +170,20 @@ static bool ParseOperator(const CHR *raw, BoolOperator *out)
 
 static void AddGetTerms(CGIAPP *cgi, std::vector<ApiTerm> *terms_out)
 {
-  if (cgi == NULL || terms_out == NULL) {
+  if (cgi == nullptr || terms_out == nullptr) {
     return;
   }
 
   const CHR *single_term = cgi->GetValueByName("term");
-  if (single_term != NULL && single_term[0] != '\0') {
+  if (single_term != nullptr && single_term[0] != '\0') {
     ApiTerm term;
     term.term = single_term;
     const CHR *single_field = cgi->GetValueByName("field");
     const CHR *single_weight = cgi->GetValueByName("weight");
     const CHR *single_phrase = cgi->GetValueByName("phrase");
-    if (single_field != NULL) term.field = single_field;
-    if (single_weight != NULL) term.weight = single_weight;
-    if (single_phrase != NULL) {
+    if (single_field != nullptr) term.field = single_field;
+    if (single_weight != nullptr) term.weight = single_weight;
+    if (single_phrase != nullptr) {
       bool phrase = false;
       if (ParseBoolean(single_phrase, &phrase)) {
         term.phrase = phrase;
@@ -178,7 +196,7 @@ static void AddGetTerms(CGIAPP *cgi, std::vector<ApiTerm> *terms_out)
     CHR key[32];
     snprintf(key, sizeof(key), "TERM_%d", i);
     const CHR *term_value = cgi->GetValueByName(key);
-    if (term_value == NULL || term_value[0] == '\0') {
+    if (term_value == nullptr || term_value[0] == '\0') {
       continue;
     }
 
@@ -187,19 +205,19 @@ static void AddGetTerms(CGIAPP *cgi, std::vector<ApiTerm> *terms_out)
 
     snprintf(key, sizeof(key), "FIELD_%d", i);
     const CHR *field_value = cgi->GetValueByName(key);
-    if (field_value != NULL) {
+    if (field_value != nullptr) {
       term.field = field_value;
     }
 
     snprintf(key, sizeof(key), "WEIGHT_%d", i);
     const CHR *weight_value = cgi->GetValueByName(key);
-    if (weight_value != NULL) {
+    if (weight_value != nullptr) {
       term.weight = weight_value;
     }
 
     snprintf(key, sizeof(key), "PHRASE_%d", i);
     const CHR *phrase_value = cgi->GetValueByName(key);
-    if (phrase_value != NULL) {
+    if (phrase_value != nullptr) {
       bool phrase = false;
       if (ParseBoolean(phrase_value, &phrase) ||
           StrCaseCmp(phrase_value, "YES") == 0) {
@@ -248,7 +266,7 @@ static bool ValidateRequest(const ApiRequest& req, STRING& error_detail)
 class JsonReader {
 public:
   explicit JsonReader(const CHR *text)
-    : p(text != NULL ? text : ""), pos(0), len(strlen(p))
+    : p(text != nullptr ? text : ""), pos(0), len(strlen(p))
   {
   }
 
@@ -277,7 +295,7 @@ public:
 
   bool ParseString(STRING *out)
   {
-    if (out == NULL) return false;
+    if (out == nullptr) return false;
     SkipWs();
     if (pos >= len || p[pos] != '"') return false;
     pos++;
@@ -301,11 +319,35 @@ public:
           case 'n': result.push_back('\n'); break;
           case 'r': result.push_back('\r'); break;
           case 't': result.push_back('\t'); break;
-          case 'u':
+          // BUGFIX #2 (docs/BUG_CATALOG.md#isearch-cgiapi_requesthxx):
+          // this used to skip the 4 hex digits and push a literal '?'
+          // placeholder instead of actually decoding them -- silently
+          // corrupting every \uXXXX escape (a completely ordinary way
+          // to encode an accented character, or even just a quote, in
+          // JSON) into a question mark, while still reporting the
+          // parse as successful. Confirmed with a live repro:
+          // {"q":"café"} parsed to q="caf?" instead of "café".
+          // This codebase is single-byte (ISO-8859-1) throughout, so
+          // there's no lossless representation above 0xFF -- decode
+          // 0x00-0xFF to the matching Latin-1 byte, and fail the parse
+          // (loud, not silent corruption) for anything higher instead
+          // of guessing.
+          case 'u': {
             if (pos + 4 > len) return false;
+            unsigned int code = 0;
+            for (int k = 0; k < 4; k++) {
+              CHR h = p[pos + k];
+              code <<= 4;
+              if (h >= '0' && h <= '9') code |= (unsigned int)(h - '0');
+              else if (h >= 'a' && h <= 'f') code |= (unsigned int)(h - 'a' + 10);
+              else if (h >= 'A' && h <= 'F') code |= (unsigned int)(h - 'A' + 10);
+              else return false;
+            }
             pos += 4;
-            result.push_back('?');
+            if (code > 0xFF) return false;
+            result.push_back((char)code);
             break;
+          }
           default:
             return false;
         }
@@ -318,7 +360,7 @@ public:
 
   bool ParseBool(bool *out)
   {
-    if (out == NULL) return false;
+    if (out == nullptr) return false;
     SkipWs();
     if (pos + 4 <= len && strncmp(p + pos, "true", 4) == 0) {
       pos += 4;
@@ -335,7 +377,7 @@ public:
 
   bool ParseNumberToken(STRING *out)
   {
-    if (out == NULL) return false;
+    if (out == nullptr) return false;
     SkipWs();
     size_t start = pos;
     if (pos < len && (p[pos] == '-' || p[pos] == '+')) pos++;
@@ -595,7 +637,7 @@ static std::string ReadStdinBody()
 
 static bool ContainsNoCase(const CHR *value, const CHR *needle)
 {
-  if (value == NULL || needle == NULL || needle[0] == '\0') {
+  if (value == nullptr || needle == nullptr || needle[0] == '\0') {
     return false;
   }
   const size_t value_len = strlen(value);
@@ -617,18 +659,18 @@ static bool ContainsNoCase(const CHR *value, const CHR *needle)
 
 static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
 {
-  if (cgi == NULL) {
+  if (cgi == nullptr) {
     SetError(error_detail, "GET request requires CGI parameter parser.");
     return false;
   }
 
-  const CHR *value = NULL;
+  const CHR *value = nullptr;
 
   value = GetValue(cgi, "database", "DATABASE");
-  if (value != NULL) out.database = value;
+  if (value != nullptr) out.database = value;
 
   value = GetValue(cgi, "q", "ISEARCH_TERM");
-  if (value != NULL) out.q = value;
+  if (value != nullptr) out.q = value;
 
   value = GetValue(cgi, "search_type", "SEARCH_TYPE");
   if (!ParseSearchType(value, &out.search_type)) {
@@ -645,10 +687,10 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
   AddGetTerms(cgi, &out.terms);
 
   value = GetValue(cgi, "element_set", "ELEMENT_SET");
-  if (value != NULL && value[0] != '\0') out.element_set = value;
+  if (value != nullptr && value[0] != '\0') out.element_set = value;
 
   value = GetValue(cgi, "start", "START");
-  if (value != NULL && value[0] != '\0') {
+  if (value != nullptr && value[0] != '\0') {
     if (!ParsePositiveInt(value, &out.start)) {
       SetError(error_detail, "start must be a positive integer.");
       return false;
@@ -656,7 +698,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
   }
 
   value = GetValue(cgi, "max_hits", "MAXHITS");
-  if (value != NULL && value[0] != '\0') {
+  if (value != nullptr && value[0] != '\0') {
     if (!ParsePositiveInt(value, &out.max_hits)) {
       SetError(error_detail, "max_hits must be a positive integer.");
       return false;
@@ -664,7 +706,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
   }
 
   value = cgi->GetValueByName("include_url");
-  if (value != NULL && value[0] != '\0') {
+  if (value != nullptr && value[0] != '\0') {
     if (!ParseBoolean(value, &out.include_url)) {
       SetError(error_detail, "include_url must be boolean.");
       return false;
@@ -672,7 +714,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
   }
 
   value = cgi->GetValueByName("include_headline");
-  if (value != NULL && value[0] != '\0') {
+  if (value != nullptr && value[0] != '\0') {
     if (!ParseBoolean(value, &out.include_headline)) {
       SetError(error_detail, "include_headline must be boolean.");
       return false;
@@ -680,7 +722,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
   }
 
   value = cgi->GetValueByName("include_record_key");
-  if (value != NULL && value[0] != '\0') {
+  if (value != nullptr && value[0] != '\0') {
     if (!ParseBoolean(value, &out.include_record_key)) {
       SetError(error_detail, "include_record_key must be boolean.");
       return false;
@@ -688,7 +730,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
   }
 
   value = cgi->GetValueByName("score_scale");
-  if (value != NULL && value[0] != '\0') {
+  if (value != nullptr && value[0] != '\0') {
     if (!ParsePositiveInt(value, &out.score_scale)) {
       SetError(error_detail, "score_scale must be a positive integer.");
       return false;
@@ -696,7 +738,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
   }
 
   value = cgi->GetValueByName("request_id");
-  if (value != NULL && value[0] != '\0') out.request_id = value;
+  if (value != nullptr && value[0] != '\0') out.request_id = value;
 
   return ValidateRequest(out, error_detail);
 }
@@ -704,7 +746,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
 static bool ParsePostRequest(const CHR *body, ApiRequest& out, STRING& error_detail)
 {
   const CHR *content_type = getenv("CONTENT_TYPE");
-  if ((content_type == NULL || content_type[0] == '\0')) {
+  if ((content_type == nullptr || content_type[0] == '\0')) {
     content_type = getenv("HTTP_CONTENT_TYPE");
   }
   if (!ContainsNoCase(content_type, "application/json")) {
@@ -713,12 +755,12 @@ static bool ParsePostRequest(const CHR *body, ApiRequest& out, STRING& error_det
   }
 
   std::string stdin_body;
-  if (body == NULL) {
+  if (body == nullptr) {
     stdin_body = ReadStdinBody();
     body = stdin_body.c_str();
   }
 
-  if (body == NULL || body[0] == '\0') {
+  if (body == nullptr || body[0] == '\0') {
     SetError(error_detail, "POST body is required.");
     return false;
   }
@@ -736,10 +778,10 @@ bool ParseRequest(CGIAPP* cgi, const CHR* method, const CHR* body,
   out = ApiRequest();
 
   const CHR *effective_method = method;
-  if (effective_method == NULL || effective_method[0] == '\0') {
+  if (effective_method == nullptr || effective_method[0] == '\0') {
     effective_method = getenv("REQUEST_METHOD");
   }
-  if (effective_method == NULL || effective_method[0] == '\0') {
+  if (effective_method == nullptr || effective_method[0] == '\0') {
     SetError(error_detail, "REQUEST_METHOD is required.");
     return false;
   }
