@@ -8806,3 +8806,85 @@ sound — every `fopen()`/`fread()` result is already checked, and
 `make tests`/`make tests-asan` pass clean (730 test cases, 2825
 assertions).
 
+## src/zpresent.cxx
+
+**Scope note, read first:** same `main()`-only structural limitation as
+[`src/Iget.cxx`](#srcigetcxx)/[`src/Isearch.cxx`](#srcisearchcxx) (can't
+be linked into the shared Catch2 test binary — duplicate `main()`).
+Unlike those two, this file's bugs were verified with a real end-to-end
+runtime differential, not just static inspection: built the actual
+production binaries (`make isearch`), indexed a real document under the
+`FGDC` doctype (`./bin/Iindex -d ... -t FGDC ...`, whose `Present()`
+genuinely branches on the record-syntax parameter — confirmed by
+reading `doctype/fgdc.cxx`), and ran `./bin/zpresent` against it with
+different `-f` values before and after each fix.
+
+Two bugs found and fixed:
+
+1. **`-f` (record syntax) is parsed, validated, and echoed into the
+   output, but never actually used** (most severe finding in this
+   file) — `main()` computes `RecordSyntax` from the `-f` flag with the
+   same OID-normalization logic as `src/Isearch.cxx` (verbatim
+   identical block), and prints it into the `<isearch:results ...
+   prs="...">` attribute — but the one `pdb->Present(RsRecord, ESet,
+   XmlRecordSyntax, &Record);` call hardcoded the literal
+   `XmlRecordSyntax` constant instead of passing the local
+   `RecordSyntax` variable. `Isearch.cxx`'s own three `Present()` calls
+   all correctly pass their computed `RecordSyntax`; this was the one
+   place in `zpresent.cxx` that didn't. Confirmed live and reachable,
+   not just by inspection: indexed a real document as `FGDC` (whose
+   `Present()` wraps a title in `<title>...</title>` XML tags when
+   `RecordSyntax.CaseEquals("XML")`, or leaves it plain otherwise —
+   `doctype/fgdc.cxx` lines ~1219-1238) and ran `zpresent -f TEXT`
+   against it: with the bug, the output was still `<metadata><idinfo>
+   ...<title>...` XML-wrapped despite the `prs="SUTRS"` attribute
+   claiming otherwise; with the fix, `-f TEXT` correctly produced plain,
+   untagged output. Revert-and-repro (reverted the fix, rebuilt, reran
+   the same two commands) reproduced the exact broken behavior, then
+   restoring the fix reproduced the correct behavior again. Fixed by
+   passing `RecordSyntax` instead of `XmlRecordSyntax`. See `BUGFIX #1`
+   in source.
+2. **Dead "unrecognized arguments" check (wrong comparison direction)**
+   — the same defect as `src/Iget.cxx`'s `BUGFIX #2`: `x = LastUsed + 1;
+   if (x > argc) { ... "Unrecognized arguments" ... }`. `LastUsed` is
+   only ever assigned a valid `argv` index (always `< argc`), so `x =
+   LastUsed + 1` can never exceed `argc` — `x > argc` was permanently
+   false, and this check had never actually fired. Traced through a
+   valid-usage case (`zpresent -d db -id 123`, ends with `x == argc`,
+   no error either way) and a broken-usage case (`zpresent -d db
+   extra_garbage`, ends with `x == 3, argc == 4`: the old `x > argc`
+   check misses it, `x < argc` catches it) to confirm the fix doesn't
+   regress valid usage. Confirmed against the real binary both ways: a
+   trailing unrecognized argument now correctly produces an
+   `status="Error"`/`Unrecognized arguments` response instead of being
+   silently accepted. Unlike `Iget.cxx`'s equivalent `BUGFIX #1`
+   (missing-argument-value null-deref), this file doesn't have that
+   companion bug — every `-flag`-without-a-value branch here calls
+   `XmlBail()`, which unconditionally `exit()`s, so there's no fall-
+   through to the unchecked `argv[x]` read. Fixed by changing `x > argc`
+   to `x < argc`. See `BUGFIX #2` in source.
+
+Also noted, not changed: `GDT_BOOLEAN Error=GDT_FALSE;` is set once
+(`Error=GDT_TRUE;`, immediately followed by an `XmlBail()` call that
+exits) and never read anywhere — confirmed dead via
+`-Wunused-but-set-variable` (the only warning on this file's own lines;
+every other warning from a standalone `-Wall -Wextra` compile comes
+from already-existing conditions in transitively-included headers, not
+from anything touched this turn). Same shape as `src/Isearch.cxx`'s
+vestigial `LastUsed` finding — an incomplete-removal leftover from an
+earlier refactor, not a functional bug, and left alone per this
+project's "don't restyle code you're not otherwise touching" principle.
+`DTREG dtreg(0);` (a raw `0` for a `PIDBOBJ` parameter) was left
+un-modernized to match `src/Isearch.cxx`'s identical, already-processed
+line, rather than diverging from that sibling file's established
+precedent.
+
+No test file was written for the reasons in the scope note above;
+both fixes are documented in detail here and at their `BUGFIX #n`
+comment sites in source instead, plus the runtime differential
+confirmation above (stronger than `Iget.cxx`/`Isearch.cxx`'s
+inspection-only verification). `make isearch`/`make smoke-test` both
+pass clean; `make tests`/`make tests-asan` (unaffected by this file,
+which isn't part of `TEST_ENGINE_SRCS`) still pass clean (745 test
+cases, 2850 assertions).
+
