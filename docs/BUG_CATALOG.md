@@ -786,6 +786,46 @@ their own turn yet:
   double-free (of `HitTable`) under a `DO_HIGHLIGHTING` build, the same
   shape as `DFT`'s original bug.
 
+## src/rset.cxx
+
+`BUGFIX #2-6` above were already applied to this file during
+`rset.hxx`'s turn (copy constructor/`operator=`, `GetEntry`'s
+sign-compare, the `SaveTable`/`LoadTable` rewrite, `SortByScore`/
+`SortByKey`'s comparator fixes). This file's own dedicated turn found
+one more, more severe than any of them:
+
+7. **`SetEntry()` had no bounds check at all — confirmed wild-pointer
+   heap-buffer-overflow** (most severe finding in this file): unlike
+   `GetEntry()` (bounds-checked, see `BUGFIX #3`), `SetEntry()` wrote
+   `Table[x-1] = ResultRecord;` for any caller-supplied `x`, with
+   nothing validating it against `[1, TotalEntries]` or even
+   `MaxEntries`. Confirmed real with a standalone repro: a 1-entry
+   `RSET` (100-entry initial capacity) called with `SetEntry(500, ...)`
+   produced not just an out-of-bounds write but a wild-pointer
+   heap-buffer-overflow — `RESULT::operator=`, writing into the
+   out-of-range slot, tried to free/reuse whatever garbage
+   `STRING::Buffer` pointer happened to be sitting in that unrelated
+   heap memory. This file's only real caller, `IRSET::Fill()`
+   (`src/irset.cxx`), is safe today only by calling convention: every
+   call site (`Isearch-cgi/api_search.cxx`, `src/Isearch.cxx` ×2,
+   `src/zsearch.cxx`, `Isearch-cgi/isrch_html.cxx`,
+   `Isearch-cgi/isrch_srch.cxx` — all six checked) first sizes the
+   destination `RSET` via `GetRset()` with the exact same range
+   `Fill()` then iterates, so `SetEntry()`'s index never actually
+   exceeds the pre-grown table in practice — a real, exploitable
+   contract gap on a public method, not (yet) an active one, the same
+   category as `src/rcache.cxx`'s `Fetch()` (`BUGFIX #3` there) and
+   every other indexed accessor in this tree. Fixed by matching
+   `GetEntry()`'s own bounds check and no-op-on-out-of-range
+   convention. See `BUGFIX #7` in source. Verified fixed: the same
+   repro now exits cleanly, and `tests/src/test_rset.cxx` has dedicated
+   `SetEntry` regression tests (in-range overwrite, and the
+   out-of-range case that used to crash) — `SetEntry` had no test
+   coverage at all before this turn.
+
+No `NULL`/`sprintf`, zero warnings under `-Wall -Wextra`. `make
+tests`/`make tests-asan` pass clean (735 test cases, 2836 assertions).
+
 ## src/irset.hxx
 
 The `IRSET` copy-constructor double-free flagged as "found but out of

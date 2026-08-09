@@ -85,6 +85,50 @@ TEST_CASE("RSET GetEntry leaves its output untouched for an out-of-range index",
 	REQUIRE(s == "untouched");
 }
 
+TEST_CASE("RSET SetEntry overwrites an existing entry in place", "[rset]") {
+	RSET rset;
+	RESULT r1, r2;
+	MakeResult(&r1, "one", 1.0);
+	MakeResult(&r2, "two", 2.0);
+	rset.AddEntry(r1);
+	rset.AddEntry(r2);
+
+	RESULT replacement;
+	MakeResult(&replacement, "replaced", 5.0);
+	rset.SetEntry(1, replacement);
+
+	RESULT out;
+	STRING s;
+	rset.GetEntry(1, &out);
+	out.GetKey(&s);
+	REQUIRE(s == "replaced");
+	rset.GetEntry(2, &out);
+	out.GetKey(&s);
+	REQUIRE(s == "two");
+}
+
+TEST_CASE("RSET SetEntry with an out-of-range index is a no-op, not an out-of-bounds write", "[rset]") {
+	// BUGFIX #7 coverage: SetEntry() had no bounds check at all, unlike
+	// GetEntry() -- confirmed via a standalone repro that an
+	// out-of-range index produced a wild-pointer heap-buffer-overflow.
+	RSET rset;
+	RESULT only;
+	MakeResult(&only, "only", 1.0);
+	rset.AddEntry(only);
+
+	RESULT replacement;
+	MakeResult(&replacement, "should-not-appear", 9.0);
+	rset.SetEntry(0, replacement);
+	rset.SetEntry(500, replacement);
+	REQUIRE(rset.GetTotalEntries() == 1);
+
+	RESULT out;
+	STRING s;
+	rset.GetEntry(1, &out);
+	out.GetKey(&s);
+	REQUIRE(s == "only");
+}
+
 TEST_CASE("RSET AddEntry expands past the initial 100-entry capacity", "[rset]") {
 	RSET rset;
 	RESULT r;

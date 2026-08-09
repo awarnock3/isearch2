@@ -40,6 +40,9 @@ Description:	Class RSET - Search Result Set
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdio.h>
 
 #include "defs.hxx"
@@ -346,9 +349,28 @@ RSET::SetScoreRange(DOUBLE High, DOUBLE Low)
 }
 
 
-void 
+void
 RSET::SetEntry(const INT x, const RESULT& ResultRecord )
 {
+  // BUGFIX #7 (docs/BUG_CATALOG.md#srcrsetcxx): unlike GetEntry() (see
+  // BUGFIX #3), this had no bounds check at all -- Table[x-1] was
+  // written unconditionally for any caller-supplied x. Confirmed real
+  // with a standalone repro: SetEntry() with an index past MaxEntries
+  // produced a wild-pointer heap-buffer-overflow (RESULT::operator=,
+  // called on the out-of-range slot, tried to free/reuse whatever
+  // garbage STRING::Buffer pointer happened to be there). This file's
+  // sole real caller (IRSET::Fill(), src/irset.cxx) is safe today only
+  // because every call site first sizes `set` via GetRset() with the
+  // exact same range Fill() then iterates, so this was a real,
+  // exploitable contract gap on a public method, not (yet) an active
+  // one -- the same "unenforced index contract" category already fixed
+  // for src/rcache.cxx's Fetch() (BUGFIX #3) and every other indexed
+  // accessor in this tree (DFT::GetEntry, FCT::GetEntry, this class's
+  // own GetEntry). Fixed by matching GetEntry()'s bounds check and
+  // convention: silently no-op when x is out of [1, TotalEntries].
+  if (x < 1 || (SIZE_T)x > TotalEntries) {
+    return;
+  }
   DOUBLE S;
   S = ResultRecord.GetScore();
   if (S > HighScore) {

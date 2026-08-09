@@ -169,7 +169,7 @@
 | 165 | src/record.cxx | done | 2026-08-09 | [src/record.cxx](BUG_CATALOG.md#srcrecordcxx) |
 | 166 | src/registry.cxx | done | 2026-08-07 | [src/registry.cxx](BUG_CATALOG.md#srcregistrycxx) |
 | 167 | src/result.cxx | done | 2026-08-07 | [src/result.cxx](BUG_CATALOG.md#srcresultcxx) |
-| 168 | src/rset.cxx | pending | | |
+| 168 | src/rset.cxx | done | 2026-08-09 | [src/rset.cxx](BUG_CATALOG.md#srcrsetcxx) |
 | 169 | src/soundex.cxx | done | 2026-08-07 | [src/soundex.cxx](BUG_CATALOG.md#srcsoundexcxx) |
 | 170 | src/squery.cxx | pending | | |
 | 171 | src/sterm.cxx | pending | | |
