@@ -195,7 +195,7 @@
 | 191 | doctype/colondoc.cxx | done | 2026-08-07 | [doctype/colondoc.cxx](BUG_CATALOG.md#doctypecolondoccxx) |
 | 192 | doctype/dif.cxx | done | 2026-08-08 | [doctype/dif.cxx](BUG_CATALOG.md#doctypedifcxx) |
 | 193 | doctype/doctype.cxx | done | 2026-08-07 | [doctype/doctype.cxx](BUG_CATALOG.md#doctypedoctypecxx) |
-| 194 | doctype/dtconf.cxx | pending | | |
+| 194 | doctype/dtconf.cxx | done | 2026-08-09 | [doctype/dtconf.cxx](BUG_CATALOG.md#doctypedtconfcxx) |
 | 195 | doctype/emacsinfo.cxx | done | 2026-08-08 | [doctype/emacsinfo.cxx](BUG_CATALOG.md#doctypeemacsinfocxx) |
 | 196 | doctype/eos_guide.cxx | done | 2026-08-08 | [doctype/eos_guide.cxx](BUG_CATALOG.md#doctypeeos_guidecxx) |
 | 197 | doctype/fgdc.cxx | done | 2026-08-08 | [doctype/fgdc.cxx](BUG_CATALOG.md#doctypefgdccxx) |

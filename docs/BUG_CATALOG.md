@@ -9094,3 +9094,91 @@ as part of this turn, matching the `src/dtreg.cxx`/`.hxx` convention —
 `ANALYZE` didn't recognize this generator/directory shape and had
 queued them as ordinary `pending` files.
 
+## doctype/dtconf.cxx
+
+**Scope note, read first:** a standalone C++ `main()`-only build-time
+generator, the canonical `generated`-relationship source CLAUDE.md
+already describes: reads `doctype/dtconf.inf` (one doctype stem per
+line) plus each listed doctype's own `.hxx` (to pull its class name and
+`Description:` comment), and writes **three** files relative to its own
+working directory — `../src/dtreg.hxx`, `../src/dtreg.cxx` (both
+already `generated` rows, confirmed unaffected below), and
+`../src/Makefile` itself (regenerated from `../src/Makefile.000`,
+substituting doctype-specific `###DTOBJ###`/`###DTHXX###`/
+`###DTMAKE###` sections). That last one made this turn unusually
+high-stakes: the *real* `src/Makefile` has been extensively hand-
+extended by this entire cleanup project (`tests`/`tests-asan`/
+`smoke-test` targets, `TEST_ENGINE_SRCS`, etc. — see CLAUDE.md's BUILD
+section) and has diverged from `src/Makefile.000` by design. Actually
+running the real binary against the real tree would have **overwritten
+and destroyed all of that test infrastructure**. Verified instead in a
+fully isolated sandbox (`/tmp/...`, never touching the real tree):
+copied `dtconf.inf`, every `doctype/*.hxx`, and `src/Makefile.000` into
+a scratch `doctype/`+`src/` pair, compiled and ran the fixed
+`dtconf.cxx` there, and diffed its output against the real, currently-
+committed files.
+
+Two bugs found and fixed, both confirmed via `-Wall -Wextra` — not just
+inspection:
+
+1. **`sprintf(t, "%s.hxx", DtFn[TotalDt])` — confirmed possible buffer
+   overflow via `-Wformat-overflow`** — the compiler's own warning
+   spelled it out: `sprintf output between 5 and 84 bytes into a
+   destination of size 80`. `DtFn[TotalDt]` can be up to 79 characters
+   (bounded only by `fgets()`'s own `MAXSTR` cap on the `dtconf.inf`
+   line it came from), and appending `.hxx` plus the terminator can
+   need up to 84 bytes — 4 more than `t`'s 80-byte buffer. Not
+   reachable with any of the real (short) doctype names in
+   `doctype/dtconf.inf`, but a real latent overflow for a
+   sufficiently long one. Fixed two ways: `snprintf(t, sizeof(t), ...)`
+   instead of `sprintf`, and widened `t`'s buffer from `MAXSTR` to
+   `MAXSTR+8` so the true worst case (79 + 4 + 1) fits with room to
+   spare — `-Wall -Wextra` is fully clean after (the `snprintf`-alone
+   fix left a residual, expected `-Wformat-truncation` warning, since
+   `snprintf` can still truncate within its declared bound; widening
+   the buffer removes even that). See `BUGFIX #1` in source.
+2. **No bound on `TotalDt` against `MAXDT` (500)** — `DtName`/`DtFn`
+   are fixed-size `static char [MAXDT][MAXSTR]` arrays; `TotalDt` was
+   incremented once per `dtconf.inf` entry with no check against
+   `MAXDT` anywhere, so a config file listing more than 500 doctypes
+   would silently overflow both static arrays. `doctype/dtconf.inf`
+   currently lists 38 — nowhere near the limit, so not practically
+   reachable today, but a real static-buffer overflow for unbounded
+   config input, the same category of finding already fixed several
+   times this project for other fixed-capacity tables (e.g.
+   `TH_PARENT_LIST::AddEntry`'s `BUGFIX #1`). Fixed by refusing to
+   process further entries once the table is full instead of writing
+   past it (printing a warning to `stderr` and stopping, rather than
+   silently truncating the doctype list with no explanation). See
+   `BUGFIX #2` in source.
+
+**Verified, not changed**: if a listed doctype's `.hxx` opens
+successfully but contains no `class ...` line at all, `DtName[TotalDt]`
+is never written — since it's a zero-initialized `static` array slot
+used exactly once, this just prints an empty class name for that entry
+(`printf("\t%s", DtName[TotalDt])` prints nothing after the tab) rather
+than crashing. Every one of the 38 real `.hxx` files this turn's
+sandbox run processed does contain a `class` declaration (confirmed:
+all 38 printed real class names, none empty), so this is unreachable
+against the real tree today; not fixed, since guessing at
+"file has no class" recovery behavior for a scenario the current tree
+never hits isn't worth guessing at.
+
+**Regeneration confirmed behavior-preserving**: the sandbox run's
+`dtreg.hxx`/`dtreg.cxx` output diffed byte-identical against the real,
+currently-committed `src/dtreg.hxx`/`src/dtreg.cxx` — proving both
+fixes are purely defensive and change nothing about what gets
+generated for the real `dtconf.inf`. The sandbox's regenerated
+`Makefile` (from the copied `Makefile.000`) was inspected for sane
+structure (601 lines, correct per-doctype `.o` rules) but was
+**deliberately never compared against, or written over, the real
+`src/Makefile`** — that file has diverged from `Makefile.000` on
+purpose throughout this whole project, and doing so would risk
+suggesting it should be regenerated, which it must not be. The real
+`src/Makefile` was not touched by this turn.
+
+No test file was written for the reasons in the scope note above (a
+`main()`-only build-time tool, not linkable into the Catch2 binary);
+verified via `-Wall -Wextra` compile-clean and the isolated-sandbox
+regeneration-diff confirmation described above.
+
