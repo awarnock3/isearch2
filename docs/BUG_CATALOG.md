@@ -6863,3 +6863,83 @@ No test file was written for the reasons in the scope note above; both
 fixes are documented in detail here and at their `BUGFIX #n` comment
 sites in source instead, matching `src/Iget.cxx`'s precedent.
 
+## src/Isearch.cxx
+
+**Scope note, read first:** same `main()`-only structural limitation as
+[`src/Iget.cxx`](#srcigetcxx)/[`src/Iindex.cxx`](#srciindexcxx) (can't
+be linked into the shared Catch2 test binary — duplicate `main()`). At
+754 lines, the deep audit prioritized the search/result-set pipeline
+(`VIDB::Search()`/`AndSearch()` and how their return value is used) and
+the argument-parsing loop over the JSON-output and interactive-browsing
+tail of `main()`. Verified via a standalone `g++ -c` compile-clean
+confirmation (comparing warning output against the pre-edit committed
+version to confirm no new warnings — see below) and manual
+trace-through, including reading `VIDB::Search()`/`AndSearch()`'s own
+implementation in `src/vidb.cxx` to confirm the null-return path below
+is real, not hypothetical.
+
+One bug found and fixed:
+
+1. **Unchecked `nullptr` from `VIDB::Search()`/`AndSearch()`** (most
+   severe finding in this file) — `pirset = pdb->Search(squery);` (or
+   `AndSearch()` under `-and`) is immediately followed by `n =
+   pirset->GetTotalEntries();` with no null check. Both
+   `VIDB::Search()` and `VIDB::AndSearch()` (`src/vidb.cxx`) explicitly
+   initialize `RsetPtr = nullptr;` and return it early with the comment
+   `// Bail out if no databases` when `c_dbcount <= 0` — a virtual
+   database (`VIDB`, a union of sub-databases configured via a registry
+   file) with zero usable sub-databases. `DBExists(DBName)` (checked
+   earlier in `main()`) only confirms the top-level `VIDB` marker exists,
+   not that it lists at least one still-openable sub-database, so a
+   misconfigured or partially-broken virtual database reaches this
+   **null-pointer dereference** in practice, not just in theory. Fixed
+   by checking `!pirset` immediately after the `Search()`/`AndSearch()`
+   call and exiting via the same `fprintf(stderr, ...); delete []
+   WordList; delete pdb; RETURN_ERROR;` pattern already used by this
+   function's other fatal-error paths (e.g. the `IsDbCompatible()`
+   check just above). See `BUGFIX #1` in source.
+
+Two pre-existing characteristics observed but deliberately left
+unfixed, both confirmed by inspection and by diffing this file's
+compile warnings against its pre-edit committed version (identical
+before and after these edits):
+
+- **`-RECT{North South West East}` is documented but unimplemented** —
+  the usage/help text (printed when `argc < 2`) advertises this flag
+  for geographic-rectangle search, and a variable named
+  `SpatialRectFlag` is declared for it, but neither of the two
+  argument-parsing loops in `main()` has any code path that recognizes
+  a `-RECT{...}`-shaped token — it isn't in the first loop's
+  `Flag.Equals(...)` chain, and it isn't in the second (word-list-
+  building) loop's flag classification lists either, so a user who
+  actually passes `-RECT{...}` as documented gets it silently treated
+  as an ordinary search term instead of a spatial filter.
+  `SpatialRectFlag` itself is written to (`=0`, in its own declaration)
+  but never read anywhere else in the file, and never set to a nonzero
+  value by anything (confirmed via `-Wunused-variable`, unchanged from
+  the pre-edit file). Left unfixed: implementing real geo-rectangle
+  query parsing would mean guessing at intended `SQUERY`/geosearch
+  integration semantics that no longer exist anywhere in this file,
+  which is feature work, not a bug fix, and squarely the kind of
+  judgment call this project's own principles reserve for a human
+  decision rather than an autopilot guess.
+- **`LastUsed` is fully vestigial** — assigned in 18 separate places
+  across the first argument-parsing loop (mirroring the same bookkeeping
+  pattern `src/Iget.cxx` and `src/Iindex.cxx` use to find where
+  positional file/word arguments begin, `x = LastUsed + 1`), but this
+  file never reads `LastUsed` anywhere (confirmed via
+  `-Wunused-but-set-variable`, also unchanged from the pre-edit file).
+  Positional word arguments are instead found by an entirely separate,
+  self-sufficient two-pass scan of `argv[]` further down in `main()`
+  (building `NumWords`/`WordList` by independently re-classifying every
+  `-flag`), whose own flag lists were checked and confirmed to exactly
+  match the first loop's 18 recognized flags — so `LastUsed`'s dead
+  bookkeeping doesn't indicate a functional bug, just an incomplete
+  removal from an earlier refactor. Left as-is per this project's "don't
+  restyle code you're not otherwise touching" principle — removing 18
+  scattered assignment lines isn't tied to fixing a real defect here.
+
+No test file was written for the reasons in the scope note above;
+`BUGFIX #1` is documented in detail here and at its comment site in
+source instead, matching `src/Iget.cxx`/`src/Iindex.cxx`'s precedent.
+
