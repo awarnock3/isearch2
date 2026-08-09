@@ -130,7 +130,7 @@
 | 126 | src/dft.cxx | done | 2026-08-09 | [src/dft.hxx](BUG_CATALOG.md#srcdfthxx) |
 | 127 | src/fc.cxx | done | 2026-08-09 | [src/fc.cxx](BUG_CATALOG.md#srcfccxx) |
 | 128 | src/fct.cxx | done | 2026-08-09 | [src/fct.cxx](BUG_CATALOG.md#srcfctcxx) |
-| 129 | src/filemap.cxx | pending | | |
+| 129 | src/filemap.cxx | done | 2026-08-05 | [src/filemap.hxx](BUG_CATALOG.md#srcfilemaphxx) |
 | 130 | src/fprec.cxx | done | 2026-08-07 | [src/fprec.cxx](BUG_CATALOG.md#srcfpreccxx) |
 | 131 | src/fpt.cxx | pending | | |
 | 132 | src/geosearch.cxx | pending | | |
