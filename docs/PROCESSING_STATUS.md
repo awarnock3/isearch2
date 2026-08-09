@@ -146,7 +146,7 @@
 | 142 | src/irset.cxx | done | 2026-08-09 | [src/irset.cxx](BUG_CATALOG.md#srcirsetcxx) |
 | 143 | src/marc.cxx | done | 2026-08-08 | [src/marc.hxx](BUG_CATALOG.md#srcmarchxx) |
 | 144 | src/marclib.cxx | done | 2026-08-09 | [src/marclib.cxx](BUG_CATALOG.md#srcmarclibcxx) |
-| 145 | src/md5.cxx | pending | | |
+| 145 | src/md5.cxx | done | 2026-08-09 | [src/md5.cxx](BUG_CATALOG.md#srcmd5cxx) |
 | 146 | src/md5sum.cxx | pending | | |
 | 147 | src/mdt.cxx | pending | | |
 | 148 | src/mdtrec.cxx | done | 2026-08-07 | [src/mdtrec.cxx](BUG_CATALOG.md#srcmdtreccxx) |
