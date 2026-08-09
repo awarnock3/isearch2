@@ -2385,6 +2385,27 @@ nothing else in that file was touched, and it was not marked
 `processed`. `src/reclist.cxx` was added to `TEST_ENGINE_SRCS` in the
 Makefile so `tests/src/test_reclist.cxx` can link against it.
 
+## src/reclist.cxx
+
+`BUGFIX #2` above (copy constructor and `operator=`, both already
+self-assignment-safe) was already applied to this file during
+`reclist.hxx`'s turn. This file's own dedicated turn (Order 164) found
+nothing further: `AddEntry()`/`Expand()` use the additive
+`Resize(TotalEntries+1000)` growth pattern (not the anomalous
+multiplicative-doubling shape that caused a confirmed stuck-at-zero
+overflow in `src/irset.cxx`'s `Expand()`), so no equivalent risk here.
+`GetEntry()` leaves its output parameter untouched on an out-of-range
+index — matches `IRSET::GetEntry()`'s identical, already-accepted
+convention (see `tests/src/test_irset.cxx`), not a bug. `RECLIST` is
+still dormant (confirmed via `grep`: its only two references, in
+`src/Iindex.cxx` and `src/idb.hxx`, remain commented out). No
+`NULL`/`sprintf`, zero warnings under `-Wall -Wextra`. No test changes:
+existing coverage in `tests/src/test_reclist.cxx` is already thorough
+(construction, add/get round-trip including out-of-range, `Expand`/
+`CleanUp`, copy constructor, `operator=` including self-assignment,
+independent destruction). `make tests`/`make tests-asan` pass clean
+(732 test cases, 2827 assertions, unchanged from before this turn).
+
 ## src/vlist.hxx
 
 Reprocessed via `/reprocess-blocked` after being blocked at GENERAL step
