@@ -6121,3 +6121,72 @@ return stops it safely); and a non-`"B"` element set deferring to
 `STRLIST::GetValue()` parses, confirmed by reading
 `src/strlist.cxx`) so each test can control `NumLines` at construction.
 
+## doctype/soif.cxx
+
+`SOIF : public DOCTYPE` parses Harvest SOIF (Summary Object Interchange
+Format) records — unlike most other doctypes, `ParseRecords()` doesn't
+split a file into multiple records at all; it always treats the whole
+file as one. `ParseFields()` parses a leading `"@FILE { <url>\n"` line
+(mapped to a `"url"` field) and `"name{len}:\t"` attribute headers.
+Three distinct memory-leak bugs found, all confirmed via before/after
+test-reverts under ASan (one reproducing dramatically — 22,968 bytes
+across 309 allocations across the whole suite, since the leaked `DFT`
+transitively owns every `FCT`/`DF` copied into it).
+
+1. **`ParseRecords()` never freed `RecBuffer` on the success path
+   (`BUGFIX #1`)** — same shape as `doctype/para.cxx`'s `BUGFIX #2`:
+   `RecBuffer` (`new CHR[RecLength + 2]`) is `delete []`'d on the
+   early-error paths (failed/short `fread()`) but the function falls
+   straight through to its closing brace on the normal, successful
+   path — a leak on every file this function successfully processes.
+   Confirmed via a before/after test-revert under ASan. Fixed by adding
+   `delete [] RecBuffer;` at the end of the function. `BUGFIX #1` in
+   source.
+
+2. **`ParseFields()`'s three malformed-record error paths freed
+   `RecBuffer` but never `pdft` (`BUGFIX #2`)** — `pdft` (`new DFT()`)
+   is allocated once, above the parsing loop, and correctly freed on
+   the success path, but all three "badly started/ended/formatted
+   record" early returns inside the loop free only `RecBuffer`, never
+   `pdft` — a leak reachable on any malformed SOIF input. Confirmed via
+   a before/after test-revert under ASan (reverting all three sites at
+   once produced the 309-allocation leak mentioned above, since by that
+   point in the suite's run many prior tests' `DFT`s had also gone
+   through this same code path). Fixed by adding `delete pdft;` at each
+   of the three sites. `BUGFIX #2` in source.
+
+3. **`ParseFields()`'s `file` (a `NewCString()` copy of the path, used
+   only for `perror()`) was allocated unconditionally and never freed
+   at all (`BUGFIX #3`)** — allocated once near the top of the
+   function regardless of whether either of its two use sites (both
+   `perror(file)` calls, both inside early-return error branches) is
+   ever reached, and never `delete []`'d anywhere in the function —
+   leaking on *every single call* to `ParseFields()`, not just an error
+   path. Confirmed via a before/after test-revert under ASan. Fixed by
+   allocating it lazily, right before each of its two uses, and freeing
+   it immediately after. `BUGFIX #3` in source.
+
+Also removed two entirely-unused local variables in `ParseRecords()`
+(`i`, `lastBrace`) that were triggering real `-Wunused-variable`
+warnings — dead leftovers, confirmed via `grep` to have no other
+reference anywhere in the file. The apparent `%u`-vs-signed-`INT`
+`sscanf()` format mismatch in `ParseFields()` (`INT val_len` passed to
+a `"%u"` conversion) was investigated but not changed: neither
+`-Wall -Wextra` nor `-Wformat=2` flag it (confirmed with a standalone
+repro), since `int`/`unsigned int` share an identical bit
+representation on this platform — a real hardening target for a
+future architecture, not a demonstrated bug here, so left alone rather
+than inventing a fix with no observable effect. Replaced the stale
+comment above `ParseFields()` (leftover from an earlier, different
+title-tag-based design that was never updated to describe the actual
+`name{len}:\t` implementation) with an accurate one, and added a
+class-level doc comment to the header. `NULL` converted to `nullptr`.
+`doctype/soif.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_soif.cxx` covers: `ParseRecords()` adding the whole
+file as a single record; extracting the `@FILE` `"url"` field and a
+`"name{len}:\t"` attribute field; not crashing (or leaking, under ASan)
+on each of the three malformed-record error paths (`BUGFIX #2`) and on
+a file that can't be opened (`BUGFIX #3`); and `Present()`'s `"F"`
+(whole record) and no-fields-yet-registered paths.
+

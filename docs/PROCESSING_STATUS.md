@@ -108,7 +108,7 @@
 | 104 | doctype/para.hxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypeparacxx](BUG_CATALOG.md#doctypeparacxx) |
 | 105 | doctype/referbib.hxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypereferbibcxx](BUG_CATALOG.md#doctypereferbibcxx) |
 | 106 | doctype/simple.hxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypesimplecxx](BUG_CATALOG.md#doctypesimplecxx) |
-| 107 | doctype/soif.hxx | pending | | |
+| 107 | doctype/soif.hxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypesoifcxx](BUG_CATALOG.md#doctypesoifcxx) |
 | 108 | doctype/taglist.hxx | pending | | |
 | 109 | doctype/usmarc.hxx | pending | | |
 | 110 | doctype/uspat.hxx | pending | | |
@@ -227,7 +227,7 @@
 | 223 | doctype/sgmlnorm.cxx | done | 2026-08-07 | [doctype/sgmlnorm.cxx](BUG_CATALOG.md#doctypesgmlnormcxx) |
 | 224 | doctype/sgmltag.cxx | done | 2026-08-07 | [doctype/sgmltag.cxx](BUG_CATALOG.md#doctypesgmltagcxx) |
 | 225 | doctype/simple.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypesimplecxx](BUG_CATALOG.md#doctypesimplecxx) |
-| 226 | doctype/soif.cxx | pending | | |
+| 226 | doctype/soif.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypesoifcxx](BUG_CATALOG.md#doctypesoifcxx) |
 | 227 | doctype/taglist.cxx | pending | | |
 | 228 | doctype/unified.c | pending | | |
 | 229 | doctype/unified.h | pending | | |
