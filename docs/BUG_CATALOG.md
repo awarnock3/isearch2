@@ -6591,3 +6591,91 @@ here regardless of what's on disk. Both fixes were verified by
 inspection only; this is stated explicitly in the test file's own
 header comment as well.
 
+## src/Debug.h
+
+**Scope note, read first:** `src/Debug.h` and its implementation
+`src/Debug.cc` are not included by any other file in `src/`, `doctype/`,
+or `Isearch-cgi/` (confirmed by grepping the whole tree for
+`#include.*"Debug.h"` — the only hit is `Debug.cc` itself), and
+`DEBUGCLASS` is never defined anywhere in the top-level `Makefile`.
+`Debug.h`'s real `class Debug` body is therefore compiled out
+everywhere; every translation unit that ever did include this header
+would get the no-op stub instead. `Debug.cc` isn't referenced by
+`TEST_ENGINE_SRCS` or any production build rule either, so it isn't
+compiled at all in the current build. Both files are, in short,
+orphaned dead code. Processed anyway (it carries a
+`docs/PROCESSING_STATUS.md` row), and the bugs below are real and
+independently confirmed under ASan — they'd matter the moment
+`DEBUGCLASS` is ever defined or the header is ever wired back in.
+
+Four bugs found and fixed, all in `src/Debug.cc`'s `DEBUGCLASS`-guarded
+implementation:
+
+1. **`Debug::out()`'s unbounded `vsprintf()`** — formats a caller-
+   supplied `fmt`/varargs message into a fixed 2048-byte stack buffer
+   with no length bound. Any caller whose formatted message reaches
+   2048+ bytes overflows it. Confirmed as a real **stack-buffer-
+   overflow** via a before/after test-revert under ASan (`vsprintf`
+   inside `Debug::out() src/Debug.cc:43`). Fixed with `vsnprintf()`
+   bounded to `sizeof(buffer)`. See `BUGFIX #1` in source.
+
+2. **`Debug::_init()`'s unbounded `_active_categories[i] = t`** (most
+   severe finding in this file) — `_active_categories` is a fixed
+   1024-entry array; the `while (t) { ... }` loop parsing the
+   `;`-separated `DEBUG_OPT` environment variable had no bound on `i`,
+   so a `DEBUG_OPT` with 1024 or more categories overflowed it.
+   Confirmed as a real **global-buffer-overflow** via a before/after
+   test-revert under ASan (`Debug::_init() src/Debug.cc:124`, landing
+   exactly at the start of the adjacent `initialized` static variable's
+   redzone — a concrete illustration of the overflow's reach). Fixed by
+   bounding the loop to `i < 1023`, leaving room for the terminating
+   `0`. See `BUGFIX #2` in source.
+
+3. **`Debug::_init()`'s `initialized` never set on the main path** —
+   the function's whole purpose for the `static bool initialized` guard
+   is "parse `DEBUG_OPT` once"; the two early-return branches
+   (`!c`/`!_environment_setting`) correctly set `initialized = true`,
+   but the normal, successful-parse path fell through to `return;`
+   without ever setting it. This made the guard dead: every single
+   `Debug` object constructed after the first would re-run `_init()`,
+   re-`strdup()`-ing `DEBUG_OPT` into `_environment_setting` and
+   silently leaking the previous allocation each time, and
+   re-tokenizing the string. Fixed by setting `initialized = true`
+   before the final `return`. See `BUGFIX #3` in source.
+
+4. **`Debug.cc` doesn't compile if `DEBUGCLASS` is ever defined** —
+   `cerr`/`endl` are used unqualified throughout, with no
+   `using namespace std;` and no `#include` in this file that would
+   provide one; `<iostream>` alone only declares `std::cerr`/`std::endl`,
+   not the unqualified names. Since `using namespace std;` doesn't cross
+   translation-unit boundaries, this file cannot rely on some other
+   already-compiled file's declaration the way many `.hxx`/`.cxx` files
+   in this tree do (see the existing comments in `src/defs.hxx`,
+   `src/fc.hxx`, `src/fct.hxx` documenting that ambient dependency) —
+   this is a standalone `.cc` file with its own `#include` list, and
+   that list doesn't include anything that pulls `using namespace std;`
+   in. Confirmed directly: compiling this file with `-DDEBUGCLASS`
+   before this fix fails with `'cerr' was not declared in this scope`.
+   Fixed by qualifying both call sites with `std::`. See `BUGFIX #4` in
+   source.
+
+`tests/src/test_debug.cxx` covers all four bugs in one `TEST_CASE`
+(`Debug::_init()`'s "only run once" static guard means every `Debug`
+object constructed within one process shares the same parsed
+`_active_categories` state, so the test controls ordering by doing
+everything — building an oversized `DEBUG_OPT`, `setenv()`, and both
+`Debug` constructions — before any assertion, rather than relying on
+Catch2's per-`TEST_CASE` isolation). Since `Debug.cc` isn't part of
+`TEST_ENGINE_SRCS` (adding it there would compile to an empty
+translation unit, as `DEBUGCLASS` still wouldn't be defined for the
+rest of the suite), the test file instead privately compiles its own
+copy of the real implementation via `#define DEBUGCLASS 1` followed by
+`#include "Debug.cc"` directly — a self-contained translation unit that
+doesn't touch the Makefile or affect any other test's build. Both
+`BUGFIX #1` and `BUGFIX #2` were confirmed as real crashes via a
+before/after test-revert under ASan before being fixed (see above);
+`BUGFIX #3` has no dedicated behavioral assertion (it's a
+correctness/leak fix with no observable output difference in a
+single-process test), and `BUGFIX #4` is inherently confirmed by the
+test file compiling at all.
+
