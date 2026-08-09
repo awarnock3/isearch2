@@ -31,8 +31,11 @@ IN NO EVENT SHALL MCNC/CNIDR BE LIABLE FOR ANY SPECIAL, INCIDENTAL,
 INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY KIND, OR ANY DAMAGES WHATSOEVER
 RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER OR NOT ADVISED OF THE
 POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
-IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
+
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 /*@@@
 File:		mergeunit.hxx
@@ -53,10 +56,27 @@ Author:		Jim Fullton, MCNC/CNIDR
 
 #define LIM 10000
 
+/// One index-merge participant: wraps a sorted run of GP/key entries
+/// read from disk (`list`/`Start`/`sistrings`/`Tag`, all owned,
+/// heap-allocated arrays) and hands them out smallest-first via
+/// Smallest()/Load() during an N-way merge. Non-copyable: no live call
+/// site ever copies one (see BUGFIX #1), so the copy constructor and
+/// operator= are both deleted.
 class MERGEUNIT{
-	
+
  public:
   MERGEUNIT();
+  // BUGFIX #1 (docs/BUG_CATALOG.md#srcmergeunithxx): MERGEUNIT owns
+  // four separate heap-allocated arrays with no user-declared copy
+  // constructor or operator= -- the compiler-generated ones
+  // shallow-copied all four, confirmed to cause real heap corruption on
+  // copy (an alloc-dealloc-mismatch fired even before the double-free
+  // could be observed directly -- see BUGFIX #2 below). No live call
+  // site ever copies a MERGEUNIT (only default/array construction), so
+  // it's made explicitly non-copyable rather than given deep-copy
+  // semantics.
+  MERGEUNIT(const MERGEUNIT&) = delete;
+  MERGEUNIT& operator=(const MERGEUNIT&) = delete;
   GDT_BOOLEAN Smallest(STRING *small);
   GDT_BOOLEAN Initialize(STRING& FileName,const PIDBOBJ DbParent,
 			 FILEMAP *map, INT IDValue); // true = success

@@ -7038,3 +7038,71 @@ not `INTERVALLIST`'s own), so it was verified by inspection only,
 documented explicitly in the test file's own comments. `make
 tests`/`make tests-asan` pass clean (678 test cases, 2297 assertions).
 
+## src/mergeunit.hxx
+
+Reprocessed via `/reprocess-blocked` (originally blocked at GENERAL
+step 4 on 2026-08-07; see the resolved `docs/AUTOPILOT_LOG.md` entry for
+the original finding). `MERGEUNIT` is one participant in an N-way
+index-merge, owning four separate heap-allocated arrays (`list`,
+`Start`, `sistrings`, `Tag`).
+
+1. **Four `delete`/`delete[]` mismatches — real, confirmed undefined
+   behavior** (most severe finding in this file, and notably *not*
+   dependent on the copy-semantics question below): `list`, `Tag`, and
+   `Start` are each allocated with array `new` (in the constructor and
+   in `SetLoadLimit()`) but three of the four deallocation sites freed
+   them with scalar `delete` — `~MERGEUNIT()` (`list`/`Tag`/`Start`,
+   only `sistrings` there was already correct) and `CacheLoad()`'s local
+   `p`. Confirmed as a real **alloc-dealloc-mismatch** via a before/
+   after test-revert under ASan (`MERGEUNIT::~MERGEUNIT()
+   src/mergeunit.cxx:391`) — and this fires on the most basic
+   construct-then-destroy usage of the class, e.g. the live `MERGEUNIT
+   A[2];` at `src/index.cxx:2438`, not just on copying. Fixed by
+   changing all four sites to `delete []`. See `BUGFIX #2` in source.
+2. **No copy semantics — confirmed heap corruption on copy** — no
+   user-declared copy constructor or `operator=` existed, so the
+   compiler-generated ones shallow-copied all four owned arrays;
+   confirmed via a standalone repro (`MERGEUNIT b = a;`, let `b` then
+   `a` go out of scope) — though this repro actually surfaced `BUGFIX
+   #2` above first (an ASan abort on `a`'s own destruction, before the
+   copy-construction double-free could even be observed directly), since
+   basic construction/destruction alone was already broken. No live call
+   site copies a `MERGEUNIT` (only default/array construction).
+   **Decision (human, via `/reprocess-blocked`): make it non-copyable**
+   — `MERGEUNIT(const MERGEUNIT&) = delete;` and `MERGEUNIT&
+   operator=(const MERGEUNIT&) = delete;` added to the header. See
+   `BUGFIX #1` in source.
+3. **Constructor leaves `Parent`/`fp`/`Map`/`ID`/`Gp` uninitialized** —
+   `Initialize()` is a mandatory second-phase constructor that sets all
+   but `Gp`, but `~MERGEUNIT()` already dereferences `Parent` (via
+   `Parent->ffclose(fp)`, guarded only by `if(fp)`) if a `MERGEUNIT` is
+   ever destroyed without `Initialize()` having been called first, which
+   would read `fp`/`Parent` as indeterminate values. No confirmed call
+   site was found that skips `Initialize()`, so this is latent, but
+   matches the same "indeterminate primitive/pointer member" category
+   already fixed multiple times this project (`RESULT`, `NUMERICFLD`,
+   `NUMERICLIST`). Fixed by zero/null-initializing all five in the
+   constructor. See `BUGFIX #3` in source.
+
+**Found in a different file while reading `MERGEUNIT`'s real callers,
+out of scope for this turn** (per the original `docs/AUTOPILOT_LOG.md`
+finding, still applicable): `src/index.cxx:773` does `A = new
+MERGEUNIT[sizeof(MERGEUNIT)*IndexNum];` — `new T[n]` allocates `n`
+*objects* of type `T`, not `n` bytes, so this allocates `sizeof(MERGEUNIT)`
+times more `MERGEUNIT` objects than intended. Belongs to `index.cxx`'s
+own turn (Order 54, still pending in `docs/PROCESSING_STATUS.md`).
+
+`tests/src/test_mergeunit.cxx` covers: `MERGEUNIT` is non-copyable
+(`BUGFIX #1`); plain construct-then-destroy, both singly and via array
+new/delete matching the live `src/index.cxx:2438` usage, doesn't trigger
+a delete/delete[] mismatch (`BUGFIX #2`, confirmed as a real bug via a
+before/after test-revert under ASan — see above) and doesn't crash on
+the indeterminate-`fp` path either (`BUGFIX #3`, since `Initialize()` is
+deliberately never called in these tests). `MERGEUNIT::Initialize()`
+itself requires a real `PIDBOBJ`/`FILEMAP`/backing file, a
+disproportionate fixture for this file's turn (matching the judgment
+call already made for `src/Iindex.cxx`'s `AddFile()` —
+`docs/BUG_CATALOG.md#srciindexcxx`), so `CacheLoad()`/`Load()`/`Flush()`
+aren't exercised directly. `make tests`/`make tests-asan` pass clean
+(681 test cases, 2301 assertions).
+
