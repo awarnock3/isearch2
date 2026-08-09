@@ -6979,3 +6979,62 @@ at a deterministic `0` (`BUGFIX #2`), alongside a basic sanity check of
 `GetCoords()`/`GetCount()`. `make tests`/`make tests-asan` pass clean
 (676 test cases, 2292 assertions).
 
+## src/intlist.hxx
+
+Reprocessed via `/reprocess-blocked` (originally blocked at GENERAL
+step 4 on 2026-08-07; see the resolved `docs/AUTOPILOT_LOG.md` entry for
+the original finding). `INTERVALLIST` (derives from `NUMERICLIST`,
+above) owns its own separate heap-allocated `table` array (`new
+INTERVALFLD[50*Ncoords]` in both constructors, freed in
+`~INTERVALLIST()`).
+
+1. **No copy semantics — confirmed heap-use-after-free on copy** — same
+   shape as `NUMERICLIST`: no user-declared copy constructor or
+   `operator=`, so the compiler-generated ones shallow-copied
+   `INTERVALLIST`'s own `table` (and would have hit `NUMERICLIST`'s
+   identical bug one level up too, before that base class's own fix).
+   Confirmed via a standalone repro (`INTERVALLIST b = a;`, let `b` then
+   `a` go out of scope) triggering a real heap-use-after-free in
+   `~INTERVALLIST()` under ASan. No live call site copies an
+   `INTERVALLIST`. **Decision (human, via `/reprocess-blocked`): make it
+   non-copyable**, consistent with `NUMERICLIST`'s own choice above —
+   `INTERVALLIST(const INTERVALLIST&) = delete;` and `INTERVALLIST&
+   operator=(const INTERVALLIST&) = delete;` added to the header (note:
+   `NUMERICLIST`'s own deleted copy constructor already makes
+   `INTERVALLIST`'s compiler-generated one implicitly deleted too: the
+   explicit declaration here is for clarity, not strictly required).
+   See `BUGFIX #1` in source.
+2. **`INTERVALLIST`'s own (shadowed) `Attribute`/`Relation` left
+   indeterminate by both constructors** — found while fixing `BUGFIX
+   #1`, the same "indeterminate primitive member" bug already fixed for
+   the base class's own copies in `src/nlist.cxx`'s `BUGFIX #2`, but
+   distinct here: `INTERVALLIST` redeclares its own `Attribute`/
+   `Relation` (see the shadowing note below), separate storage from
+   `NUMERICLIST`'s. Fixed by zero-initializing both in both
+   constructors. Not independently testable via the public API — see
+   the test note below. See `BUGFIX #2` in source.
+
+**Known design issue, documented but not fixed** (per the original
+`docs/AUTOPILOT_LOG.md` finding, still applicable): `INTERVALLIST`
+redeclares its own private copies of nearly every member `NUMERICLIST`
+already has (`Count`, `Attribute`, `Pointer`, `MaxEntries`,
+`StartIndex`, `EndIndex`, `Relation`, `FileName`, `Ncoords`, plus its
+own differently-typed `table`), so every `INTERVALLIST` instance
+allocates and initializes two separate, independent table arrays — the
+base's own 100-entry `NUMERICFLD[]`, entirely unused after construction,
+plus the derived class's real `INTERVALFLD[]` — wasting an allocation
+and ~1.2KB per instance. Fixing this means either making
+`NUMERICLIST`'s members `protected` or dropping the public inheritance
+entirely, both a human design call rather than a mechanical fix, and
+out of scope for this pass.
+
+`tests/src/test_intlist.cxx` covers: `INTERVALLIST` is non-copyable
+(`BUGFIX #1`, same `STATIC_REQUIRE_FALSE` technique as `nlist.hxx`'s
+test) and basic construction/destruction. `BUGFIX #2` has no dedicated
+assertion: `INTERVALLIST` declares no accessor for its own shadowed
+`Attribute`/`Relation` (`GetAttribute()`/`GetRelation()` are inherited
+from `NUMERICLIST` and read the *base* class's already-fixed copies,
+not `INTERVALLIST`'s own), so it was verified by inspection only,
+documented explicitly in the test file's own comments. `make
+tests`/`make tests-asan` pass clean (678 test cases, 2297 assertions).
+

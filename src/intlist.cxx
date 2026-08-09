@@ -35,6 +35,8 @@ THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 /*@@@
 File:		intlist.cxx
@@ -63,6 +65,7 @@ SortGPCmp(const void* x, const void* y);
 
 
 
+/// Constructs an empty list with the default 3-coordinate entry shape.
 INTERVALLIST::INTERVALLIST()
 {
   Ncoords    = 3;
@@ -72,9 +75,18 @@ INTERVALLIST::INTERVALLIST()
   FileName   = "";
   Pointer    = 0;
   StartIndex = EndIndex = -1;
+  // BUGFIX #2 (docs/BUG_CATALOG.md#srcintlisthxx): Attribute/Relation
+  // (INTERVALLIST's own members, shadowing NUMERICLIST's identically-
+  // named ones -- see the shadowing note in docs/BUG_CATALOG.md) were
+  // left indeterminate by both constructors, the same "indeterminate
+  // primitive member" category already fixed for the base class's own
+  // copies in src/nlist.cxx's BUGFIX #2.
+  Attribute  = 0;
+  Relation   = 0;
 }
 
 
+/// Constructs an empty list whose entries hold n coordinate values.
 INTERVALLIST::INTERVALLIST(INT n)
 {
   Ncoords    = n;
@@ -84,6 +96,9 @@ INTERVALLIST::INTERVALLIST(INT n)
   FileName   = "";
   Pointer    = 0;
   StartIndex = EndIndex = -1;
+  // BUGFIX #2, second constructor -- see the default constructor above.
+  Attribute  = 0;
+  Relation   = 0;
 }
 
 
