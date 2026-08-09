@@ -6302,3 +6302,173 @@ tag (`BUGFIX #2`); `ParseFields()` called twice on the same instance
 not corrupting memory (`BUGFIX #3`); and `ParseWords()` returning the
 sentinel instead of exiting when its GP buffer is full (`BUGFIX #4`).
 
+## doctype/usmarc.cxx
+
+`USMARC : public DOCTYPE` parses USMARC/MARC21 library records.
+Uniquely among every file processed this batch, its parsed record
+state (`RecBuffer`, `marcDir`, `marcNumDirEntries`, `marcBaseAddr`,
+`marcRecordLength`) lives in **globals** (declared in
+`doctype/usmarc.hxx`), not `USMARC` instance members, explicitly shared
+between a `ParseFields()` call (which populates them) and the
+`ParseWords()` call expected to follow it for the same record (which
+frees them). This turned out to be the most heavily-bugged file of the
+whole batch: **nine** distinct bugs, several found only by actually
+running the test suite against real bugs rather than by static
+reading — a crash and a heap-buffer-overflow this session's own tests
+triggered mid-development, not just pre-planned repros. All nine
+confirmed real, six via before/after test-reverts (four under ASan).
+
+1. **`ParseWords()` never checked `GpListSize` against `GpLength`
+   before writing (`BUGFIX #1`, tied for most severe)** — confirmed via
+   `-Wunused-parameter`: `GpLength` (the caller-provided capacity of
+   `GpBuffer`) was referenced nowhere in the function. Every sibling
+   `ParseWords()` (`doctype.cxx`, `doctype/taglist.cxx`) guards the
+   equivalent write; this one had no guard at all — an unconditional
+   heap-buffer-overflow write on any record with more indexable words
+   than the caller's buffer could hold. Confirmed via a before/after
+   test-revert under ASan (a real stack-buffer-overflow with a
+   1-element test buffer). Fixed with the same guard-and-sentinel
+   pattern already established in `doctype.cxx`'s `BUGFIX #1` and
+   `taglist.cxx`'s `BUGFIX #4`. `BUGFIX #1` in source.
+
+2. **`ParseWords()` passed the wrong bound to `IsStopWord()`
+   (`BUGFIX #2`)** — `Db->IsStopWord(DataBuffer + Position, DataLength)`
+   instead of `DataLength - Position` (the remaining length from here);
+   every sibling caller correctly subtracts `Position`. Confirmed by
+   reading the real implementation, `INDEX::IsStopWord()`
+   (`src/index.cxx`): it uses the bound as a hard read limit for its own
+   alphanumeric scan, *and* temporarily writes a `'\0'` partway through
+   at the scanned word's end — so the oversized bound risked both an
+   out-of-bounds read and an out-of-bounds write, not just a read.
+   Fixed to match the established, correct pattern. `BUGFIX #2` in
+   source.
+
+3. **`RecBuffer`/`marcDir` leaked across calls, and a failed
+   `readFileContents()` left `readMarcStructure()` no way to detect it
+   (`BUGFIX #3`, tied for most severe)** — two problems sharing one
+   root cause and one fix. `RecBuffer` and `marcDir` are globals,
+   reassigned by `readFileContents()`/`readMarcStructure()` on every
+   `ParseFields()` call with no free of whatever they held from a
+   previous call — a real leak across any multi-record MARC batch (the
+   normal case for this DOCTYPE), since `ParseFields()` runs once per
+   record while `ParseWords()` (which frees them) may not run again
+   until much later, for a *different* record. Separately,
+   `readFileContents()` has several early-return paths (file won't
+   open, seek fails, empty file, allocation fails, short read), and
+   `readMarcStructure()` used to proceed regardless, with
+   `readRecordLength()`/`readBaseAddr()` immediately dereferencing
+   whatever `RecBuffer` happened to hold. This was **not** a theoretical
+   concern: a real test with a nonexistent file segfaulted here
+   (`RecBuffer` null, since a prior call's `ParseWords()` had correctly
+   freed-and-nulled it) before this fix existed. Fixed by freeing and
+   nulling both globals up front (in `readFileContents()` for
+   `RecBuffer`, at the top of `readMarcStructure()` for `marcDir`, both
+   before any early return can skip past their real reallocation), and
+   adding `if (RecBuffer == nullptr) { marcNumDirEntries = 0; return;
+   }` right after the `readFileContents()` call — which also makes
+   every downstream directory loop (`ParseFields()`, `ParseWords()`)
+   safely do nothing for a record that couldn't be read, rather than
+   crash. `BUGFIX #3` in source (in both functions).
+
+4. **`ParseRecords()` never closed its file handle (`BUGFIX #4`)** —
+   `fp` is opened once at the top and never `fclose()`'d anywhere: not
+   on either early-return error path, not on normal end-of-loop
+   completion. A file-descriptor leak on every call. Fixed by adding
+   `fclose(fp);` at all three exit points. `BUGFIX #4` in source.
+
+5. **`readFileContents()`'s `file` was allocated but never freed
+   (`BUGFIX #5`)** — same bug as `doctype/soif.cxx`'s `BUGFIX #3` and
+   `doctype/taglist.cxx`'s `BUGFIX #5`: a `NewCString()` copy of the
+   path, used only for two `perror()` calls, leaked on every call
+   regardless of which path was taken. Fixed identically: allocated
+   lazily right where needed, freed immediately after. `BUGFIX #5` in
+   source.
+
+6. **`findNextTag()`'s scan loops had no bound but the MARC delimiter
+   bytes themselves (`BUGFIX #6`)** — for a malformed/corrupted record
+   missing an expected `END_OF_FIELD`/`START_OF_SUBFIELD` delimiter, the
+   scan ran straight past the buffer's real allocation with nothing to
+   stop it — not even `RecBuffer`'s own null terminator
+   (`readFileContents()` always sets `RecBuffer[RecLength] = '\0'`, but
+   nothing checked for it). A real heap-buffer-overflow read, confirmed
+   via a before/after test-revert under ASan using a record whose field
+   terminator was overwritten with an ordinary character. Fixed by also
+   stopping at `'\0'`, with the surrounding `if`/`else` reworked to
+   treat that the same safe way as a genuine `END_OF_FIELD`. Confirmed
+   via test-revert to be independently necessary even with `BUGFIX #9`
+   already applied. `BUGFIX #6` in source.
+
+7. **A subfield-specific `addSearchEntry()` call used an inconsistent,
+   exclusive end (`BUGFIX #7`)** — `tagPos, tagPos + tagLength` instead
+   of `tagPos, tagPos + tagLength - 1`; the *other two*
+   `addSearchEntry()` call sites in the very same function both
+   correctly use `fieldPos + fieldLength - 1` (inclusive), matching
+   `FC`'s established inclusive-end convention elsewhere in this tree.
+   Since most `ParseData[]` entries name a specific subfield letter
+   (this is the common path, not an edge case), every one of those
+   fields had its stored span include one byte too many: the delimiter
+   immediately following the real content. Confirmed via a before/after
+   test-revert: a subfield's extracted text gained a trailing control
+   character. `BUGFIX #7` in source.
+
+8. See `BUGFIX #3` above — the crash this uncovered is documented there
+   rather than as a separate entry, since one fix (the `nullptr` check)
+   resolves both the leak and the crash together.
+
+9. **`fieldPos` was shared and mutated across different `ParseData[]`
+   entries instead of being reset per entry (`BUGFIX #9`, tied for most
+   severe)** — `fieldPos` is computed once per MARC directory entry,
+   *outside* the loop over `ParseData[]`, but passed by reference into
+   `findNextTag()` inside that loop, which mutates it. Many real fields
+   match *several* `ParseData[]` entries at once (all six "24*"/title
+   entries, for subfield letters a/b/h/i/j/k, are typical), so once one
+   entry's subfield search advanced `fieldPos`, the next entry's search
+   resumed from wherever that left off instead of the field's own true
+   start — silently wrong for a well-formed record (a later subfield
+   appearing before that point would never be found), and, for a
+   malformed one, capable of walking `fieldPos` further past the buffer
+   on every successive iteration, eventually exceeding even `BUGFIX
+   #6`'s own per-call bound. This is exactly what happened: `BUGFIX #6`
+   alone left a real heap-buffer-overflow reachable, caught live by
+   `make tests-asan` while testing that very fix, not found by
+   inspection. Fixed with a fresh local scan cursor (`scanPos`), reset
+   to `fieldPos`'s true value for every `ParseData[]` entry, leaving
+   `fieldPos` itself (also used by the wildcard-tag `addSearchEntry()`
+   call) untouched. Confirmed via a before/after test-revert under ASan.
+   `BUGFIX #9` in source.
+
+`NULL` converted to `nullptr` at its one live call site. Added
+class-level doc comment to the header (including a note on the global
+state's shared-lifecycle contract) and function-level doc comments in
+the source. `doctype/usmarc.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+Left as documented, not changed: `compareReg()`'s `if (s1 == nullptr ||
+s2 == nullptr) { }` empty block (its own `FIXME` comment already
+acknowledges this is unresolved, and neither of its two call sites ever
+passes null in practice); `usefulMarcField()`'s unused parameter
+(matches its own doc comment's stated "index everything for now"
+design, an intentional stub); `compareReg()`'s second loop reading
+`s1[i]` for `i` up to `strlen(s2)` without confirming `s1` is at least
+that long (both real call sites always pass same-length fixed-size
+strings in practice, so not reachable as a live bug, matching this
+project's "don't add validation for scenarios that can't happen").
+
+`tests/doctype/test_usmarc.cxx` covers, using a minimal hand-built,
+byte-verified MARC record (offsets checked with a standalone script
+before being hard-coded, per this session's established discipline for
+binary-format test fixtures): `ParseRecords()` splitting a batch file at
+each record's own length prefix; `ParseFields()` indexing both the raw
+tag and friendly name with the exact right byte span (`BUGFIX #7`);
+`ParseWords()` returning the sentinel instead of overflowing
+(`BUGFIX #1`, exercising `BUGFIX #2` along the way); no leak when
+`ParseFields()` runs twice without an intervening `ParseWords()`
+(`BUGFIX #3`); no crash/leak when the file can't be opened (`BUGFIX #3`'s
+crash half, `BUGFIX #5`); and no heap-buffer-overflow on a field
+missing its end-of-field delimiter (`BUGFIX #6`/`BUGFIX #9` together —
+this is the exact test that caught `BUGFIX #9` live, after `BUGFIX #6`
+alone still weren't enough to make it pass under ASan). Every test that
+calls `ParseFields()` without going on to call the real `ParseWords()`
+as part of its own assertions explicitly calls it anyway purely for
+cleanup, since `RecBuffer`/`marcDir` being globals means one test's
+unclean state could otherwise leak into whichever other test Catch2's
+randomized run order happens to execute next.
+

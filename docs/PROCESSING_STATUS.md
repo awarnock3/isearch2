@@ -110,7 +110,7 @@
 | 106 | doctype/simple.hxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypesimplecxx](BUG_CATALOG.md#doctypesimplecxx) |
 | 107 | doctype/soif.hxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypesoifcxx](BUG_CATALOG.md#doctypesoifcxx) |
 | 108 | doctype/taglist.hxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypetaglistcxx](BUG_CATALOG.md#doctypetaglistcxx) |
-| 109 | doctype/usmarc.hxx | pending | | |
+| 109 | doctype/usmarc.hxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypeusmarccxx](BUG_CATALOG.md#doctypeusmarccxx) |
 | 110 | doctype/uspat.hxx | pending | | |
 | 111 | src/Debug.h | pending | | |
 | 112 | src/Firewall.h | pending | | |
@@ -231,7 +231,7 @@
 | 227 | doctype/taglist.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypetaglistcxx](BUG_CATALOG.md#doctypetaglistcxx) |
 | 228 | doctype/unified.c | pending | | |
 | 229 | doctype/unified.h | pending | | |
-| 230 | doctype/usmarc.cxx | pending | | |
+| 230 | doctype/usmarc.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypeusmarccxx](BUG_CATALOG.md#doctypeusmarccxx) |
 | 231 | doctype/uspat.cxx | pending | | |
 | 232 | Isearch-cgi/cgi-util.cxx | done | 2026-08-08 | [Isearch-cgi/cgi-util.hxx](BUG_CATALOG.md#isearch-cgicgi-utilhxx) |
 | 233 | Isearch-cgi/config.cxx | pending | | |

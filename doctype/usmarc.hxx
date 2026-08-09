@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*
 
 File:        usmarc.hxx
@@ -22,6 +25,13 @@ typedef struct mde {
   char offset[6];
 } marc_dir_entry;
 
+// The current record's raw bytes and parsed MARC directory, shared as
+// globals (not USMARC instance members) between ParseFields() -- which
+// allocates and populates them via readMarcStructure() -- and the
+// ParseWords() call that follows for the same record, which is
+// responsible for freeing them. See doctype/usmarc.cxx's BUGFIX #3 for
+// why every allocation site frees any prior value first and every free
+// site nulls the pointer afterward.
 extern CHR *RecBuffer;
 extern GPTYPE marcNumDirEntries;
 extern GPTYPE marcRecordLength;
@@ -29,8 +39,15 @@ extern GPTYPE marcBaseAddr;
 
 extern marc_dir_entry *marcDir;
 
-class USMARC 
-  : public DOCTYPE 
+// A DOCTYPE for USMARC/MARC21 library records: ParseRecords() splits a
+// batch file into one record per length-prefixed MARC record;
+// ParseFields() reads the directory (see readMarcStructure()) and
+// indexes each field both by its raw MARC tag (e.g. "245") and, via
+// ParseData[]'s field/subfield/tag-letter table, under a friendlier
+// name (e.g. "title"); ParseWords() then restricts word-position
+// extraction to those same field ranges.
+class USMARC
+  : public DOCTYPE
 {
 public:
   USMARC(PIDBOBJ DbParent);
