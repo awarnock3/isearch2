@@ -6472,3 +6472,122 @@ cleanup, since `RecBuffer`/`marcDir` being globals means one test's
 unclean state could otherwise leak into whichever other test Catch2's
 randomized run order happens to execute next.
 
+## doctype/uspat.cxx
+
+**Scope note, read first:** at 5039 lines, this is by far the largest
+file processed this whole effort (typical files this session have been
+100–600 lines). A full function-by-function audit at the same depth as
+every other file was not practical in one pass, so the audit was
+deliberately scoped to `USPAT::ParseRecords()`/`ParseFields()`/
+`Present()` and the `GB` column-tagged field parser (`GB::GetFieldName()`
+via its public `BuildDft()` entry point) — the actual parse/index
+pipeline. The remaining ~4500 lines are ~40 `pato_*` presentation-
+formatting helper functions (Text/HTML/TextHtml element and
+element-set renderers) that were left unaudited beyond confirming they
+still compile with no new warnings from the edits below. This is stated
+here explicitly rather than silently claiming full-file coverage.
+
+`USPAT : public DOCTYPE` reads "Greenbook-style" US Patent text.
+`ParseRecords()` forwards straight to `DOCTYPE::ParseRecords()`
+unchanged, so — like `doctype/soif.cxx` — each input file is treated as
+a single whole-file record, not split into multiple records; the actual
+per-record parsing happens once in `ParseFields()`.
+
+1. **`ParseFields()`'s `RecEnd = ftell(fp) - 1` off-by-one/underflow** —
+   the same bug pattern already fixed (and ASan-confirmed) in
+   `doctype/colondoc.cxx` `BUGFIX #1`, `doctype/marcdump.cxx`
+   `BUGFIX #2`, `doctype/memodoc.cxx` `BUGFIX #1`, and
+   `doctype/referbib.cxx` `BUGFIX #2` — this makes six files with this
+   exact bug. `RecEnd` is `GPTYPE` (unsigned `UINT4`), and this fallback
+   path only runs when the caller passes `RecordEnd == 0` (the
+   whole-file sentinel), so for a genuinely empty file `ftell(fp)`
+   returns `0` and the old `- 1` underflowed to `UINT_MAX`, which would
+   make the following `new CHR[RecLength + 1]` attempt a huge
+   allocation. Fixed by dropping the `- 1`; see `BUGFIX #1` in source.
+
+2. **`Present()` leaks `PreferredRecordSyntax`** — `new STRING` is
+   allocated near the top of the function as a workaround comment notes
+   ("these next two lines will go away when `DOCTYPE::Present` is
+   modified to support Preferred Record Syntax") and never freed on any
+   of the function's exit paths, unlike every other heap allocation in
+   the same function (`Buffer`, `ThePatent`, `pcPRS`, `RecBuffer`, all
+   correctly freed at the end). Fixed by freeing it alongside the
+   others; see `BUGFIX #2` in source.
+
+3. **`GB::GetFieldName()`'s unbounded 4-byte tag read** (most severe
+   finding in this file) — `GetFieldName()` reads a 4-character column
+   tag via `memcpy(tmp, c_record+Start, 4)` with no bounds check on
+   `Start`, and the loop that scans past blank/continuation lines to
+   find the next field's start could exit having run `ColumnStartPtr`
+   off the end of `c_record` (`>= c_length`) while still reporting
+   `Done = 0` — a genuine bug, not a hypothetical one, since a record
+   whose last field's line simply ends in a newline (an ordinary,
+   common case) drives exactly this path. The caller, `GB::BuildDft()`,
+   would then invoke `GetFieldName()` again with an out-of-bounds
+   `Start`, straight into the unchecked `memcpy()`. Confirmed as a real
+   **heap-buffer-overflow** via a before/after test-revert under ASan
+   (`GB::GetFieldName() doctype/uspat.cxx:4959`, triggered by exactly
+   this "record ends in a newline" scenario — see
+   `tests/doctype/test_uspat.cxx`). Also reachable, degenerately, for a
+   genuinely empty record (`Start=0, c_length=0`) on the very first
+   call. Fixed with two guards: an upfront `if (Start + 4 > c_length)`
+   check before the `memcpy()`, and a post-loop check that sets `Done =
+   1` (instead of leaving it `0`) when the blank-line scan ran off the
+   end of the buffer. See `BUGFIX #3` in source (both halves).
+
+   **Known limitation, documented but not fixed:** tracing through
+   `GB::BuildDft()`'s driving loop (`Done = GetFieldName(...); while
+   (!Done) { process; Start = NextFieldStart; Done = GetFieldName(...);
+   }`) shows that a record's *last* field is never inserted into the
+   DFT — `Done` is only ever set to `1` on the same call that identifies
+   that last field's name and boundaries, and the `while (!Done)` loop
+   exits before processing it. This is a pre-existing property of the
+   algorithm (confirmed present in the original, unfixed code too, via
+   its other `Done=1` branch — the "no trailing newline" case), not
+   something introduced by `BUGFIX #3` above; `BUGFIX #3` just makes the
+   "record ends in a newline" case share the same (already-existing)
+   behavior instead of crashing. Left unfixed because it's a potential
+   functional/indexing-correctness change (it could alter DFT contents
+   for every existing `USPAT`-indexed collection), not a memory-safety
+   issue, and changing it deserves a deliberate human decision rather
+   than a silent fix bundled into an unattended cleanup pass.
+
+4. **`pato_ReadPatent()`'s unbounded `memccpy()`** — each line of the
+   input `Buffer` is copied into a fixed 256-byte scratch buffer via
+   `memccpy(Si, Buffer+Pos, '\n', 200)`, unconditionally reading up to
+   200 bytes starting at `Buffer+Pos` regardless of how many bytes
+   actually remain in `Buffer` — reachable whenever the final line's
+   tail is shorter than 200 bytes and has no trailing `\n` for
+   `memccpy()` to stop at first, letting the read run past the end of
+   `Buffer`. Fixed by bounding the copy length to
+   `min(200, PatentSize - Pos)`. See `BUGFIX #4` in source.
+
+Modernization (`NULL` → `nullptr`, `sprintf` → `snprintf`) was applied
+only within the functions actually touched above (`ParseFields()`,
+`Present()`, `pato_ReadPatent()`), not blanket-applied across the
+file's other ~180 `NULL` occurrences and ~45 `sprintf` calls living in
+the unaudited `pato_*` helpers, per this project's "modernize only
+while touching a function" rule. Confirmed via a full-file recompile
+that the file's 282 pre-existing `-Wall -Wextra` warnings (almost all
+`-Wwrite-strings`, from C-string-literal-to-`char*` conversions in the
+untouched `pato_*` functions) are unchanged before and after these
+edits, with none falling on the edited lines.
+
+`tests/doctype/test_uspat.cxx` covers: `ParseFields()` not attempting a
+huge allocation on an empty file (`BUGFIX #1`, `REQUIRE_NOTHROW`);
+`GB::BuildDft()` not reading out of bounds for a zero-length record
+(`BUGFIX #3`'s upfront guard); and `GB::BuildDft()` not reading out of
+bounds when a two-field record's last line ends exactly at EOF
+(`BUGFIX #3`'s post-loop guard — this is the exact scenario
+before/after-confirmed as a real heap-buffer-overflow under ASan, per
+above). `BUGFIX #2` and `BUGFIX #4` are **not** covered by an automated
+test: `pato_ReadPatent()` is a private method and the header-signature
+freeze rules out adding a test-only friend declaration to expose it,
+and `Present()`'s only path into that code, `RESULT::
+GetHighlightedRecord()`, is a no-op in this build (`DO_HIGHLIGHTING` is
+never defined anywhere in this tree — see `src/result.cxx`), so
+`StringBuffer` never carries real record content through `Present()`
+here regardless of what's on disk. Both fixes were verified by
+inspection only; this is stated explicitly in the test file's own
+header comment as well.
+
