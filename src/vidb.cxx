@@ -43,7 +43,7 @@ Author:         Kevin Gamiel, kgamiel@cnidr.org
                 Archie Warnock, warnock@awcubed.com
 @@@*/
 
-// ISEARCH2-CLEANUP: processed 2026-08-08
+// ISEARCH2-CLEANUP: processed 2026-08-09
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <sys/stat.h>
@@ -272,6 +272,20 @@ VIDB::Search(const SQUERY& SearchQuery)
     // Do the search
     RsetPtrs[i] = c_dblist[i]->MainIndex->Search(Query);
 
+    // BUGFIX #3 (docs/BUG_CATALOG.md#srcvidbcxx): MainIndex->Search()
+    // (INDEX::Search(), src/index.cxx) returns nullptr when Query's
+    // OPSTACK has zero operands (an empty/degenerate search term) --
+    // its final `TempStack >> NewIrset;` explicitly sets it to nullptr
+    // via OPSTACK::Pop()'s empty-stack branch. RsetPtrs[i] was
+    // dereferenced immediately below with no null check. Confirmed
+    // with a real crash via Isearch-cgi/isrch_srch.cxx (SIGSEGV inside
+    // IRSET::StoreDbNum() called through a null this). Fixed the same
+    // way INDEX::Search() itself already handles an analogous case
+    // (`if (!NewIrset) NewIrset = new IRSET(Parent);`): substitute an
+    // empty result set instead of a null one.
+    if (!RsetPtrs[i])
+      RsetPtrs[i] = new IRSET(c_dblist[i]);
+
     // Stash the database number in each record
     RsetPtrs[i]->StoreDbNum(i);
     RsetPtrs[i]->SetMdt(*pMDT);
@@ -331,6 +345,13 @@ VIDB::AndSearch(const SQUERY& SearchQuery)
 
     // Do the search
     RsetPtrs[i] = c_dblist[i]->MainIndex->AndSearch(Query);
+
+    // BUGFIX #3, continued (docs/BUG_CATALOG.md#srcvidbcxx): same
+    // missing null check as VIDB::Search() above --
+    // INDEX::AndSearch() itself just delegates to INDEX::Search()
+    // (src/index.cxx), so it can return nullptr the same way.
+    if (!RsetPtrs[i])
+      RsetPtrs[i] = new IRSET(c_dblist[i]);
 
     // And stash the database number in each record
     RsetPtrs[i]->StoreDbNum(i);

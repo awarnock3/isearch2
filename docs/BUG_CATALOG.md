@@ -3936,6 +3936,35 @@ category of this batch's non-index-parser files.
    whose one confirmed-reachable sibling bug was serious, and the fix
    is free, so both got the same guard. `BUGFIX #2` in source.
 
+3. **Added 2026-08-09, while processing `Isearch-cgi/isrch_srch.cxx`
+   (a `pending` file, not part of this section's original turn):
+   `Search()`/`AndSearch()` dereferenced `RsetPtrs[i]` immediately after
+   `c_dblist[i]->MainIndex->Search()`/`AndSearch()` with no null check —
+   confirmed SIGSEGV via the real `isrch_srch` CGI binary.**
+   `INDEX::Search()` (`src/index.cxx`) returns `nullptr` when the
+   `SQUERY` it's given tokenizes to zero real operands (its final
+   `TempStack >> NewIrset;` explicitly sets `NewIrset` to `nullptr` via
+   `OPSTACK::Pop()`'s empty-stack branch) — and `INDEX::AndSearch()`
+   just delegates to `INDEX::Search()`, inheriting the same behavior.
+   `RsetPtrs[i]->StoreDbNum(i);` ran unconditionally right after,
+   crashing on the null result. This is one level deeper than
+   `BUGFIX #1`'s own "no databases at all" null-return case (`RsetPtr =
+   nullptr; if (c_dbcount <= 0) return RsetPtr;`), which callers were
+   already expected to check for — this one hides *inside* a
+   successful, `c_dbcount > 0` call. Confirmed live: a CGI request whose
+   query has no real search terms (e.g. a "next page" request that's
+   missing its query field entirely) reached this exact crash through
+   `Isearch-cgi/isrch_srch.cxx`. Fixed in both `Search()` and
+   `AndSearch()` by substituting an empty result set instead of a null
+   one — `if (!RsetPtrs[i]) RsetPtrs[i] = new IRSET(c_dblist[i]);` —
+   mirroring `INDEX::Search()`'s own existing fallback for its
+   per-operand null case a few lines earlier in that same file
+   (`if (!NewIrset) NewIrset = new IRSET(Parent);`). `BUGFIX #3` in
+   source (both `Search()` and `AndSearch()`). Re-verified no new
+   warnings via the same before/after `-Wall -Wextra` diff technique
+   (85 warnings, unchanged); `make tests`/`make tests-asan`/`make
+   smoke-test` all still pass.
+
 **Not otherwise pursued:** `c_inconsistent_doctypes` is set to
 `GDT_FALSE` once in `Initialize()` and never set `GDT_TRUE` anywhere,
 making the `if(c_inconsistent_doctypes) return GDT_FALSE;` check in
@@ -9362,4 +9391,86 @@ binary (including one full revert-and-repro) rather than inspection
 alone. `make isearch-cgi` passes clean; `make tests`/`make tests-asan`
 (unaffected by this file) still pass clean (745 test cases, 2850
 assertions).
+
+## Isearch-cgi/isrch_srch.cxx
+
+**Scope note, read first:** same `main()`-only structural limitation as
+[`Isearch-cgi/isrch_html.cxx`](#isearch-cgiisrch_htmlcxx) — and closely
+related to it: this file's own header comment identifies it as
+`isrch_html.cxx`'s ancestor ("Derived from isrch_srch.cxx"), and the
+two share almost all of their structure, including four of
+`isrch_html.cxx`'s four bugs verbatim. Adds JSON output support
+(`OUTPUT=JSON`/`FORMAT=JSON`) that `isrch_html.cxx` doesn't have — that
+code was checked separately and found sound (see below). Verified with
+the real production binary via `REQUEST_METHOD`/`QUERY_STRING`, plus
+`gdb` to pin down one crash whose stack trace pointed somewhere
+unexpected.
+
+Four bugs in this file itself, all identical in shape and confirmed the
+same way as `isrch_html.cxx`'s own `BUGFIX #1/#2/#3/#4` (see that
+file's entry for the full mechanism explanation — not repeated here):
+
+1. **`query = cgidata->GetValueByName("ISEARCH_TERM")` (two sites,
+   `ADVANCED` branch and the `Start>1` refetch) — confirmed SIGSEGV.**
+   See `BUGFIX #1` in source (both sites).
+2. **`StrCaseCmp(p, ...)`/`.Cat(p)` reused a possibly-null `p` for
+   `BOOLEAN` search's 2nd+ terms — confirmed SIGSEGV.** Defaulted to
+   `"OR"`, same as `isrch_html.cxx`. See `BUGFIX #2` in source.
+3. **`pirset->SortByScore()` with no null check — confirmed SIGSEGV,
+   but not the same crash `isrch_html.cxx` had.** Initially looked like
+   the same fix would suffice (and it's still necessary — `pdb` here is
+   a `VIDB*`, the exact class `src/Isearch.cxx`'s original `BUGFIX #1`
+   covers for the "zero usable databases" case), but the *same repro*
+   that crashed `isrch_html.cxx` at this point crashed here one level
+   *deeper*: `gdb`'s backtrace showed `SIGSEGV` inside
+   `IRSET::StoreDbNum()`, called from `VIDB::Search()` itself, called
+   from this file's own `Search()` — i.e. the crash was happening
+   *before* `pirset` was even assigned, inside `pdb->Search(query)`.
+   Traced this to a **separate, more severe bug in the already-`done`
+   `src/vidb.cxx`** (see `BUGFIX #3` newly added to
+   [`src/vidb.hxx`](#srcvidbhxx)'s catalog entry for the full
+   explanation and fix): `VIDB::Search()`/`AndSearch()` dereferenced
+   `RsetPtrs[i]` right after `MainIndex->Search()`/`AndSearch()` with
+   no null check, and that inner call can itself return `nullptr` for a
+   degenerate query. Fixed `src/vidb.cxx` directly (a `.cxx` file, not
+   header-frozen) as part of this turn, then added the *same*
+   `!pirset`-after-`Search()` guard here too, matching
+   `isrch_html.cxx`'s `BUGFIX #3` and `Isearch.cxx`'s original
+   `BUGFIX #1` — both layers needed the check: this file's own guard
+   for the "no databases at all" case, `vidb.cxx`'s fix for the
+   "degenerate per-database query" case underneath it. Confirmed clean
+   after both fixes together. See `BUGFIX #3` in source.
+4. **`PrintField = field` in `get_term()` — confirmed SIGSEGV** when
+   `FIELD_%i` wasn't submitted. See `BUGFIX #4` in source.
+
+**JSON output path checked separately, found sound**: `PrintJsonEscaped()`
+correctly escapes `"`, `\`, and control characters (`\uXXXX` for
+anything `< 0x20`); `PrintJsonError()` and `WantsJsonOutput()` both
+null-check their `GetValueByName()` results before use, unlike the four
+bugs above. This looks like newer, more carefully-written code than the
+rest of the file (which dates to 1996-1998) — no fixes needed here.
+Also noted: this file already guards `FetchCount` against `Start >
+HitCount` (`INT FetchCount = 0; if (Start <= HitCount) {...}`) — a
+check `isrch_html.cxx`'s otherwise-near-identical code lacks (it could
+compute a negative `FetchCount` for a stale "next page" request past
+the actual result count). Not a crash in either file — the resulting
+loop just doesn't execute — but worth noting as a discrepancy between
+the two files' equivalent code, in case a future turn wants to
+backport this file's stricter version into `isrch_html.cxx`.
+
+Also modernized: same `(PCHR)NULL`/`== NULL` → `nullptr` (17 + 4
+occurrences) and `sprintf` → `snprintf` (9 occurrences) sweep as
+`isrch_html.cxx`. Confirmed zero new warnings via the same before/after
+`-Wall -Wextra` diff (98 warnings, unchanged, all pre-existing unused-
+variable noise).
+
+No test file was written for the reasons in the scope note above; all
+four fixes (plus the `vidb.cxx` fix they exposed) are documented in
+detail here and at their `BUGFIX #n` comment sites in source instead,
+verified via the real production binary (including `gdb` for the one
+non-obvious crash). `make isearch`/`make isearch-cgi`/`make smoke-test`
+all pass clean; `make tests`/`make tests-asan` (which *do* link
+`src/vidb.cxx`, unlike `isrch_srch.cxx` itself) still pass clean (745
+test cases, 2850 assertions, unchanged — the `vidb.cxx` fix doesn't
+touch any code path the existing suite exercises).
 
