@@ -3,7 +3,7 @@
 | Order | File | Status | Last Documented |
 |-------|------|--------|------------------|
 | 1 | src/fc.hxx | done | 2026-08-09 |
-| 2 | src/fct.hxx | pending | |
+| 2 | src/fct.hxx | done | 2026-08-09 |
 | 3 | src/dft.hxx | pending | |
 | 4 | src/record.hxx | pending | |
 | 5 | src/rcache.hxx | pending | |

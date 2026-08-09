@@ -42,6 +42,9 @@ Description:	General definitions
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "gdt.h"
 
 const CHR* IsearchDefaultDbName = "ISEARCH";
