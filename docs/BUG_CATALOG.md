@@ -9474,3 +9474,65 @@ all pass clean; `make tests`/`make tests-asan` (which *do* link
 test cases, 2850 assertions, unchanged — the `vidb.cxx` fix doesn't
 touch any code path the existing suite exercises).
 
+## Isearch-cgi/search_form.cxx
+
+**Scope note, read first:** same `main()`-only structural limitation as
+[`Isearch-cgi/isrch_fetch.cxx`](#isearch-cgiisrch_fetchcxx) — a smaller
+utility (313 lines) that generates the HTML search form the other
+three CGI frontends' output feeds into, invoked either as `search_form
+<dbpath> <dbname> [www]` or `search_form -pagetype <dbpath> <dbname>
+[www]`. Both bugs confirmed with the real production binary.
+
+Two bugs found and fixed:
+
+1. **`strcpy(temp,argv[1])` into a fixed 64-byte buffer — confirmed
+   stack buffer overflow** (most severe finding in this file) — `argv[1]`
+   is a short flag (`-simple`, etc.) in the `-pagetype` form, but it's
+   the **dbpath itself** in the plain form — an arbitrary-length
+   filesystem path with no reason to be under 64 characters. Confirmed
+   with the real binary: a >64-character dbpath triggered glibc's
+   `*** buffer overflow detected ***` (`SIGABRT`) before this fix. The
+   copy turned out to be entirely unnecessary — `argv[1]` was only ever
+   read (via `temp[0]`, `strcmp(temp, ...)`), never mutated, in this
+   scope — so the fix removes the copy altogether and checks/compares
+   `argv[1]` directly instead of copying it into any buffer, small or
+   otherwise. See `BUGFIX #2` in source (numbered after `BUGFIX #1`
+   since the overflow's root cause — the unnecessary copy — is what the
+   `BUGFIX #1` code sits inside of).
+2. **`argc < 3` doesn't cover the `-pagetype` form's real 4-argument
+   requirement — confirmed SIGSEGV, plus a true out-of-bounds
+   argv[] read** — the plain form needs `argc >= 3` (`dbpath`,
+   `dbname`), but the `-pagetype` form needs `argc >= 4` (`flag`,
+   `dbpath`, `dbname`) — checked once, unconditionally, before either
+   branch even runs. When `argc == 3` in the flag form (e.g.
+   `search_form -simple /onepath`), `db = argv[3]` reads the C++-
+   standard-guaranteed `nullptr` sentinel at `argv[argc]` (harmless on
+   its own — `db` turned out to be dead, assigned but never read
+   afterward, confirmed via `-Wunused-but-set-variable`, left alone
+   matching this project's established vestigial-variable precedent) —
+   but `www = argv[4]` read **one past** that guaranteed range
+   entirely, genuine undefined behavior, not just a null read. Further
+   down, `DBRootName = argv[3];` (a real `STRING` assignment) crashed
+   via `strlen(nullptr)`. Confirmed with the real binary: `search_form
+   -simple /tmp` (`argc==3`) segfaulted before this fix. Fixed by
+   moving the argument-count check into the branch that actually knows
+   its own requirement (`argc < 4` inside the flag-form branch, after
+   the flag itself is already known), and bounds-checking the optional
+   `www` argument in both branches (`(argc > N) ? argv[N] : nullptr`)
+   instead of reading it unconditionally. See `BUGFIX #1` in source.
+
+Also modernized: the 6 `sprintf(temp, "..._%%i", i)` calls (building
+`FIELD_N`/`TERM_N`/`WEIGHT_N` form field names) → `snprintf`. Confirmed
+zero new warnings via the same before/after `-Wall -Wextra` diff
+technique (87 warnings, unchanged — the 2 warnings on this file's own
+lines, `db`/`dbpath` "set but not used", are pre-existing and already
+explained above under `BUGFIX #1`).
+
+No test file was written for the reasons in the scope note above; both
+fixes are documented in detail here and at their `BUGFIX #n` comment
+sites in source instead, verified via the real production binary
+(including under `-fsanitize=address,undefined` for the fixed
+`www`/`argc` handling). `make isearch-cgi` passes clean; `make
+tests`/`make tests-asan` (unaffected by this file) still pass clean
+(745 test cases, 2850 assertions).
+
