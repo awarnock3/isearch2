@@ -6679,3 +6679,68 @@ correctness/leak fix with no observable output difference in a
 single-process test), and `BUGFIX #4` is inherently confirmed by the
 test file compiling at all.
 
+## src/Firewall.h
+
+Same situation as [`src/Debug.h`](#srcdebugh) (see that entry's scope
+note): `src/Firewall.h`/`src/Firewall.cc` aren't included anywhere else
+in `src/`, `doctype/`, or `Isearch-cgi/`, `FIREWALLS` is never defined
+by the top-level `Makefile`, and `Firewall.cc` isn't referenced by
+`TEST_ENGINE_SRCS` or any production rule — both files are dead code in
+the current build. Processed anyway (it carries a
+`docs/PROCESSING_STATUS.md` row); the bugs below are real and
+independently confirmed under ASan/by direct compilation.
+
+Three bugs found and fixed, all in `src/Firewall.cc`'s
+`FIREWALLS`-guarded implementation — a near-exact structural twin of
+`src/Debug.cc`'s `Debug::out()`, right down to the same fixed 2048-byte
+message buffer:
+
+1. **`Firewall::hit()`/`Firewall::assert()`'s unbounded `vsprintf()`**
+   (most severe finding in this file) — both functions format a
+   caller-supplied `fmt`/varargs message into a fixed 2048-byte stack
+   buffer with `vsprintf()`, no bound on the formatted length, at two
+   separate call sites (`hit()` and `assert()` each have their own).
+   The same bug as `src/Debug.cc`'s `BUGFIX #1`. Confirmed as a real
+   **stack-buffer-overflow** via a before/after test-revert under ASan.
+   Fixed with `vsnprintf()` bounded to `sizeof(buffer)` at both sites.
+   See `BUGFIX #1` in source.
+
+2. **`Firewall.cc` doesn't compile if `FIREWALLS` is ever defined,
+   reason 1** — `cerr`/`endl` used unqualified in `trap()`, `hit()`, and
+   `assert()`, with no `using namespace std;` and no `#include` in this
+   file providing one. Identical issue and fix to `src/Debug.cc`'s
+   `BUGFIX #4`. Fixed by qualifying all three call sites with `std::`.
+   See `BUGFIX #2` in source.
+
+3. **`Firewall.cc` doesn't compile if `FIREWALLS` is ever defined,
+   reason 2** — `strcpy()` (in `hit()`/`assert()`) and `strcmp()` (in
+   `_init()`) are used with no `#include <string.h>`/`<cstring>`
+   anywhere in this file, unlike `src/Debug.cc` which does include it.
+   Confirmed directly: compiling with `-DFIREWALLS` before this fix
+   fails with `'strcpy' was not declared in this scope`. Fixed by
+   adding the missing `#include`. See `BUGFIX #3` in source.
+
+Unlike `src/Debug.cc`, `Firewall::_init()`'s own `static bool init`
+one-time guard is correct as originally written (`init` starts `true`
+and is explicitly set `false` inside the guarded block, the inverse
+polarity of `Debug`'s but implemented consistently) — no equivalent of
+`Debug.cc`'s `BUGFIX #3` applies here.
+
+`tests/src/test_firewall.cxx` covers `BUGFIX #1` at both call sites in
+one `TEST_CASE`, using the same private-compilation technique as
+`tests/src/test_debug.cxx` (`#define FIREWALLS 1` then
+`#include "Firewall.cc"` directly, since adding this file to
+`TEST_ENGINE_SRCS` would compile to nothing without `FIREWALLS`
+defined for the whole suite). `FIREWALLS` is deliberately left unset in
+the test (`_init()`'s defaults keep `_active=true`, `_fatal=false`),
+since `_fatal=true` would make `trap()` call `exit(1)` and kill the
+test binary. One subtlety the test file documents inline: `Firewall::
+assert` collides with the `<cassert>` function-like `assert` macro that
+`catch_amalgamated.hpp` pulls in transitively, which would otherwise
+rewrite `Firewall::assert(...)` before the compiler ever sees the
+`Firewall::` qualifier — worked around with `#undef assert` after
+including `catch_amalgamated.hpp`. `BUGFIX #1` was confirmed as a real
+crash via a before/after test-revert under ASan before being fixed (see
+above); `BUGFIX #2` and `BUGFIX #3` are inherently confirmed by the
+test file compiling at all.
+
