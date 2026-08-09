@@ -2100,6 +2100,32 @@ Also applied: `LoadTable`'s five `strtok((CHR*)NULL,"\n")` calls
 modernized to `strtok(nullptr,"\n")`, per this file's own
 `docs/AUTOPILOT_LOG.md` entry flagging it as ready for the next
 reprocessing. A file-level doc comment on `DFDT` per GENERAL step 7.
+
+4. **`LoadTable()` crashes on an empty or truncated `.dfd` file** (found
+   on `dfdt.cxx`'s own later turn, after the modernization pass above
+   already renamed these calls to `strtok(nullptr, ...)` but didn't
+   check their results) — every one of the six `strtok()` calls in this
+   function can return `nullptr`; an empty file makes even the very
+   first call (reading the entry count) return `nullptr`, and
+   `atoi(nullptr)` is undefined behavior — the same established pattern
+   as `doctype/cipc.cxx`'s/`doctype/cipp.cxx`'s own `BUGFIX #5`, just
+   reached via `DFDT`'s multi-level (entry → attribute) loop instead of
+   a flat one. Confirmed with a standalone repro under
+   AddressSanitizer + UndefinedBehaviorSanitizer
+   (`tests/src/test_dfdt.cxx`, run against the pre-fix code with the
+   fix temporarily reverted): a zero-byte file crashed with a real
+   SIGSEGV inside glibc's `strtol` (`atoi`'s implementation), and UBSan
+   independently flagged "null pointer passed as argument 1, which is
+   declared to never be null" at the exact call site. Fixed by checking
+   every `strtok()` result before use and stopping the parse at
+   whichever token is missing — for a truncated attribute list this
+   discards that one incomplete `DFD` rather than adding a
+   half-populated entry, but keeps every entry already fully parsed
+   before the truncation point. See `BUGFIX #4` in source; regression
+   tests in `tests/src/test_dfdt.cxx` covering an empty file, a file
+   truncated right after the entry count, and a file truncated partway
+   through a later entry's attribute list. `make tests`/`make
+   tests-asan` pass clean (704 test cases, 2359 assertions).
 `dfdt.hxx`'s own `#include`s were already complete (verified by
 compiling it standalone).
 

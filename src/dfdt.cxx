@@ -42,6 +42,9 @@ Description:	Class DFDT - Data Field Definitions Table
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "dfdt.hxx"
 
 DFDT::DFDT() {
@@ -97,7 +100,21 @@ DFDT::operator=(const DFDT& OtherDfdt) {
 }
 
 
-void 
+/**
+ * @brief Loads the table from FileName's on-disk text format (as
+ * written by SaveTable()): an entry count, then per entry a file
+ * number, an attribute count, and that many (set ID, type, value)
+ * attribute triples.
+ * @param FileName Path to the .dfd file to load; a zero-length name or
+ * a file that can't be opened leaves the table empty (Initialize()'s
+ * state) rather than erroring.
+ *
+ * Tolerates an empty or truncated file (BUGFIX #4): stops parsing at
+ * whichever token is missing instead of reading past the end of the
+ * available data, keeping whatever complete entries were already
+ * loaded.
+ */
+void
 DFDT::LoadTable(const STRING& FileName) {
   PCHR b;
   INT4 RecStart,RecEnd,ActualLength,len;
@@ -144,31 +161,55 @@ DFDT::LoadTable(const STRING& FileName) {
   PCHR pBuf;
 
   // Get the # of fields from the start of the buffer
+  // BUGFIX #4 (docs/BUG_CATALOG.md#srcdfdthxx): every strtok() call in
+  // this function can return nullptr on a truncated or empty .dfd
+  // file -- an empty file makes even this very first call return
+  // nullptr, and atoi(nullptr)/STRING::operator=(const CHR*)'s
+  // unconditional strlen() are both undefined behavior on a null
+  // argument. Same established pattern as doctype/cipc.cxx's/
+  // doctype/cipp.cxx's own BUGFIX #5, extended here to every strtok()
+  // call in the (multi-level) loop below, not just the first: a file
+  // truncated partway through a record is just as reachable as one
+  // that's empty from the start, and would otherwise crash at
+  // whichever token ran out first.
   pBuf = strtok(b,"\n");
-  DfdCount = atoi(pBuf);
+  DfdCount = pBuf ? atoi(pBuf) : 0;
 
   // Run through the buffer, looking for newlines
   // Get the file number, the # of attribs, the attribute IDs,
   // attribute types and values
   for (x=0; x<DfdCount; x++) {
-    AttrList = new ATTRLIST();
     pBuf = strtok(nullptr,"\n");         // Get the file #
+    if (!pBuf)
+      break;
     dfd.SetFileNumber(atoi(pBuf));    // Save it
     pBuf = strtok(nullptr,"\n");         // Get the # of attributes
+    if (!pBuf)
+      break;
     AttrCount = atoi(pBuf);
+
+    AttrList = new ATTRLIST();
+    GDT_BOOLEAN Truncated = GDT_FALSE;
     for (y=0;y<AttrCount;y++) {
       pBuf = strtok(nullptr,"\n");
+      if (!pBuf) { Truncated = GDT_TRUE; break; }
       s = pBuf;
       attr.SetSetId(s);
       pBuf = strtok(nullptr,"\n");
+      if (!pBuf) { Truncated = GDT_TRUE; break; }
       attr.SetAttrType(atoi(pBuf));
       pBuf = strtok(nullptr,"\n");
+      if (!pBuf) { Truncated = GDT_TRUE; break; }
       s = pBuf;
       attr.SetAttrValue(s);
       AttrList->AddEntry(attr);
     }
     dfd.SetAttributes(*AttrList);
     delete AttrList;
+    // A truncated attribute list means this record is incomplete --
+    // stop instead of adding a half-populated DFD.
+    if (Truncated)
+      break;
     FastAddEntry(dfd);
   }
   delete [] b;

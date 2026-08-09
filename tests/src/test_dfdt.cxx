@@ -8,6 +8,9 @@
 #include "dfd.hxx"
 #include "string.hxx"
 
+#include <cstdio>
+#include <unistd.h>
+
 TEST_CASE("DFDT default-constructs empty and unchanged", "[dfdt]") {
 	DFDT dt;
 	REQUIRE(dt.GetTotalEntries() == 0);
@@ -140,4 +143,60 @@ TEST_CASE("DFDT copies survive independent destruction without a double-free", "
 	delete b;
 	delete a;
 	SUCCEED("no ASan/UBSan failure on independent destruction");
+}
+
+TEST_CASE("DFDT LoadTable tolerates an empty file", "[dfdt]") {
+	// BUGFIX #4 regression: an empty .dfd file used to crash via
+	// atoi(nullptr) at strtok()'s very first call.
+	char tmpl[] = "/tmp/isearch2_test_dfdt_empty_XXXXXX";
+	int fd = mkstemp(tmpl);
+	REQUIRE(fd != -1);
+	close(fd);  // leaves a zero-byte file
+
+	DFDT dt;
+	dt.LoadTable(STRING(tmpl));
+	REQUIRE(dt.GetTotalEntries() == 0);
+
+	remove(tmpl);
+}
+
+TEST_CASE("DFDT LoadTable tolerates a file truncated right after the entry count", "[dfdt]") {
+	// BUGFIX #4 regression: a file that claims more entries than are
+	// actually present used to crash partway through the parse instead
+	// of stopping cleanly.
+	char tmpl[] = "/tmp/isearch2_test_dfdt_truncated_XXXXXX";
+	int fd = mkstemp(tmpl);
+	REQUIRE(fd != -1);
+	close(fd);
+
+	FILE* fp = fopen(tmpl, "w");
+	REQUIRE(fp != nullptr);
+	fprintf(fp, "2\n1\n");  // claims 2 entries; only entry 0's file # is present
+	fclose(fp);
+
+	DFDT dt;
+	dt.LoadTable(STRING(tmpl));
+	REQUIRE(dt.GetTotalEntries() == 0);  // truncated before any complete entry
+
+	remove(tmpl);
+}
+
+TEST_CASE("DFDT LoadTable keeps complete entries and discards a truncated trailing one", "[dfdt]") {
+	char tmpl[] = "/tmp/isearch2_test_dfdt_partial_XXXXXX";
+	int fd = mkstemp(tmpl);
+	REQUIRE(fd != -1);
+	close(fd);
+
+	FILE* fp = fopen(tmpl, "w");
+	REQUIRE(fp != nullptr);
+	// Entry 0: file # 1, 0 attributes (complete). Entry 1: file # 2,
+	// claims 1 attribute, but no attribute data follows.
+	fprintf(fp, "2\n1\n0\n2\n1\n");
+	fclose(fp);
+
+	DFDT dt;
+	dt.LoadTable(STRING(tmpl));
+	REQUIRE(dt.GetTotalEntries() == 1);  // entry 0 kept; entry 1 discarded
+
+	remove(tmpl);
 }
