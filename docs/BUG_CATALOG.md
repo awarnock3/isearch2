@@ -6190,3 +6190,115 @@ on each of the three malformed-record error paths (`BUGFIX #2`) and on
 a file that can't be opened (`BUGFIX #3`); and `Present()`'s `"F"`
 (whole record) and no-fields-yet-registered paths.
 
+## doctype/taglist.cxx
+
+`TAGLIST : public SGMLTAG` indexes only tag pairs whose name matches a
+fixed allowlist (`TITLE`/`H1`-`H4`), tracking each match's byte range in
+`m_TagPos` so `ParseWords()` restricts word extraction to just those
+ranges. Explicitly derived from `doctype/sgmltag.cxx` (per its own file
+header) — most of `ParseFields()` is a near-verbatim copy of
+`SGMLTAG::ParseFields()`, which is *already processed* and correct.
+Five bugs found, four of them exactly the shape of "this copy of an
+already-fixed function quietly dropped something the original has,"
+confirmed by direct comparison against `sgmltag.cxx`. All five
+confirmed via before/after test-reverts (three under ASan, one via an
+isolated subprocess since it kills the process outright).
+
+1. **`ParseFields()` never called `NewRecord->SetDft(*pdft)`
+   (`BUGFIX #1`, most severe)** — `pdft` is built up field-by-field
+   through the whole parsing loop, exactly as in `SGMLTAG::ParseFields()`,
+   but then simply `delete`'d without ever being attached to
+   `NewRecord`. This is not a partial or edge-case bug: **every field
+   TAGLIST ever parsed, for any input, was silently thrown away** — the
+   class has never actually indexed anything since whenever this line
+   was dropped relative to the base class. Confirmed via a before/after
+   test-revert: reverting just this one line took a passing "field
+   extracted correctly" test straight to "zero fields found." Fixed by
+   adding `NewRecord->SetDft(*pdft);` immediately before the existing
+   `delete pdft;`, matching `SGMLTAG::ParseFields()`'s exact placement.
+   `BUGFIX #1` in source.
+
+2. **`ReplaceWithSpace()`'s kept-tag branch wrote through a garbage
+   pointer (`BUGFIX #2`)** — `*tags_ptr[strlen(*tags_ptr)] = ' ';`;
+   array subscript binds tighter than unary `*` in C++, so this parsed
+   as `*(tags_ptr[strlen(*tags_ptr)])` — indexing `strlen(*tags_ptr)`
+   *slots ahead in the `tags_ptr` array itself* (not into the current
+   tag string's own buffer, which was clearly the intent given the
+   comment right above it), then dereferencing and writing to whatever
+   garbage or out-of-bounds pointer happened to occupy that slot.
+   Confirmed via a before/after test-revert under ASan: a real `SIGSEGV`
+   (`AddressSanitizer: SEGV on unknown address`), not a subtle
+   corruption — this crashed immediately and reliably on ordinary input
+   (`"<TITLE>...</TITLE>"`, `"TITLE"` being 5 characters, so the buggy
+   read landed 5 array-slots past the current tag). Fixed by
+   parenthesizing to dereference `tags_ptr` first:
+   `(*tags_ptr)[strlen(*tags_ptr)] = ' ';`. `BUGFIX #2` in source.
+
+3. **`ParseFields()` freed `m_TagPos` with scalar `delete` instead of
+   `delete []` (`BUGFIX #3`)** — `m_TagPos` is always allocated via
+   `new EntryType[numtags]` (both here and, correctly, in
+   `TAGLIST::~TAGLIST()`), but the cleanup immediately before
+   reallocating it on a second `ParseFields()` call used plain
+   `delete m_TagPos;` — a `new[]`/`delete` mismatch, undefined behavior,
+   only reachable when `ParseFields()` runs more than once on the same
+   `TAGLIST` instance (`m_TagPos` is null the first time, so the buggy
+   line is skipped entirely on a single call). Confirmed via a
+   before/after test-revert under ASan: `AddressSanitizer:
+   alloc-dealloc-mismatch`, pointing at the exact allocation and
+   deallocation sites. Fixed to match the destructor's already-correct
+   `delete [] m_TagPos;`. `BUGFIX #3` in source.
+
+4. **`ParseWords()` called `exit(1)` on GP-buffer overflow instead of
+   returning a sentinel (`BUGFIX #4`)** — same bug already fixed in
+   `DOCTYPE::ParseWords()` (`doctype/doctype.cxx`, `BUGFIX #1`):
+   `exit()`ing here aborted the *entire* `Iindex` process, losing all
+   indexing progress, the moment a single document had more matched
+   terms than fit in the current GP buffer, even though the caller
+   (`INDEX::BuildGpList()`, `src/index.cxx`) already checks for and
+   recovers from a `(GPTYPE)-1` sentinel return. Confirmed via an
+   isolated subprocess run (a full in-process revert-test would have
+   killed this very test suite): with `exit(1)` restored, the process
+   exited with status 1 and printed no Catch2 summary at all, having
+   been killed mid-run; with the fix, the same scenario returns
+   `(GPTYPE)-1` and the suite continues normally. Fixed identically to
+   `doctype.cxx`'s already-established fix: `return (GPTYPE)-1;`.
+   `BUGFIX #4` in source.
+
+5. **`ParseFields()`'s `file` was allocated but never freed
+   (`BUGFIX #5`)** — same bug as `doctype/soif.cxx`'s `BUGFIX #3`, but
+   here the correct fix was already sitting right there in the base
+   class: `SGMLTAG::ParseFields()` correctly frees `file` at every one
+   of its exit points, and this copy of the logic dropped every single
+   one of those `delete [] file;` calls, the same way it dropped
+   `SetDft()` (`BUGFIX #1`). Leaked on *every* call, not just an error
+   path. Confirmed via a before/after test-revert under ASan. Fixed by
+   adding `delete [] file;` at all 11 exit points, mirroring
+   `sgmltag.cxx`'s placement exactly rather than re-deriving it.
+   `BUGFIX #5` in source.
+
+Also documented, not changed: `OrigRecBuffer` (a second, byte-identical
+copy of the record, allocated, filled, and null-terminated) is never
+read anywhere in the function beyond its own cleanup — confirmed via
+`grep` across the whole file. Unlike `doctype/litmed.cxx`'s
+`find_next_tag()` (removed, because a compiler warning plus a clear
+cross-file comparison confirmed it was genuinely dead), there's no
+compiler warning here (the variable *is* used, just not meaningfully)
+and no confirmable reason it exists — the file's own top comment even
+calls out "Read two copies of the file into memory (implementation
+feature;-)" with what reads as the original author's own wry
+acknowledgment — so this is left in place rather than guessed at.
+`UsefulSearchField()`'s substring (not exact) match against
+`ValidTags[]` (so e.g. a hypothetical `SUBTITLE` tag would match
+`TITLE`) is also left as-is: a plausible-enough design choice with no
+spec or test suggesting otherwise. `NULL` converted to `nullptr` at all
+5 live call sites (3 in comments left untouched). Added class-level doc
+comment to the header and function-level doc comments in the source.
+`doctype/taglist.cxx` added to `TEST_ENGINE_DOCTYPE_SRCS`.
+
+`tests/doctype/test_taglist.cxx` covers: fields actually reaching the
+record's `DFT` (`BUGFIX #1`'s direct regression); an unlisted tag being
+ignored; `ReplaceWithSpace()` not corrupting memory on an allowlisted
+tag (`BUGFIX #2`); `ParseFields()` called twice on the same instance
+not corrupting memory (`BUGFIX #3`); and `ParseWords()` returning the
+sentinel instead of exiting when its GP buffer is full (`BUGFIX #4`).
+

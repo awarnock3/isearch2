@@ -34,6 +34,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:           taglist.cxx
 Version:        1.0
@@ -62,10 +65,15 @@ TODO:
 #include "taglist.hxx"
 
 TAGLIST::TAGLIST(PIDBOBJ DbParent) : SGMLTAG(DbParent) {
-	m_TagPos = NULL;
+	m_TagPos = nullptr;
 	m_NumPairs = 0;
 }
 
+// Blanks out (with spaces) every tag that isn't on
+// UsefulSearchField()'s allowlist, content included; tags that are on
+// the allowlist keep their content but lose the tag delimiters
+// themselves, then lower-cases and strips non-alphanumeric characters
+// from the whole buffer in place.
 void
 TAGLIST::ReplaceWithSpace(PCHR data, INT length)
 {
@@ -86,7 +94,16 @@ TAGLIST::ReplaceWithSpace(PCHR data, INT length)
 		}
 		else
 		{ // Want tag so lets just remove the terminating null inserted by sgml_parse_tags
-			*tags_ptr[strlen(*tags_ptr)] = ' ';
+			// BUGFIX #2 (docs/BUG_CATALOG.md#doctypetaglistcxx): array
+			// subscript binds tighter than unary '*', so this used to
+			// parse as `*(tags_ptr[strlen(*tags_ptr)])` -- indexing
+			// strlen(*tags_ptr) *slots ahead in the tags_ptr array
+			// itself* (not into the current tag string's own buffer),
+			// then dereferencing and writing to whatever garbage or
+			// out-of-bounds pointer happened to be there. Confirmed via
+			// a before/after test-revert under ASan. Parenthesized to
+			// dereference tags_ptr first, matching the stated intent.
+			(*tags_ptr)[strlen(*tags_ptr)] = ' ';
 		}
 		tags_ptr++;
 	}
@@ -112,8 +129,11 @@ const char * const ValidTags[] = {"TITLE",
 
 const int NUM_TAGS = 5;
 
-GDT_BOOLEAN 
-TAGLIST::UsefulSearchField(const STRING& Field) 
+// True if Field's name matches (as a substring, case-insensitively)
+// any entry in ValidTags[] -- the fixed allowlist of tags this
+// DOCTYPE indexes.
+GDT_BOOLEAN
+TAGLIST::UsefulSearchField(const STRING& Field)
 {
 	int i;
 	GDT_BOOLEAN bFound = GDT_FALSE;
@@ -164,6 +184,15 @@ TAGLIST::ParseFields(PRECORD NewRecord)
   if (!fp) {
     cout << "SGMLTAG::ParseRecords(): Failed to open file\n\t";
     perror(file);
+    // BUGFIX #5 (docs/BUG_CATALOG.md#doctypetaglistcxx): `file` (a
+    // NewCString() copy of the path, used only for perror()) was never
+    // freed anywhere in this function -- leaking on every single call,
+    // not just this error path. The base class this file is derived
+    // from, SGMLTAG::ParseFields() (doctype/sgmltag.cxx), correctly
+    // frees it at every one of its own equivalent exit points; this
+    // copy of the logic dropped all of them somewhere along the way,
+    // the same way it dropped the SetDft() call (BUGFIX #1).
+    delete [] file;
     return;
   }
 
@@ -175,7 +204,8 @@ TAGLIST::ParseFields(PRECORD NewRecord)
       cout << "SGMLTAG::ParseRecords(): Seek failed - ";
       cout << fn << "\n";
       fclose(fp);
-      return;	
+      delete [] file;
+      return;
     }
     RecStart = 0;
     RecEnd = ftell(fp);
@@ -183,6 +213,7 @@ TAGLIST::ParseFields(PRECORD NewRecord)
       cout << "SGMLTAG::ParseRecords(): Skipping ";
       cout << " zero-length record -" << fn << "...\n";
       fclose(fp);
+      delete [] file;
       return;
     }
     //RecEnd -= 1;
@@ -192,15 +223,17 @@ TAGLIST::ParseFields(PRECORD NewRecord)
   if(fseek(fp, (long)RecStart, SEEK_SET) == -1) {
     cout << "SGMLTAG::ParseRecords(): Seek failed - " << fn << "\n";
     fclose(fp);
-    return;	
+    delete [] file;
+    return;
   }
   RecLength = RecEnd - RecStart;
-	
+
   RecBuffer = new CHR[RecLength + 1];
   if(!RecBuffer) {
     cout << "SGMLTAG::ParseRecords(): Failed to allocate ";
     cout << RecLength + 1 << " bytes - " << fn << "\n";
     fclose(fp);
+    delete [] file;
     return;
   }
   OrigRecBuffer = new CHR[RecLength + 1];
@@ -209,6 +242,7 @@ TAGLIST::ParseFields(PRECORD NewRecord)
     cout << RecLength + 1 << " bytes - " << fn << "\n";
     delete [] RecBuffer;
     fclose(fp);
+    delete [] file;
     return;
   }
 
@@ -219,6 +253,7 @@ TAGLIST::ParseFields(PRECORD NewRecord)
     delete [] RecBuffer;
     delete [] OrigRecBuffer;
     fclose(fp);
+    delete [] file;
     return;
   }
   fclose(fp);
@@ -228,6 +263,7 @@ TAGLIST::ParseFields(PRECORD NewRecord)
     cout << " bytes - " << fn << "\n";
     delete [] RecBuffer;
     delete [] OrigRecBuffer;
+    delete [] file;
     return;
   }
   memcpy(OrigRecBuffer, RecBuffer, RecLength);
@@ -253,20 +289,27 @@ TAGLIST::ParseFields(PRECORD NewRecord)
     cout << fn << "\n";
     delete [] RecBuffer;
     delete [] OrigRecBuffer;
+    delete [] file;
     return;
   }
   tags = sgml_parse_tags(RecBuffer, RecLength, &numtags);
-  if(tags == NULL) {
+  if(tags == nullptr) {
     cout << "Unable to parse SGML file " << fn << "\n";
     delete pdft;
     delete [] RecBuffer;
     delete [] OrigRecBuffer;
+    delete [] file;
     return;
   }
 
-  tags_ptr = tags;	
-  if (m_TagPos != NULL)
-	  delete m_TagPos;
+  tags_ptr = tags;
+  // BUGFIX #3 (docs/BUG_CATALOG.md#doctypetaglistcxx): m_TagPos is
+  // always allocated via `new EntryType[numtags]` (array new, see just
+  // below and TAGLIST::~TAGLIST()'s own correct `delete []`), but this
+  // freed it with scalar `delete` -- a new[]/delete mismatch, undefined
+  // behavior. Fixed to match the destructor's already-correct form.
+  if (m_TagPos != nullptr)
+	  delete [] m_TagPos;
   m_TagPos = new EntryType[numtags];
   m_NumPairs = 0;
   while(*tags_ptr) {
@@ -299,20 +342,33 @@ TAGLIST::ParseFields(PRECORD NewRecord)
     tags_ptr++;
   }
 
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypetaglistcxx): pdft was never
+  // attached to NewRecord before being deleted -- every field parsed
+  // above was simply thrown away, meaning TAGLIST never actually
+  // indexed anything. The base class this file is derived from,
+  // SGMLTAG::ParseFields() (doctype/sgmltag.cxx), calls
+  // NewRecord->SetDft(*pdft) in the equivalent spot; this copy of the
+  // logic dropped that one line somewhere along the way.
+  NewRecord->SetDft(*pdft);
   delete pdft;
   delete [] RecBuffer;
   delete [] OrigRecBuffer;
   delete [] tags;
+  delete [] file;
 }
 
 TAGLIST::~TAGLIST(){
-	if (m_TagPos != NULL)
+	if (m_TagPos != nullptr)
 		delete [] m_TagPos;
-	m_TagPos = NULL;
+	m_TagPos = nullptr;
 	m_NumPairs = 0;
 }
 
-GPTYPE 
+// Scans only the byte ranges recorded in m_TagPos (populated by the
+// last ParseFields() call) for indexable words, skipping stop words,
+// and fills GpBuffer with each word's start position; word positions
+// outside those ranges are never considered.
+GPTYPE
 TAGLIST::ParseWords(
 		    //@ManMemo: Pointer to document text buffer.
 		    CHR* DataBuffer,
@@ -344,12 +400,23 @@ TAGLIST::ParseWords(
 			{
 				Position++;
 			}
-			if ( (Position < SubLength) &&	(!(Db->IsStopWord(DataBuffer + Position, DataLength - Position))) ) 
+			if ( (Position < SubLength) &&	(!(Db->IsStopWord(DataBuffer + Position, DataLength - Position))) )
 			{
-				if (GpListSize >= GpLength) 
+				if (GpListSize >= GpLength)
 				{
+					// BUGFIX #4 (docs/BUG_CATALOG.md#doctypetaglistcxx):
+					// exit()ing here aborted the entire Iindex process,
+					// losing all indexing progress, the moment a single
+					// document had more matched terms than fit in the
+					// current GP buffer. Same bug already fixed in
+					// DOCTYPE::ParseWords() (doctype/doctype.cxx,
+					// BUGFIX #1) -- the caller, INDEX::BuildGpList()
+					// (src/index.cxx), already checks for and recovers
+					// from a (GPTYPE)-1 sentinel return; returning it
+					// here instead of exiting lets that existing
+					// recovery path run instead of killing the process.
 					cout << "GpListSize >= GpLength" << endl;
-					exit(1);
+					return (GPTYPE)-1;
 				}
 				GpBuffer[GpListSize++] = DataOffset + Position;
 			}
