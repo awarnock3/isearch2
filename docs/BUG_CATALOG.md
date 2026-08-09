@@ -9263,3 +9263,103 @@ sites in source instead, plus the runtime/ASan confirmation above.
 (unaffected by this file) still pass clean (745 test cases, 2850
 assertions).
 
+## Isearch-cgi/isrch_html.cxx
+
+**Scope note, read first:** same `main()`-only structural limitation as
+[`Isearch-cgi/isrch_fetch.cxx`](#isearch-cgiisrch_fetchcxx). At 845
+lines this is the largest CGI frontend in the tree — a full HTML search
+results renderer supporting SIMPLE/ADVANCED/BOOLEAN search modes built
+from raw CGI form fields. Every bug below was independently confirmed
+with the real production binary via `REQUEST_METHOD`/`QUERY_STRING`
+environment variables (the standard CGI invocation convention), not
+just inspection, including one revert-and-repro on the fix itself.
+
+Four bugs found and fixed, all the same root defect repeated at
+different sites — a CGI field that wasn't submitted (entirely ordinary:
+a shorter search form, a "next page" request, "search all fields")
+makes `CGIAPP::GetValueByName()` return `nullptr`
+(`Isearch-cgi/cgi-util.cxx`), and something downstream dereferences it
+unconditionally:
+
+1. **`query = cgidata->GetValueByName("ISEARCH_TERM")` (two sites) —
+   confirmed SIGSEGV** (most severe finding in this file, and
+   trivially reachable) — assigning a possibly-`nullptr` `PCHR`
+   straight into a `STRING` calls `STRING::operator=(const CHR*)`,
+   which dereferences it unconditionally via `strlen()`
+   (`src/string.cxx`). Two independent call sites hit this: the
+   `ADVANCED` search branch, and the "next page" (`Start > 1`) refetch
+   further down. Confirmed both with the real binary:
+   `SEARCH_TYPE=ADVANCED` with no `ISEARCH_TERM` field, and separately
+   `START=5` with no `ISEARCH_TERM` field, both segfaulted before this
+   fix. Fixed by guarding both assignments with the same
+   ternary-default idiom every *other* field in this function already
+   uses (`DATABASE`, `START`, `MAXHITS`, etc.) — treating a missing
+   field the same as an empty one. See `BUGFIX #1` in source (both
+   sites).
+2. **`StrCaseCmp(p, ...)`/`.Cat(p)` reused a possibly-`nullptr` `p` for
+   the `BOOLEAN` search type's 2nd-and-later terms — confirmed SIGSEGV**
+   — `p` is set from `GetValueByName("OPERATOR")`, but only *inside* an
+   `if (p)` guard; when `OPERATOR` wasn't submitted, `p` stayed
+   `nullptr` and was reused unconditionally a few lines later inside
+   the term-building loop (`StrCaseCmp(p, "AND")`, etc. — `StrCaseCmp`
+   calls `strcasecmp()` directly, no null tolerance, same as
+   `Iget.cxx`/`zsearch.cxx`'s already-fixed argument-parsing bugs this
+   batch). Confirmed with the real binary: a `BOOLEAN` search with 2
+   terms and no `OPERATOR` field segfaulted before this fix. Fixed by
+   defaulting `p` to `"OR"` right where it's set, matching this same
+   file's own documented "otherwise is an implied OR" convention for
+   the `SIMPLE` branch — `p` is now never null going into the loop. See
+   `BUGFIX #2` in source.
+3. **`pirset->SortByScore()` with no null check — confirmed SIGSEGV via
+   revert-and-repro, the same root cause as `src/Isearch.cxx`'s
+   already-fixed `BUGFIX #1`** — traced one level deeper than that
+   file's own investigation: `INDEX::Search()`'s final `TempStack >>
+   NewIrset;` (`src/index.cxx`) explicitly sets `NewIrset` to `nullptr`
+   via `OPSTACK::Pop()`'s empty-stack branch when the `SQUERY` being
+   searched has zero operands, and that `nullptr` propagates unchanged
+   through `IDB::Search()`/`AndSearch()`'s passthrough
+   `AfterSearching()` call — reaching `Search()`'s `pirset=pdb->Search
+   (query);` here with no check before `pirset->SortByScore();` right
+   after. Initially justified only by this source trace (no live CGI
+   request could reach it without hitting `BUGFIX #1` first) — but
+   after applying `BUGFIX #1`, the exact `Start>1`-with-no-`ISEARCH_TERM`
+   request that used to crash there now reaches *this* code with a
+   genuinely empty query, giving a real live repro after all. Verified
+   with an isolated revert-and-repro: reverting only this fix (keeping
+   `BUGFIX #1/#2/#4`) reproduced the same `SIGSEGV` on that exact
+   request; restoring it produces a clean `<B>Unable to process
+   query.</B>` response instead. Fixed by checking `!pirset` and
+   returning early, matching `Isearch.cxx`'s own fix shape. See
+   `BUGFIX #3` in source.
+4. **`PrintField = field` in `get_term()` — confirmed SIGSEGV** — same
+   shape as `BUGFIX #1`/`#2`: `field` comes from `get_field("FIELD_%i",
+   i)`, stays `nullptr` when that field wasn't submitted (an entirely
+   normal request — no field restriction means search every field),
+   and was assigned straight into a `STRING` unconditionally a few
+   lines later. Confirmed with the real binary: a `BOOLEAN` search with
+   terms but no `FIELD_1`/`FIELD_2` fields segfaulted here specifically
+   (after `BUGFIX #2` fixed the earlier `OPERATOR`-related crash on the
+   same request, this is what the request hit next). Fixed with the
+   same ternary-default idiom as `BUGFIX #1`. See `BUGFIX #4` in
+   source.
+
+Also modernized: all `(PCHR)NULL`/`== NULL` (17 + 4 occurrences) →
+`nullptr`; all 9 `sprintf` calls in `get_field()`/`get_term()` →
+`snprintf`, bounded to the same `MAXSTR+1` the destination buffers were
+already allocated with (functionally safe before too — every one used
+`%.128s`/`%.256s` precision limiters — but modernized regardless,
+matching this project's standing convention). Confirmed zero new
+warnings: diffed a standalone `-Wall -Wextra` compile against the
+pre-edit committed file (100 warnings before, 100 after, all pre-
+existing unused-variable/`-Wdangling-else` noise, same as
+`src/Isearch.cxx`'s/`src/zsearch.cxx`'s own already-documented
+vestigial-variable findings).
+
+No test file was written for the reasons in the scope note above; all
+four fixes are documented in detail here and at their `BUGFIX #n`
+comment sites in source instead, verified via the real production
+binary (including one full revert-and-repro) rather than inspection
+alone. `make isearch-cgi` passes clean; `make tests`/`make tests-asan`
+(unaffected by this file) still pass clean (745 test cases, 2850
+assertions).
+
