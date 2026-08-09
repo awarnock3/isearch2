@@ -43,17 +43,48 @@ Description:	Class SQUERY - Search Query
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "squery.hxx"
 
+/// Constructs an empty query with no synonym thesaurus open.
 SQUERY::SQUERY() {
-  Thesaurus = (THESAURUS *)NULL;
+  Thesaurus = nullptr;
 }
 
 
-SQUERY& 
+/// Copy-constructs Opstack/c_kwaqs_term from OtherSquery; the copy
+/// starts with no thesaurus of its own (see BUGFIX #1) regardless of
+/// whether OtherSquery has one open.
+SQUERY::SQUERY(const SQUERY& OtherSquery) {
+  Opstack = OtherSquery.Opstack;
+  c_kwaqs_term = OtherSquery.c_kwaqs_term;
+  Thesaurus = nullptr;
+}
+
+
+SQUERY&
 SQUERY::operator=(const SQUERY& OtherSquery) {
   Opstack = OtherSquery.Opstack;
-  Thesaurus = OtherSquery.Thesaurus;
+  // BUGFIX #1, continued: c_kwaqs_term was never copied at all here
+  // (only Opstack and the buggy Thesaurus alias below were) -- found
+  // while fixing the copy constructor above; a real, separate
+  // incomplete-copy bug, confirmed by inspection (SetKWAQSTerm()/
+  // GetKWAQSTerm() are real, meaningful accessors for this member, not
+  // dead code).
+  c_kwaqs_term = OtherSquery.c_kwaqs_term;
+  // BUGFIX #1, continued: this used to be `Thesaurus =
+  // OtherSquery.Thesaurus;`, aliasing the source's pointer -- both
+  // objects then shared one THESAURUS* that only one CloseThesaurus()
+  // call could safely free (confirmed heap-use-after-free under ASan),
+  // and `this`'s own previous Thesaurus (if any) was silently leaked by
+  // the overwrite. Matches the copy constructor's "starts with no
+  // thesaurus" semantics: free this's own previous one first, then
+  // leave it null rather than sharing the source's.
+  if (Thesaurus)
+    delete Thesaurus;
+  Thesaurus = nullptr;
   return *this;
 }
 
@@ -312,15 +343,33 @@ SQUERY::GetKWAQSTerm(STRING *kwaqs_string) const
 }
 
 
-void 
+/// Opens (or replaces) this query's synonym thesaurus. Any previously
+/// open thesaurus is freed first (see BUGFIX #4 -- calling this twice
+/// without an intervening CloseThesaurus() used to leak the first one).
+void
 SQUERY::OpenThesaurus(const STRING& PathName, const STRING& FileName) {
+  if (Thesaurus)
+    delete Thesaurus;
   Thesaurus = new THESAURUS(PathName, FileName);
 }
 
 
+/// Closes and frees this query's thesaurus, if one is open; a no-op
+/// otherwise.
 void
 SQUERY::CloseThesaurus() {
-  delete Thesaurus;
+  // BUGFIX #3 (docs/BUG_CATALOG.md#srcsqueryhxx): Thesaurus was freed
+  // but never reset to nullptr afterward, leaving it a dangling
+  // pointer. This was already latent (a second CloseThesaurus() call,
+  // or ExpandQuery()'s `if (!Thesaurus) return;` check, would then
+  // operate on freed memory) but became load-bearing the moment
+  // ~SQUERY() was fixed to free Thesaurus too (BUGFIX #2 below): every
+  // normal OpenThesaurus()+CloseThesaurus()-paired SQUERY would
+  // otherwise double-free at destruction.
+  if (Thesaurus) {
+    delete Thesaurus;
+    Thesaurus = nullptr;
+  }
 }
 
 
@@ -374,5 +423,11 @@ SQUERY::ExpandQuery() {
 }
 
 
+/// Frees Thesaurus if it's still open (see BUGFIX #2 -- a SQUERY that
+/// called OpenThesaurus() and was destroyed without a matching
+/// CloseThesaurus() used to leak it, and transitively its open file
+/// handles). Safe to call after CloseThesaurus() too: Thesaurus is
+/// nullptr in that case (BUGFIX #3), and `delete nullptr` is a no-op.
 SQUERY::~SQUERY() {
+  delete Thesaurus;
 }

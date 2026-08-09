@@ -7292,3 +7292,104 @@ bugs are fixed (`prefix"unmatched rest` → `["prefixunmatched",
 assuming symmetry). `make tests`/`make tests-asan` pass clean (693 test
 cases, 2334 assertions).
 
+## src/squery.hxx
+
+Reprocessed via `/reprocess-blocked` (originally blocked at GENERAL
+step 4 on 2026-08-07; see the resolved `docs/AUTOPILOT_LOG.md` entry for
+the original finding). `SQUERY` owns a heap-allocated `THESAURUS
+*Thesaurus` (via `OpenThesaurus()`), unlike every other file in this
+batch: it already had a user-declared `operator=` (just a buggy one),
+but no copy constructor at all.
+
+1. **No copy constructor, and `operator=` shallow-copied `Thesaurus` —
+   confirmed heap-use-after-free** (most severe finding in this file):
+   the compiler-generated copy constructor and the existing
+   hand-written `operator=` both aliased `Thesaurus` rather than
+   copying anything meaningfully. Confirmed via a standalone repro (open
+   a thesaurus, copy-construct a second `SQUERY`, call
+   `CloseThesaurus()` on each) triggering a real
+   **heap-use-after-free** via a before/after test-revert under ASan
+   (`STRING::~STRING() src/string.cxx:1317`, reached through
+   `THESAURUS::~THESAURUS()` from the second, now-dangling
+   `CloseThesaurus()` call). No confirmed copy-construction call site
+   exists in the live tree. **Decision (human, via `/reprocess-blocked`):
+   copies start with no thesaurus of their own** — added a real
+   `SQUERY(const SQUERY&)` and fixed `operator=`, both copying
+   `Opstack`/`c_kwaqs_term` but leaving the target's `Thesaurus` `null`
+   rather than sharing or duplicating the source's (there's no defined
+   meaning for sharing open synonym-file state). `operator=` also now
+   frees the target's own previous `Thesaurus` first, instead of leaking
+   it via the overwrite. See `BUGFIX #1` in source (both the new copy
+   constructor and the fixed `operator=`).
+
+   **Found while fixing `BUGFIX #1`, a separate incomplete-copy bug in
+   the same function**: the existing `operator=` never copied
+   `c_kwaqs_term` at all (only `Opstack` and the buggy `Thesaurus` alias
+   were touched) — confirmed by inspection that `SetKWAQSTerm()`/
+   `GetKWAQSTerm()` are real, meaningful accessors for this member, not
+   dead code. Fixed alongside `BUGFIX #1` rather than filed separately,
+   since it's the same function and the same kind of "operator= doesn't
+   actually copy everything" defect.
+2. **`~SQUERY()` never freed `Thesaurus`** — the destructor body was
+   empty; only `CloseThesaurus()` (a separate, caller-must-remember-to-
+   call method) freed it. Any `SQUERY` that called `OpenThesaurus()` and
+   was destroyed without an explicit matching `CloseThesaurus()` leaked
+   the `THESAURUS` and, transitively, its open file handles. No
+   confirmed leak site was found in the live tree (every `OpenThesaurus()`
+   caller pairs it with `CloseThesaurus()`), so this was latent, but a
+   straightforward RAII fix once `BUGFIX #1`'s ownership question was
+   settled. See `BUGFIX #2` in source.
+3. **`CloseThesaurus()` didn't null `Thesaurus` after freeing it — became
+   load-bearing the moment `BUGFIX #2` was applied**: `delete Thesaurus;`
+   left `Thesaurus` a dangling pointer, so a second `CloseThesaurus()`
+   call (or `ExpandQuery()`'s `if (!Thesaurus) return;` check running
+   afterward) would operate on freed memory. This was already latent
+   before this turn, but fixing the destructor (`BUGFIX #2`) without also
+   fixing this would have introduced a **new, universally-reachable
+   double-free** — every normal `SQUERY` that calls `OpenThesaurus()` +
+   `CloseThesaurus()` (the paired usage every live caller already
+   follows) would then double-free at destruction, since `CloseThesaurus()`
+   already freed `Thesaurus` and the destructor would try to free it
+   again. Found while implementing `BUGFIX #2`, not by the original
+   `docs/AUTOPILOT_LOG.md` finding. Fixed by nulling `Thesaurus` after
+   freeing it. See `BUGFIX #3` in source.
+4. **`OpenThesaurus()` leaked a previously-open thesaurus if called
+   twice** — `Thesaurus = new THESAURUS(...)` overwrote the pointer
+   unconditionally, with no check for an already-open one. No confirmed
+   double-`OpenThesaurus()` call site was found in the live tree, so
+   latent, but a direct, easily-fixed analogue of the destructor leak
+   above found while auditing every `Thesaurus`-touching method in this
+   file. Fixed by freeing any existing `Thesaurus` before overwriting.
+   See `BUGFIX #4` in source.
+
+Also noted, cosmetic and harmless (removed while here): `squery.hxx`
+included itself (a no-op given the include guard, confirmed by the fact
+the file already compiled before this change) — almost certainly a
+stray copy-paste, not a functional bug.
+
+`tests/src/test_squery.cxx` covers: the copy constructor copies
+`Opstack`/`c_kwaqs_term` but starts with no thesaurus, and both the
+original's and the copy's `CloseThesaurus()` calls are independently
+safe (`BUGFIX #1`, confirmed as a real bug via a before/after
+test-revert under ASan — see above); `operator=` likewise copies both
+members and doesn't share `Thesaurus` (`BUGFIX #1`, including the
+previously-missed `c_kwaqs_term` copy); `OpenThesaurus()` called twice
+doesn't leak (`BUGFIX #4`, verified under ASan's LeakSanitizer, part of
+the standard `make tests-asan` run); `CloseThesaurus()` is safe to call
+twice (`BUGFIX #3`); a `SQUERY` destroyed with an open thesaurus and no
+explicit `CloseThesaurus()` doesn't leak (`BUGFIX #2`, also verified
+under LeakSanitizer). `THESAURUS`'s search-time constructor tolerates a
+nonexistent path/file cleanly (confirmed by reading `src/thesaurus.cxx`
+— `OpenParentsFile()`/`OpenChildrenFile()` just `fopen()` and return
+early on failure), so these tests point `OpenThesaurus()` at a scratch
+path that doesn't exist rather than building real `.syn`/`.spx`/`.scx`
+files on disk. `make tests`/`make tests-asan` pass clean (698 test
+cases, 2343 assertions).
+
+---
+
+This closes out the `/reprocess-blocked` run: all six files that were
+`blocked` at the start of this run (`nlist.hxx`, `intlist.hxx`,
+`mergeunit.hxx`, `thesaurus.hxx`, `tokengen.hxx`, `squery.hxx`) are now
+`done`.
+
