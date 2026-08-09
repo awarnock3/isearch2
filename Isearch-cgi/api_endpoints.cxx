@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-10
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "api_endpoints.hxx"
 
 #include <dirent.h>
@@ -9,7 +12,7 @@
 
 static bool HasSuffix(const CHR *value, const CHR *suffix)
 {
-  if (value == NULL || suffix == NULL) {
+  if (value == nullptr || suffix == nullptr) {
     return false;
   }
   const size_t value_len = strlen(value);
@@ -64,7 +67,7 @@ void HandleDatabases(const ApiConfig& cfg)
 
   CHR *db_path = cfg.db_path.NewCString();
   DIR *dir = opendir(db_path);
-  if (dir == NULL) {
+  if (dir == nullptr) {
     delete [] db_path;
     WriteHttpHeader(500, true);
     WriteProblem(500,
@@ -75,7 +78,7 @@ void HandleDatabases(const ApiConfig& cfg)
   }
 
   std::vector<STRING> names;
-  for (dirent *entry = readdir(dir); entry != NULL; entry = readdir(dir)) {
+  for (dirent *entry = readdir(dir); entry != nullptr; entry = readdir(dir)) {
     if (!HasSuffix(entry->d_name, ".mdt")) {
       continue;
     }

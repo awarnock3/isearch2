@@ -9737,3 +9737,45 @@ cases, 2949 assertions — up from 768/2903, the 46-assertion increase
 being this new file's own coverage). `make isearch-cgi` also confirmed
 to still build clean (`api_request.cxx` links into `isrch_api`).
 
+## Isearch-cgi/api_endpoints.hxx, Isearch-cgi/api_endpoints.cxx
+
+**Processed together**, same pairing convention as the other JSON-API
+files above. Small (103-line `.cxx`): `HandleHealth()`, `HandleCapabilities()`,
+and `HandleDatabases()`, the three non-search endpoints of the JSON API
+— a liveness check, a static capabilities/defaults dump, and a listing
+of configured databases (scanning `ApiConfig::db_path` for `*.mdt`
+files and stripping the suffix to get each database's root name).
+Confirmed self-contained.
+
+**Zero bugs found** after a full read plus a real end-to-end repro
+(built the real binary against a scratch directory containing
+`mydb.mdt`, `otherdb.mdt`, `notadb.txt`, and a bare `.mdt` dotfile with
+no stem — confirmed only `["otherdb","mydb"]` came back, correctly
+excluding the non-`.mdt` file and the empty-stem dotfile).
+`HasSuffix()`'s bounds check (`suffix_len > value_len` before the
+`strcmp` offset subtraction) and the `EraseAfter(len-4)` stem-stripping
+(verified against `STRING::EraseAfter()`'s actual semantics in
+`src/string.cxx` rather than assumed) are both correct; `db_path`
+(`NewCString()`) is freed on every exit path, including both early
+`return`s.
+
+Modernized the 4 code-level `NULL` uses to `nullptr`; no `sprintf`
+calls present.
+
+`tests/Isearch-cgi/test_api_endpoints.cxx` (new, wired into
+`TEST_ENGINE_CGI_SRCS`) covers: `HandleHealth()`'s status/version
+fields; `HandleCapabilities()`'s search types, operators, and limits;
+`HandleDatabases()`'s `501`/`500` problem responses for an unconfigured
+or unopenable `ISEARCH_DB_PATH`; the real-directory-scan case
+(`.mdt`-suffix filtering, dotfile exclusion, correct stem extraction);
+and an empty-directory case. Needed two small RAII helpers not yet used
+elsewhere in this exact combination: `CoutCapture` (reused from
+`tests/Isearch-cgi/test_api_response.cxx`) and a `TempDbDir` (a real
+`mkdtemp()`-created scratch directory, cleaned up including its
+contents on scope exit — same spirit as `tests/src/test_fpt.cxx`'s
+`TempFile`, extended to a whole directory). `make tests`/`make
+tests-asan` pass clean (790 test cases, 2969 assertions — up from
+784/2949, the 20-assertion increase being this new file's own
+coverage). `make isearch-cgi` also confirmed to still build clean
+(`api_endpoints.cxx` links into `isrch_api`).
+

@@ -270,7 +270,7 @@ TEST_ENGINE_OBJS_ASAN := $(patsubst src/%.cxx,tests/obj-asan/%.o,$(TEST_ENGINE_S
 # Same idea as TEST_ENGINE_SRCS above, for engine sources living outside
 # src/ (e.g. Isearch-cgi/). Kept as a separate list/pattern rule because
 # TEST_ENGINE_OBJS's patsubst assumes a src/ prefix.
-TEST_ENGINE_CGI_SRCS := Isearch-cgi/config.cxx Isearch-cgi/cgi-util.cxx Isearch-cgi/api_config.cxx Isearch-cgi/api_response.cxx Isearch-cgi/api_request.cxx
+TEST_ENGINE_CGI_SRCS := Isearch-cgi/config.cxx Isearch-cgi/cgi-util.cxx Isearch-cgi/api_config.cxx Isearch-cgi/api_response.cxx Isearch-cgi/api_request.cxx Isearch-cgi/api_endpoints.cxx
 TEST_ENGINE_CGI_OBJS      := $(patsubst Isearch-cgi/%.cxx,tests/obj/cgi-%.o,$(TEST_ENGINE_CGI_SRCS))
 TEST_ENGINE_CGI_OBJS_ASAN := $(patsubst Isearch-cgi/%.cxx,tests/obj-asan/cgi-%.o,$(TEST_ENGINE_CGI_SRCS))
 
