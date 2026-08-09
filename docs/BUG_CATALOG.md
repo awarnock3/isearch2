@@ -9536,3 +9536,72 @@ sites in source instead, verified via the real production binary
 tests`/`make tests-asan` (unaffected by this file) still pass clean
 (745 test cases, 2850 assertions).
 
+## Isearch-cgi/api_config.hxx, Isearch-cgi/api_config.cxx
+
+**Processed together**: `api_config.hxx` declares `struct ApiConfig`
+(server-side configuration for the JSON API frontend, `isrch_api.cxx` —
+still `pending`) and `LoadApiConfig()`, populated entirely from
+environment variables (`ISEARCH_DB_PATH`, `ISEARCH_API_MAX_HITS`,
+`ISEARCH_API_ALLOWLIST`) by the `.cxx`'s two `static` helper functions.
+Confirmed self-contained (compiles clean as the sole `#include`).
+Unlike every CGI file processed earlier this batch, this one is *not*
+`main()`-only — `ApiConfig`/`LoadApiConfig()` are ordinary, directly
+testable code — so this is also the first CGI-directory file this
+batch to get a real Catch2 test file (`tests/Isearch-cgi/
+test_api_config.cxx`, wired into `TEST_ENGINE_CGI_SRCS` in the
+top-level `Makefile`). Much newer, more carefully written code than
+the four `main()`-only files processed earlier in this batch (all of
+which trace to 1996-1998; this one reads like it was written
+specifically for the JSON API addition) — every `getenv()` result is
+already null-checked before use, `strtol()`'s parse success is already
+validated. Still found two real bugs, both confirmed via the new test
+suite, including one full revert-and-repro:
+
+1. **`strtol()`'s `long` result cast straight to `INT` with no range
+   check — confirmed silent truncation, not a crash** —
+   `ReadPositiveIntEnv()` validates that `strtol()` consumed the whole
+   string and produced a positive value, but never checked it against
+   `INT_MAX` before `static_cast<INT>(parsed)`. Confirmed with a
+   standalone repro before writing the permanent test:
+   `ISEARCH_API_MAX_HITS=99999999999` (a plausible admin typo — one
+   digit short of a `long` overflow, not some exotic edge case)
+   produced `max_hits_ceiling=1215752191`, an arbitrary truncated value
+   with no relationship to the intended cap, not the sane maximum a
+   typo like this should fall back to. Real severity is low — this
+   environment variable is server-side configuration, not remote-
+   request input — but the fix is cheap and safe: clamp to `INT_MAX`
+   instead of truncating. See `BUGFIX #1` in source.
+2. **`ParseAllowList()`'s `entry.Trim()` only strips *trailing*
+   whitespace — confirmed via the new test suite, including a full
+   revert-and-repro** — `STRING::Trim()` (`src/string.cxx`) only walks
+   back from the end of the string; leading whitespace needs the
+   separate `TrimLeading()` call, the same two-call convention already
+   established elsewhere in this tree (e.g. `src/thesaurus.cxx`).
+   `ParseAllowList()` only called `Trim()`, so every entry after the
+   first in an ordinarily-formatted `"alpha, beta, gamma"` allowlist
+   (spaces after each comma — the overwhelmingly natural way to write
+   one) kept its leading space, silently corrupting the allowlist for
+   every entry but the first: whatever downstream code checks a
+   request's database name against this list would never match `"
+   beta"`/`" gamma"` against a clean `"beta"`/`"gamma"`. Confirmed with
+   the new Catch2 test (`ApiConfig splits, trims, and skips empty
+   entries in ISEARCH_API_ALLOWLIST`) — failed before the fix (entries
+   came back as `" beta"`/`" gamma"`), and confirmed the test is a real
+   regression guard via revert-and-repro: temporarily removed the added
+   `TrimLeading()` call and reran `make tests`, watched the exact same
+   test fail again, then restored the fix. See `BUGFIX #2` in source.
+
+Also modernized: the 4 code-level `NULL` uses converted to `nullptr`.
+
+`tests/Isearch-cgi/test_api_config.cxx` (new) covers: defaults with no
+environment variables set; `ISEARCH_DB_PATH` picked up correctly; a
+valid `ISEARCH_API_MAX_HITS`; fallback to the default for a non-numeric
+or non-positive value; the `INT_MAX`-clamp confirming `BUGFIX #1`;
+comma-splitting/trimming/empty-entry-skipping for
+`ISEARCH_API_ALLOWLIST` confirming `BUGFIX #2`; an empty allowlist when
+unset; and a sanity check on the three exported constants. `make
+tests`/`make tests-asan` pass clean (754 test cases, 2866 assertions —
+up from 745/2850, the 16-assertion increase being this new file's own
+coverage). `make isearch-cgi` also confirmed to still build clean
+(`api_config.cxx` links into `isrch_api`).
+
