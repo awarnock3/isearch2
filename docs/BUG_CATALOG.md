@@ -2604,6 +2604,45 @@ role (a payload-free circular-list base class) per GENERAL step 7. No
 already complete (verified by compiling it standalone), unlike
 `reclist.hxx`'s analogous defect above.
 
+## src/vlist.cxx
+
+`BUGFIX #1` above (copy constructor/`operator=`) was already applied to
+this file during `vlist.hxx`'s turn, but the processed marker was never
+added here and `docs/PROCESSING_STATUS.md`'s row was never synced —
+this turn is both. Full re-read of every member function confirmed
+`BUGFIX #1` present and correct, and resolved the one item that entry
+explicitly deferred to this turn:
+
+1. **The `~VLIST()` cascade-delete hazard (documented, not hardened)** —
+   `vlist.hxx`'s "Found but out of scope" note flagged that `~VLIST()`
+   unconditionally cascades `delete Next` through the rest of the
+   circle, which is only safe when every attached node is
+   heap-allocated and exactly one entry point into a circle is ever
+   deliberately destroyed; it explicitly left the choice between
+   hardening the destructor and just documenting the contract to this
+   file's own turn. Chose documentation over hardening: there's no
+   reliable way to distinguish a heap- from a stack-allocated `VLIST*`
+   at runtime without extra per-node bookkeeping that no current caller
+   needs, and both live subclasses (`FCT`, `STRLIST`) already honor the
+   contract (their anchors are stack-/member-allocated but torn down
+   through exactly one entry point; every node attached via
+   `AddNode()`/`AddEntry()` is heap-allocated). Added a comment directly
+   above `~VLIST()` spelling out the contract explicitly, cross-
+   referencing this entry and the original one in `vlist.hxx`.
+2. Modernization: pointer-typed `0` literals (`return 0;` in
+   `GetNodePtr()`, `Prev`/`Next` assignments and comparisons in
+   `Clear()`/`EraseAfter()`/`~VLIST()`) converted to `nullptr`, matching
+   the same treatment `doctype/gopher.cxx`'s `(FILE *)0` got earlier in
+   this project. No `NULL`/`sprintf` usages. `INT x = 0;` in
+   `GetTotalEntries()` is a genuine integer counter, left alone.
+
+No test changes: `tests/src/test_vlist.cxx` (written during `vlist.hxx`'s
+turn) already covers `BUGFIX #1` — including the exact stack-allocated-
+multi-node-circle crash that motivated item 1 above, called out in that
+file's own header comment as the reason every test builds heap-allocated
+nodes under a single-entry-point anchor. `make tests`/`make tests-asan`
+pass clean (745 test cases, 2850 assertions).
+
 ## src/attrlist.hxx
 
 Reprocessed via `/reprocess-blocked` after being blocked at GENERAL step

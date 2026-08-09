@@ -181,7 +181,7 @@
 | 177 | src/thesaurus.cxx | done | 2026-08-09 | [src/thesaurus.cxx](BUG_CATALOG.md#srcthesauruscxx) |
 | 178 | src/tokengen.cxx | done | 2026-08-09 | [src/tokengen.cxx](BUG_CATALOG.md#srctokengencxx) |
 | 179 | src/vidb.cxx | done | 2026-08-08 | [src/vidb.hxx](BUG_CATALOG.md#srcvidbhxx) |
-| 180 | src/vlist.cxx | pending | | |
+| 180 | src/vlist.cxx | done | 2026-08-09 | [src/vlist.cxx](BUG_CATALOG.md#srcvlistcxx) |
 | 181 | src/zpresent.cxx | pending | | |
 | 182 | src/zsearch.cxx | pending | | |
 | 183 | doctype/Unified/gen_unified.c | pending | | |

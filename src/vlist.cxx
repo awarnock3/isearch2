@@ -40,6 +40,9 @@ Description:	Class VLIST - Doubly Linked Circular List Base Class
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "vlist.hxx"
 
 VLIST::VLIST() {
@@ -113,7 +116,7 @@ VLIST::GetNodePtr(const INT Index) const {
     p = p->Next;
     x++;
   }
-  return 0;	// Index was never matched
+  return nullptr;	// Index was never matched
 }
 
 
@@ -126,8 +129,8 @@ VLIST::GetNextNodePtr() const {
 void 
 VLIST::Clear() {
   if (this->Next != this) {
-    Prev->Next = 0;	// disattach circle to isolate nodes
-    Prev = 0;
+    Prev->Next = nullptr;	// disattach circle to isolate nodes
+    Prev = nullptr;
     delete this->Next;	// delete all subsequent nodes
     Next = this;	// reattach circle of one
     Prev = this;
@@ -141,8 +144,8 @@ VLIST::EraseAfter(const INT Index) {
   VLIST* p = VLIST::GetNodePtr(Index);
   if (p) {
     if (p->Next != this) {
-      Prev->Next = 0;	// disattach circle to isolate nodes
-      Prev = 0;
+      Prev->Next = nullptr;	// disattach circle to isolate nodes
+      Prev = nullptr;
       delete p->Next;	// delete all subsequent nodes
       p->Next = this;	// reattach circle
       this->Prev = p;
@@ -166,11 +169,28 @@ VLIST::Reverse() {
 }
 
 
+// Contract (documented, not enforced -- see docs/BUG_CATALOG.md
+// #srcvlisthxx, "Found but out of scope", and #srcvlistcxx): every node
+// reachable from `this` via Next -- other than `this` itself -- must be
+// heap-allocated, and `this` must be the *only* entry point into the
+// circle ever deliberately destroyed (via delete, or by going out of
+// scope). Violating this (e.g. multiple stack-allocated nodes of the
+// same circle each destroyed independently) cascades an invalid
+// `delete` onto a stack address -- confirmed to crash ("double free or
+// corruption") while writing this file's tests. No live call site in
+// this tree violates the contract: FCT/STRLIST anchors are stack- or
+// member-allocated but always torn down through exactly one entry point
+// (Clear(), EraseAfter(), or the anchor's own destructor); every node
+// they attach via AddNode()/AddEntry() is heap-allocated via `new`.
+// Left as a documented contract rather than hardened against misuse:
+// there's no reliable way to distinguish a heap- from a stack-allocated
+// VLIST* at runtime without extra per-node bookkeeping that no current
+// caller needs.
 VLIST::~VLIST() {
   // Disattach from previous node
-  if (Prev != 0)
-    Prev->Next = 0;
-  //	Prev = 0;	// not necessary
+  if (Prev != nullptr)
+    Prev->Next = nullptr;
+  //	Prev = nullptr;	// not necessary
   // Delete next node
   if (Next) {
     delete Next;
