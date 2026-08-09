@@ -353,8 +353,10 @@ Documented here conceptually; the actual invokable slash commands live
 in `.claude/commands/` (see the files provided alongside this one) so
 you can type `/analyze`, `/rescan-status`, `/process-next`,
 `/process <filename>`, `/process-5`, `/process-10`, `/sync-upstream`,
-`/smoke-test`, `/blocked-report`, and `/reprocess-blocked` directly in the
-Claude Code tab.
+`/smoke-test`, `/blocked-report`, `/reprocess-blocked`,
+`/document-next`, `/document-10`, `/document <filename>`,
+`/status-report`, `/commands-reference`, `/bug-catalog-report`, and
+`/code-documentation-report` directly in the Claude Code tab.
 
 - **ANALYZE** — ensures branch + baseline (see GIT), scans `src/`,
   `doctype/`, `Isearch-cgi/`; builds a `#include` dependency graph;
@@ -418,6 +420,19 @@ Claude Code tab.
   `docs/DOCUMENTATION_STATUS.md`, commits, and pushes. Stops after one
   file, same as PROCESS-NEXT.
 - **DOCUMENT-10** — batch version of DOCUMENT-NEXT, up to 10 files.
+- **DOCUMENT `<filename>`** — the reprocess-path sibling of
+  DOCUMENT-NEXT, for documenting one specific file (or its `.hxx`/`.cxx`
+  pair) on demand instead of whatever the queue would pick next. Accepts
+  a bare basename (auto-discovers the matching `.cxx`/`.hxx`/`.h` pair
+  in the same directory), a single filename (its natural sibling, if
+  any, is pulled in automatically), or two filenames given explicitly.
+  Refuses `generated` files, and asks for confirmation before
+  documenting a file that isn't yet `done` in
+  `docs/PROCESSING_STATUS.md` (since that work would likely be redone
+  once bug-fixing changes the file). Same per-function coverage
+  standard as DOCUMENT-NEXT. Updates or adds the relevant row(s) in
+  `docs/DOCUMENTATION_STATUS.md`, commits, and pushes, then stops —
+  it never continues to another file in the same invocation.
 - **SYNC-UPSTREAM** — fetches and merges `upstream/main` into
   `cleanup/isearch2`, tags the sync point, and reruns RESCAN-STATUS (not
   just ANALYZE) so newly merged files get queued immediately rather than

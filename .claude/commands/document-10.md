@@ -31,7 +31,11 @@ file. Same read-only-w.r.t.-bug-fixing-status contract — never touches
       full `@brief`/`@param`/`@return` block above *every* function
       definition; a one-line `@brief` above each matching `.hxx`
       declaration. Complete coverage, not just the interesting
-      functions.
+      functions. If this row was reopened by the staleness check in
+      step 2 rather than being new, this also means re-verifying every
+      *existing* block against the function's current body and
+      signature and rewriting anything now stale — not just adding
+      blocks for functions that don't have one yet.
    d. **Compile clean.** `make tests`.
    e. Update the row in `docs/DOCUMENTATION_STATUS.md` to `done`, set
       `Last Documented` to today's date.

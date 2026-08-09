@@ -58,6 +58,16 @@ never changes `docs/PROCESSING_STATUS.md` or `docs/BUG_CATALOG.md`.
      each matching declaration in the `.hxx` (full detail lives at the
      definition; the header just needs enough for a caller skimming the
      API). Skip this for files with no separate header.
+   - **Re-documenting a file that already has doc comments** (this row
+     was flipped back to `pending` by the staleness check in step 2,
+     meaning the file changed since it was last documented): don't just
+     fill in gaps for new functions. Re-read every existing block
+     against that function's *current* body and signature, and rewrite
+     any block whose `@brief`, prose, `@param`s, or `@return` no longer
+     match — a function whose signature didn't change can still have
+     had its behavior change underneath an now-stale comment. A comment
+     is only left as-is if it still accurately describes what the
+     function does today.
    - Don't restate what's already obvious from a well-named signature;
      don't invent behavior you haven't actually read in the function
      body. If a function's real behavior is subtle or surprising,
