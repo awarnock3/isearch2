@@ -184,9 +184,9 @@
 | 180 | src/vlist.cxx | done | 2026-08-09 | [src/vlist.cxx](BUG_CATALOG.md#srcvlistcxx) |
 | 181 | src/zpresent.cxx | done | 2026-08-09 | [src/zpresent.cxx](BUG_CATALOG.md#srczpresentcxx) |
 | 182 | src/zsearch.cxx | done | 2026-08-09 | [src/zsearch.cxx](BUG_CATALOG.md#srczsearchcxx) |
-| 183 | doctype/Unified/gen_unified.c | pending | | |
-| 184 | doctype/Unified/unified.c | pending | | |
-| 185 | doctype/Unified/unified.h | pending | | |
+| 183 | doctype/Unified/gen_unified.c | done | 2026-08-09 | [doctype/Unified/gen_unified.c](BUG_CATALOG.md#doctypeunifiedgen_unifiedc) |
+| 184 | doctype/Unified/unified.c | generated | | [doctype/Unified/unified.c](BUG_CATALOG.md#doctypeunifiedunifiedc-doctypeunifiedunifiedh-doctypeunifiedc-doctypeunifiedh) |
+| 185 | doctype/Unified/unified.h | generated | | [doctype/Unified/unified.h](BUG_CATALOG.md#doctypeunifiedunifiedc-doctypeunifiedunifiedh-doctypeunifiedc-doctypeunifiedh) |
 | 186 | doctype/anzlic.cxx | done | 2026-08-08 | [doctype/anzlic.cxx](BUG_CATALOG.md#doctypeanzlichxx) |
 | 187 | doctype/anzmeta.cxx | done | 2026-08-08 | [doctype/anzmeta.cxx](BUG_CATALOG.md#doctypeanzmeta-1) |
 | 188 | doctype/bibtex.cxx | done | 2026-08-08 | [doctype/bibtex.cxx](BUG_CATALOG.md#doctypebibtexcxx) |
@@ -229,8 +229,8 @@
 | 225 | doctype/simple.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypesimplecxx](BUG_CATALOG.md#doctypesimplecxx) |
 | 226 | doctype/soif.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypesoifcxx](BUG_CATALOG.md#doctypesoifcxx) |
 | 227 | doctype/taglist.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypetaglistcxx](BUG_CATALOG.md#doctypetaglistcxx) |
-| 228 | doctype/unified.c | pending | | |
-| 229 | doctype/unified.h | pending | | |
+| 228 | doctype/unified.c | generated | | [doctype/unified.c](BUG_CATALOG.md#doctypeunifiedunifiedc-doctypeunifiedunifiedh-doctypeunifiedc-doctypeunifiedh) |
+| 229 | doctype/unified.h | generated | | [doctype/unified.h](BUG_CATALOG.md#doctypeunifiedunifiedc-doctypeunifiedunifiedh-doctypeunifiedc-doctypeunifiedh) |
 | 230 | doctype/usmarc.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypeusmarccxx](BUG_CATALOG.md#doctypeusmarccxx) |
 | 231 | doctype/uspat.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypeuspatcxx](BUG_CATALOG.md#doctypeuspatcxx) |
 | 232 | Isearch-cgi/cgi-util.cxx | done | 2026-08-08 | [Isearch-cgi/cgi-util.hxx](BUG_CATALOG.md#isearch-cgicgi-utilhxx) |

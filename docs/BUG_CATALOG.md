@@ -8983,3 +8983,114 @@ sites in source instead, plus the runtime/ASan confirmation above.
 tests-asan` (unaffected by this file, which isn't part of
 `TEST_ENGINE_SRCS`) still pass clean (745 test cases, 2850 assertions).
 
+## doctype/Unified/gen_unified.c
+
+**Scope note, read first:** a standalone C `main()`-only build-time
+generator, not part of the C++ engine at all and not wired into the top
+-level `Makefile` (`doctype/Unified/` has its own, separate `Makefile`,
+never invoked from the tree root) — same untestable-via-Catch2
+limitation as the `main()`-only CLI files, for a different reason (this
+one isn't even C++). Reads `UnifiedList.txt` (`presentation-string
+[bib-1-number]` per line) and writes `unified.h`/`unified.c`/
+`unified.inc`: a table mapping Bib-1/GILS field names to numeric IDs,
+consumed by several `doctype/*.cxx` parsers. **This turn also
+discovered and corrected a status-tracking gap**: `doctype/Unified/
+unified.c`/`unified.h` (queue rows 184/185) and their duplicate copies
+`doctype/unified.c`/`doctype/unified.h` (rows 228/229, byte-identical,
+apparently kept in sync by hand for the main build's `#include` path)
+are this generator's output — the exact `generated`-row relationship
+CLAUDE.md describes for `src/dtreg.cxx`/`.hxx`, which `ANALYZE` didn't
+recognize for this generator/directory shape. All four rows reclassified
+from `pending` to `generated` as part of this turn (see below) rather
+than run through GENERAL individually.
+
+Three bugs found and fixed, verified via `-Wall -Wextra` (compile-clean
+confirmation) and a real regeneration diff (rebuilt `gen`, ran it
+against the real `UnifiedList.txt`, confirmed byte-identical output to
+the currently-committed `unified.c`/`.h`/`.inc` — proving these fixes
+are purely defensive and don't change behavior):
+
+1. **Missing `<stdlib.h>`/`<ctype.h>` — confirmed via compiler warning,
+   not just inspection** (most severe finding in this file) — `exit()`,
+   `atoi()`, `isspace()`, `isdigit()`, `tolower()` were all called with
+   neither header included. `gcc -Wall -Wextra` on the original file
+   reported five separate `-Wimplicit-function-declaration` warnings
+   (`exit`, `isspace`, `isdigit`, `atoi`, `tolower`) plus
+   `-Wimplicit-int` on `main` itself. Implicit declarations assume an
+   `int`-returning, unprototyped signature — undefined behavior per the
+   C standard even though it happens to be harmless on this specific
+   platform (the real signatures' calling conventions match closely
+   enough by luck). The same "header not self-contained" defect class
+   already fixed throughout this project (e.g. `src/fc.hxx`'s
+   `BUGFIX #1`). Fixed by adding both includes; `-Wall -Wextra` is clean
+   after. See `BUGFIX #1` in source.
+2. **`freopen()`'s return value never checked** — `if (argc != 1)
+   freopen(argv[1], "r", stdin);` with no check. If `argv[1]` doesn't
+   exist or can't be opened, `freopen()` fails and leaves `stdin`
+   unusable; the `fgets()` loop below would then simply never execute,
+   silently producing near-empty (header-only) `unified.h`/`.c`/`.inc`
+   instead of reporting the real problem — a silent-corruption failure
+   mode in a code-generation tool, arguably worse than a loud crash.
+   Confirmed with the real binary: `./gen /nonexistent/path` now prints
+   `ERROR: could not open input file ...` and exits nonzero, instead of
+   silently emitting broken output. Fixed by checking the return value.
+   See `BUGFIX #2` in source.
+3. **`fp3` (the `.inc` output file) not checked for `NULL`, unlike
+   `fp1`/`fp2`** — `if (fp1 == NULL || fp2 == NULL) { ...; exit(-1); }`
+   omitted `fp3`, so if opening `unified.inc` specifically failed (e.g.
+   a pre-existing non-writable file or directory with that name, while
+   `unified.h`/`.c` still open fine), execution would reach the
+   unconditional `fprintf(fp3, ...)` a few lines down as a null-pointer
+   dereference. A narrow window (all three opens target the same
+   directory, so a directory-wide permission problem is already caught
+   by the `fp1`/`fp2` check) but a real, asymmetric gap relative to its
+   two siblings. Fixed by adding `fp3 == NULL` to the check. See
+   `BUGFIX #3` in source.
+
+Also modernized: `sprintf` → `snprintf` in `myopen()`; `main(int argc,
+char **argv)` → `int main(int argc, char **argv)` (the missing return
+type was exactly what triggered `-Wimplicit-int` above).
+
+**Verified, not changed** — a shape of bug that looked plausible on
+first read but was ruled out empirically, matching this project's
+"don't overclaim without a reproduced failure" discipline: the
+per-character field-name loop nulls out `buf[i]`/`temp[i]` at the
+*first* whitespace character (to isolate the presentation-string from
+an optional trailing Bib-1 number) but keeps scanning and writing
+`temp[]` past that point for the rest of the line. This looked like it
+could contaminate a field name with trailing digits, or truncate a
+genuinely multi-word (space-separated, not hyphenated) field name down
+to just its first word. Traced through a real example
+(`"Abstract 62\n"`) by hand: since both `fprintf(..., "%s", temp)` and
+`buf` reads stop at the *first* `'\0'`, the later, past-the-terminator
+writes are dead — never observed by any output function — confirming
+the real generated output (`_Sabstract`, no digit suffix) matches
+what's expected. The multi-word-name truncation shape doesn't apply
+either: checked every real entry in `UnifiedList.txt` after stripping
+`#`-comments and confirmed none has more than 2 whitespace-separated
+tokens (name, optional number) — the file's own convention always joins
+multi-word names with `-`, translated to `_` by this same loop, never
+with a raw space. Not reachable against the real input; left unchanged.
+
+No test file was written for the reasons in the scope note above;
+verified via `-Wall -Wextra` compile-clean and the regeneration-diff
+confirmation described above (stronger than a pure inspection-only
+verification, closer to this batch's `zpresent.cxx`/`zsearch.cxx`
+runtime-confirmed bugs).
+
+## doctype/Unified/unified.c, doctype/Unified/unified.h, doctype/unified.c, doctype/unified.h
+
+Machine-generated by `doctype/Unified/gen_unified.c` from
+`doctype/Unified/UnifiedList.txt` (see that file's entry above) — not
+hand-edited, not run through the GENERAL pipeline. `doctype/unified.c`/
+`.h` are byte-identical duplicates of `doctype/Unified/unified.c`/`.h`,
+kept in sync for the main build's `#include "unified.h"` path (which
+expects the file directly under `doctype/`, not in the `Unified/`
+subdirectory). Regenerated during `gen_unified.c`'s own turn and
+confirmed byte-identical to what's already committed (that generator's
+turn touched compile-time safety, not output-affecting logic). All four
+`docs/PROCESSING_STATUS.md` rows reclassified `pending` → `generated`
+as part of this turn, matching the `src/dtreg.cxx`/`.hxx` convention —
+`ANALYZE` didn't recognize this generator/directory shape and had
+queued them as ordinary `pending` files.
+
