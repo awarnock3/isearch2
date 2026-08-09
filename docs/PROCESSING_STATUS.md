@@ -161,7 +161,7 @@
 | 157 | src/nlist.cxx | done | 2026-08-09 | [src/nlist.cxx](BUG_CATALOG.md#srcnlistcxx) |
 | 158 | src/numsearch.cxx | done | 2026-08-09 | [src/numsearch.cxx](BUG_CATALOG.md#srcnumsearchcxx) |
 | 159 | src/operand.cxx | done | 2026-08-09 | [src/operand.cxx](BUG_CATALOG.md#srcoperandcxx) |
-| 160 | src/operator.cxx | pending | | |
+| 160 | src/operator.cxx | done | 2026-08-09 | [src/operator.cxx](BUG_CATALOG.md#srcoperatorcxx) |
 | 161 | src/opobj.cxx | done | 2026-08-07 | [src/opobj.cxx](BUG_CATALOG.md#srcopobjcxx) |
 | 162 | src/opstack.cxx | pending | | |
 | 163 | src/rcache.cxx | pending | | |

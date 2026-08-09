@@ -1134,6 +1134,28 @@ constructor here has nothing to double-free. Different from `DF`/
 `FCT`/`ATTRLIST`/`RESULT`'s *unconfirmed* latent risk — this one was
 checked and ruled out.
 
+## src/operator.cxx
+
+`BUGFIX #1-2` above were already applied to this file during
+`operator.hxx`'s turn (this file already carried `.hxx`'s own
+`ISEARCH2-CLEANUP` marker, dated the same day — its
+`docs/PROCESSING_STATUS.md` row just hadn't been synced to `done` yet,
+same shape as `src/memcntl.cxx`/`src/mergeunit.cxx`'s stale rows). This
+turn's own full re-read of all five methods (`OPERATOR()`,
+`SetOperatorType()`, `Duplicate()`, `operator=()`, `~OPERATOR()`) found
+nothing further. `operator=()`'s missing self-assignment guard is
+confirmed harmless (unlike `src/operand.cxx`'s equivalent, which needed
+checking against `ATTRLIST`'s underlying fix): `OperatorType =
+OtherOp.GetOperatorType();` on self-assignment just reads and
+reassigns the same plain `INT`, a no-op with no owned resource to
+corrupt — matching this file's own already-cataloged "no copy
+constructor either, but it's safe" finding above. No `NULL`/`sprintf`,
+zero warnings under `-Wall -Wextra`. No test changes: existing coverage
+in `tests/src/test_operator.cxx` already exercises every method
+including `operator=` and `Duplicate()`. `make tests`/`make
+tests-asan` pass clean (731 test cases, 2826 assertions, unchanged from
+before this turn).
+
 ## src/sterm.hxx
 
 `STERM` is `TERMOBJ`'s only real subclass: a concrete search term (a
