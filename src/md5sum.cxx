@@ -9,6 +9,10 @@
  * Written March 1993 by Branko Lankester
  * Modified June 1993 by Colin Plumb for altered md5.c.
  */
+
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdio.h>
 #include <string.h>
 
@@ -34,7 +38,17 @@
 extern char *optarg;
 extern int optind;
 
-void print_digest();
+// BUGFIX #1: forward-declared with an empty parameter list, which in
+// C++ (unlike C's "unspecified parameters") means zero parameters --
+// a different signature altogether from the actual one-`unsigned
+// char*`-parameter definition below. Currently harmless only because
+// every call site is inside main()'s #if 0 block below (so nothing
+// ever tries to resolve print_digest() against this declaration), but
+// re-enabling main() as-is would still work only by accident (the
+// real definition, appearing later in this same file, supplies the
+// one-argument overload actually called). See
+// docs/BUG_CATALOG.md#srcmd5sumcxx.
+void print_digest(unsigned char *p);
 int mdfile(FILE *fp, unsigned char *digest);
 int do_check(FILE *chkf);
 
@@ -210,8 +224,14 @@ do_check(FILE *chkf)
 		if (rc == 0)	/* not an md5 line */
 			continue;
 		if (verbose) {
-			if (strlen(filename) > flen)
-				flen = strlen(filename);
+			// BUGFIX #2 (modernization): signed/unsigned comparison
+			// warning (-Wsign-compare) -- flen stays int because it
+			// feeds "%-*s"'s int width argument below; filename's
+			// length is always small and non-negative in practice, so
+			// casting flen to size_t for the comparison changes no
+			// behavior. See docs/BUG_CATALOG.md#srcmd5sumcxx.
+			if (strlen(filename) > (size_t)flen)
+				flen = (int)strlen(filename);
 			fprintf(stderr, "%-*s ", flen, filename);
 		}
 		if (bin_mode || rc == 2)
