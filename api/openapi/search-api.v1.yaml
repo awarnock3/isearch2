@@ -443,11 +443,8 @@ components:
     SearchRequest:
       type: object
       additionalProperties: false
-      required: [database]
+      required: []
       properties:
-        database:
-          type: string
-          minLength: 1
         q:
           type: string
         search_type:
