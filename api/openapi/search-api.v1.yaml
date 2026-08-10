@@ -7,7 +7,7 @@ info:
     This v1 contract provides anonymous read endpoints for searching,
     service health, capabilities discovery, and database listing.
 servers:
-  - url: /api/v1
+  - url: /v1/api
     description: Default API base path
 tags:
   - name: search
@@ -18,7 +18,7 @@ tags:
     description: Database discovery endpoint
 security: []
 paths:
-  /search:
+  /{database}/search:
     get:
       tags: [search]
       operationId: searchRecordsGet
@@ -26,7 +26,7 @@ paths:
       description: Executes a search request using query-string parameters.
       security: []
       parameters:
-        - $ref: '#/components/parameters/database'
+        - $ref: '#/components/parameters/databasePath'
         - $ref: '#/components/parameters/q'
         - $ref: '#/components/parameters/searchType'
         - $ref: '#/components/parameters/operator'
@@ -203,6 +203,14 @@ components:
         type: string
         example: no-store
   parameters:
+    databasePath:
+      name: database
+      in: path
+      required: true
+      description: Database root/stem (equivalent to CGI DATABASE).
+      schema:
+        type: string
+        minLength: 1
     database:
       name: database
       in: query
