@@ -168,13 +168,29 @@ INT main(int argc, char **argv)
   // Which result set record number should be displayed first?
 
   Start = (p = cgidata->GetValueByName("START")) ? atoi(p): 1;
+  if (Start < 1) {
+    if (JsonOutput) {
+      PrintJsonError("START must be at least 1.");
+    } else {
+      cout << "<B>START must be at least 1.</B>" << endl;
+      PutHTMLBodyEnd();
+    }
+    delete cgidata;
+    exit(0);
+  }
 
   // How many result set records should be displayed?
   MaxHits = (p = cgidata->GetValueByName("MAXHITS")) ? atoi(p): MAXHIT_DEFAULT;
-  if (MaxHits == 0)
-    MaxHits = 1;
-  else if (MaxHits < 0)
-    MaxHits = MAXHIT_DEFAULT;
+  if (MaxHits < 1 || MaxHits > 1000) {
+    if (JsonOutput) {
+      PrintJsonError("MAXHITS must be between 1 and 1000.");
+    } else {
+      cout << "<B>MAXHITS must be between 1 and 1000.</B>" << endl;
+      PutHTMLBodyEnd();
+    }
+    delete cgidata;
+    exit(0);
+  }
 
   // What element set to return
   // "B" = brief.
@@ -192,7 +208,16 @@ INT main(int argc, char **argv)
   
   // Score scale for normalization
   ScoreScale = (p = cgidata->GetValueByName("SCORE_SCALE")) ? atoi(p) : 100;
-  if (ScoreScale < 1) ScoreScale = 100;
+  if (ScoreScale < 1) {
+    if (JsonOutput) {
+      PrintJsonError("SCORE_SCALE must be at least 1.");
+    } else {
+      cout << "<B>SCORE_SCALE must be at least 1.</B>" << endl;
+      PutHTMLBodyEnd();
+    }
+    delete cgidata;
+    exit(0);
+  }
 
   // If they want URLs returned, there has to be a value for HTTP_PATH
   path = cgidata->GetValueByName("HTTP_PATH");
