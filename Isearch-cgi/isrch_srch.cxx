@@ -94,7 +94,8 @@ INT get_term(INT t, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight);
 PCHR get_field(const CHR *fmt, INT n);
 
 INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
-	INT Start, INT MaxHits, INT TYPE, GDT_BOOLEAN JsonOutput);
+	INT Start, INT MaxHits, INT TYPE, INT ScoreScale,
+	const STRING& RequestId, GDT_BOOLEAN JsonOutput);
 void  PutHTTPHeader(GDT_BOOLEAN JsonOutput);
 void  PutHTMLHead(void);
 void  PutHTMLBodyStart(void);
@@ -118,6 +119,7 @@ INT main(int argc, char **argv)
   CHR temp[MAXSTR+1];
   INT Start, MaxHits, i, type, x, y, z, terms;
   STRING PrintQuery, PrintTerm, PrintField, PrintWeight;
+  STRING RequestId;
   GDT_BOOLEAN IncludeUrl, IncludeHeadline, IncludeRecordKey;
   INT ScoreScale;
 
@@ -217,6 +219,13 @@ INT main(int argc, char **argv)
     }
     delete cgidata;
     exit(0);
+  }
+
+  RequestId = (p = cgidata->GetValueByName("REQUEST_ID")) ? p : "";
+  if (RequestId.Equals("")) {
+    CHR reqbuf[32];
+    sprintf(reqbuf, "req-%ld", (long)time(NULL));
+    RequestId = reqbuf;
   }
 
   // If they want URLs returned, there has to be a value for HTTP_PATH
@@ -343,7 +352,8 @@ INT main(int argc, char **argv)
   }
 
   INT nhits;
-  nhits = Search(argv[1], db, query, ESName, Start, MaxHits, type, JsonOutput);
+  nhits = Search(argv[1], db, query, ESName, Start, MaxHits, type,
+                 ScoreScale, RequestId, JsonOutput);
   if ((nhits > 0) && (!JsonOutput)) {
     cout << "<HR>" << endl;
   }
@@ -551,7 +561,8 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
 */
 
 INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
-	INT Start, INT MaxHits, INT type, GDT_BOOLEAN JsonOutput)
+	INT Start, INT MaxHits, INT type, INT ScoreScale,
+	const STRING& RequestId, GDT_BOOLEAN JsonOutput)
 {
   PRSET prset;
   PIRSET pirset;
@@ -672,6 +683,9 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
 
   if (JsonOutput) {
     cout << "{";
+    cout << "\"request_id\":";
+    PrintJsonEscaped(RequestId);
+    cout << ",";
     cout << "\"matching_record_count\":" << HitCount << ",";
     cout << "\"total_retrieved\":" << FetchCount << ",";
     cout << "\"interpreted_query\":";
@@ -680,6 +694,44 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
     cout << "\"query_time_seconds\":" << (EndTime - StartTime) << ",";
     cout << "\"start\":" << Start << ",";
     cout << "\"max_hits\":" << MaxHits << ",";
+    cout << "\"links\":{";
+    cout << "\"next\":";
+    if (Start + MaxHits <= HitCount) {
+      STRING NextUrl = "/v1/api/";
+      NextUrl.Cat(DBName);
+      NextUrl.Cat("/search?start=");
+      CHR num[32];
+      sprintf(num, "%d", Start + MaxHits);
+      NextUrl.Cat(num);
+      NextUrl.Cat("&max_hits=");
+      sprintf(num, "%d", MaxHits);
+      NextUrl.Cat(num);
+      cout << "\"";
+      cout << NextUrl;
+      cout << "\"";
+    } else {
+      cout << "null";
+    }
+    cout << ",\"prev\":";
+    if (Start > 1) {
+      INT PrevStart = Start - MaxHits;
+      if (PrevStart < 1) PrevStart = 1;
+      STRING PrevUrl = "/v1/api/";
+      PrevUrl.Cat(DBName);
+      PrevUrl.Cat("/search?start=");
+      CHR num[32];
+      sprintf(num, "%d", PrevStart);
+      PrevUrl.Cat(num);
+      PrevUrl.Cat("&max_hits=");
+      sprintf(num, "%d", MaxHits);
+      PrevUrl.Cat(num);
+      cout << "\"";
+      cout << PrevUrl;
+      cout << "\"";
+    } else {
+      cout << "null";
+    }
+    cout << "},";
     cout << "\"results\":[";
   }
 
@@ -738,7 +790,7 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
     // in subsequent retrieval when URL is clicked.
     RsRecord.GetKey(&RecordKey);
 
-    Score = prset->GetScaledScore(RsRecord.GetScore(),100);
+    Score = prset->GetScaledScore(RsRecord.GetScore(),ScoreScale);
 
     if (JsonOutput) {
       if (i > Start) cout << ",";
