@@ -78,4 +78,7 @@ void escape_url(PCHR url, PCHR out);
 void spacetoplus(PCHR str);
 CHR x2c(PCHR p);
 
+// Path parameter extraction
+STRING ExtractPathParam(const CHR *pathInfo, INT paramIndex);
+
 #endif

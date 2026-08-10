@@ -118,6 +118,8 @@ INT main(int argc, char **argv)
   CHR temp[MAXSTR+1];
   INT Start, MaxHits, i, type, x, y, z, terms;
   STRING PrintQuery, PrintTerm, PrintField, PrintWeight;
+  GDT_BOOLEAN IncludeUrl, IncludeHeadline, IncludeRecordKey;
+  INT ScoreScale;
 
   if (!setlocale(LC_CTYPE,"")) {
     cout << "Warning: Failed to set the locale!" << endl;
@@ -137,7 +139,15 @@ INT main(int argc, char **argv)
   // cgidata->Display();
   // exit(0);
 
-  if ((db = cgidata->GetValueByName("DATABASE")) == NULL) {
+  // Try path parameter extraction first (/{database}/search)
+  STRING pathDb = ExtractPathParam(getenv("PATH_INFO"), 0);
+  if (!pathDb.IsEmpty()) {
+    db = (CHR *)pathDb.GetBuffer();
+  } else {
+    db = cgidata->GetValueByName("DATABASE");
+  }
+
+  if (db == NULL || *db == '\0') {
     if (JsonOutput) {
       PrintJsonError("You must specify a database name.");
     } else {
@@ -171,6 +181,18 @@ INT main(int argc, char **argv)
   // "F" = fulltext.
   ESName = (p = cgidata->GetValueByName("ELEMENT_SET")) ? p: "B";
   query = "";
+
+  // Output control flags
+  IncludeUrl = (p = cgidata->GetValueByName("INCLUDE_URL")) ? 
+    (StrCaseCmp(p, "false") != 0 && StrCaseCmp(p, "0") != 0) : GDT_TRUE;
+  IncludeHeadline = (p = cgidata->GetValueByName("INCLUDE_HEADLINE")) ?
+    (StrCaseCmp(p, "false") != 0 && StrCaseCmp(p, "0") != 0) : GDT_TRUE;
+  IncludeRecordKey = (p = cgidata->GetValueByName("INCLUDE_RECORD_KEY")) ?
+    (StrCaseCmp(p, "false") != 0 && StrCaseCmp(p, "0") != 0) : GDT_TRUE;
+  
+  // Score scale for normalization
+  ScoreScale = (p = cgidata->GetValueByName("SCORE_SCALE")) ? atoi(p) : 100;
+  if (ScoreScale < 1) ScoreScale = 100;
 
   // If they want URLs returned, there has to be a value for HTTP_PATH
   path = cgidata->GetValueByName("HTTP_PATH");
