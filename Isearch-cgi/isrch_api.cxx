@@ -184,9 +184,71 @@ int main(int argc, char **argv)
     HandleDatabases(cfg);
     return 0;
   }
+  if (path == "/fetch") {
+    if (!(StrCaseCmp(method, "GET") == 0 || StrCaseCmp(method, "POST") == 0)) {
+      WriteHttpHeader(400, true);
+      WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
+                   "Invalid request", "Only GET and POST are supported.");
+      return 0;
+    }
+    if (StrCaseCmp(method, "POST") == 0) {
+      const CHR *content_type = getenv("CONTENT_TYPE");
+      if (content_type == NULL || content_type[0] == '\0') {
+        content_type = getenv("HTTP_CONTENT_TYPE");
+      }
+      if (!ContainsNoCase(content_type, "application/json")) {
+        WriteHttpHeader(415, true);
+        WriteProblem(415, "https://isearch.invalid/problems/unsupported-media-type",
+                     "Unsupported media type",
+                     "Content-Type must be application/json.");
+        return 0;
+      }
+    }
+    HandleFetch(cfg, method, NULL);
+    return 0;
+  }
   CHR *path_cstr = path.NewCString();
   STRING endpoint = ExtractPathParam(path_cstr, 1);
+  STRING database = ExtractPathParam(path_cstr, 0);
   delete [] path_cstr;
+  if (!(endpoint.CaseEquals("search") || endpoint.CaseEquals("fetch"))) {
+    // Support prefixed forms like /v1/api/{database}/search and /api/v1/{database}/search.
+    for (INT i = 2; i <= 5; i++) {
+      CHR *prefixed_cstr = path.NewCString();
+      endpoint = ExtractPathParam(prefixed_cstr, i);
+      database = ExtractPathParam(prefixed_cstr, i - 1);
+      delete [] prefixed_cstr;
+      if (endpoint.CaseEquals("search") || endpoint.CaseEquals("fetch")) {
+        break;
+      }
+    }
+  }
+  if (endpoint.CaseEquals("fetch")) {
+    if (!(StrCaseCmp(method, "GET") == 0 || StrCaseCmp(method, "POST") == 0)) {
+      WriteHttpHeader(400, true);
+      WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
+                   "Invalid request", "Only GET and POST are supported.");
+      return 0;
+    }
+    if (StrCaseCmp(method, "POST") == 0) {
+      const CHR *content_type = getenv("CONTENT_TYPE");
+      if (content_type == NULL || content_type[0] == '\0') {
+        content_type = getenv("HTTP_CONTENT_TYPE");
+      }
+      if (!ContainsNoCase(content_type, "application/json")) {
+        WriteHttpHeader(415, true);
+        WriteProblem(415, "https://isearch.invalid/problems/unsupported-media-type",
+                     "Unsupported media type",
+                     "Content-Type must be application/json.");
+        return 0;
+      }
+    }
+    if (database.GetLength() > 0 && !(path == "/fetch")) {
+      setenv("ISEARCH_API_DB_FROM_PATH", database.NewCString(), 1);
+    }
+    HandleFetch(cfg, method, NULL);
+    return 0;
+  }
   const bool is_search_path = (path == "/search") || endpoint.CaseEquals("search");
   if (!is_search_path) {
     WriteHttpHeader(404, true);

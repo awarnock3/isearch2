@@ -23,6 +23,12 @@ ApiFetchResult::ApiFetchResult() {}
 
 static STRING GetParam(CGIAPP* cgi, const CHR* name)
 {
+  if (name != NULL && StrCaseCmp(name, "database") == 0) {
+    const CHR *db_from_path = getenv("ISEARCH_API_DB_FROM_PATH");
+    if (db_from_path != NULL && db_from_path[0] != '\0') {
+      return db_from_path;
+    }
+  }
   if (cgi == NULL || name == NULL) {
     return "";
   }
