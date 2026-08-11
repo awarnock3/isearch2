@@ -42,17 +42,19 @@ Optional but recommended for enforcement:
 
 | Method | Path | operationId | Purpose |
 |---|---|---|---|
-| GET | `/v1/api/search` | `searchRecordsGet` | Query-string search |
-| POST | `/v1/api/search` | `searchRecordsPost` | JSON-body search |
+| GET | `/v1/api/{database}/search` | `searchRecordsGet` | Query-string search |
+| POST | `/v1/api/{database}/search` | `searchRecordsPost` | JSON-body search |
 | GET | `/v1/api/health` | `getHealth` | Liveness/readiness |
 | GET | `/v1/api/capabilities` | `getCapabilities` | Query modes, element sets, limits |
 | GET | `/v1/api/databases` | `listDatabases` | Optional configured database list |
+| GET | `/v1/api/{database}/fetch` | `fetchRecordGet` | Fetch full content for one record key |
+| POST | `/v1/api/{database}/fetch` | `fetchRecordPost` | Fetch full content for one record key (JSON body) |
 
-## `/v1/api/search` Parameters
+## `/v1/api/{database}/search` Parameters
 
 ### Required
 
-- `database` (string): DB root/stem (`DATABASE` equivalent).
+- `database` (path string): DB root/stem (`DATABASE` equivalent).
 
 ### Query semantics
 
@@ -159,6 +161,8 @@ The MCP layer is a separate front end that calls `/v1/api/*` rather than linking
    - Backend call: `GET /v1/api/health`.
 4. `list_databases` (optional)
    - Backend call: `GET /v1/api/databases`.
+5. `fetch_record`
+   - Backend call: `GET` or `POST /v1/api/{database}/fetch`.
 
 ### New modules to add (MCP server)
 
@@ -193,7 +197,7 @@ The MCP layer is a separate front end that calls `/v1/api/*` rather than linking
 
 - Build `isrch_api` and deploy wrapper script into `cgi-bin`.
 - Route:
-  - `ScriptAlias /v1/api/search /usr/lib/cgi-bin/isearch_api`
+  - `ScriptAlias /v1/api /usr/lib/cgi-bin/isearch_api`
   - optional `ScriptAlias /v1/api /usr/lib/cgi-bin/isearch_api` with `PATH_INFO` routing.
 - Set environment:
   - `ISEARCH_DB_PATH`

@@ -202,7 +202,7 @@ paths:
           $ref: '#/components/responses/TooManyRequestsProblem'
         '500':
           $ref: '#/components/responses/InternalServerErrorProblem'
-  /fetch:
+  /{database}/fetch:
     get:
       tags: [search]
       operationId: fetchRecordGet
@@ -212,7 +212,7 @@ paths:
         its `record_key`, as returned in search results.
       security: []
       parameters:
-        - $ref: '#/components/parameters/database'
+        - $ref: '#/components/parameters/databasePath'
         - $ref: '#/components/parameters/recordKey'
         - $ref: '#/components/parameters/fetchElementSet'
         - $ref: '#/components/parameters/recordSyntax'
@@ -243,7 +243,7 @@ paths:
     post:
       tags: [search]
       operationId: fetchRecordPost
-      summary: Fetch a single record (JSON body)
+      summary: Fetch a single record (path parameter + JSON body)
       description: |
         Retrieves the full content of a single indexed record identified by
         its `record_key`, as returned in search results.
@@ -971,11 +971,8 @@ paths:
     FetchRequest:
       type: object
       additionalProperties: false
-      required: [database, record_key]
+      required: [record_key]
       properties:
-        database:
-          type: string
-          minLength: 1
         record_key:
           type: string
           minLength: 1

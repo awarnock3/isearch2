@@ -14,7 +14,7 @@ instructions for anyone calling the API with `curl` or another HTTP client.
 4. [Endpoint: Health Check — `GET /api/v1/health`](#4-endpoint-health-check)
 5. [Endpoint: Capabilities — `GET /api/v1/capabilities`](#5-endpoint-capabilities)
 6. [Endpoint: List Databases — `GET /api/v1/databases`](#6-endpoint-list-databases)
-7. [Endpoint: Fetch Record — `GET /POST /api/v1/fetch`](#7-endpoint-fetch-record)
+7. [Endpoint: Fetch Record — `GET /POST /api/v1/{database}/fetch`](#7-endpoint-fetch-record)
 8. [Endpoint: Search (GET) — `GET /api/v1/search`](#8-endpoint-search-get)
 9. [Endpoint: Search (POST) — `POST /api/v1/search`](#9-endpoint-search-post)
 10. [Search Parameters Reference](#10-search-parameters-reference)
@@ -218,8 +218,8 @@ curl -s http://localhost/api/v1/databases
 ## 7. Endpoint: Fetch Record
 
 ```
-GET  /api/v1/fetch
-POST /api/v1/fetch
+GET  /api/v1/{database}/fetch
+POST /api/v1/{database}/fetch
 ```
 
 Retrieves the full rendered content of a single indexed record using its
@@ -231,7 +231,6 @@ to the source file system.
 
 | Parameter       | Required | Default | Description                                                                                                  |
 | --------------- | -------- | ------- | ------------------------------------------------------------------------------------------------------------ |
-| `database`      | **Yes**  | —       | Database root/stem (same value as used in the search).                                                       |
 | `record_key`    | **Yes**  | —       | Record key from a `SearchHit.record_key` field.                                                              |
 | `element_set`   | No       | `F`     | Element set controlling which fields are rendered. `F` returns the full record; `B` returns a brief summary. |
 | `record_syntax` | No       | `SUTRS` | Presentation format for the JSON `content` field: `HTML` or `SUTRS`.                                        |
@@ -240,15 +239,14 @@ to the source file system.
 ### GET example
 
 ```bash
-curl -s "http://localhost/api/v1/fetch?database=XMLtest&record_key=XMLtest%2F1"
+curl -s "http://localhost/api/v1/XMLtest/fetch?record_key=XMLtest%2F1"
 ```
 
 With optional controls:
 
 ```bash
-curl -s "http://localhost/api/v1/fetch?\
-database=XMLtest\
-&record_key=XMLtest%2F1\
+curl -s "http://localhost/api/v1/XMLtest/fetch?\
+record_key=XMLtest%2F1\
 &element_set=F\
 &record_syntax=SUTRS"
 ```
@@ -256,10 +254,9 @@ database=XMLtest\
 ### POST example
 
 ```bash
-curl -s -X POST http://localhost/api/v1/fetch \
+curl -s -X POST http://localhost/api/v1/XMLtest/fetch \
   -H "Content-Type: application/json" \
   -d '{
-    "database": "XMLtest",
     "record_key": "XMLtest/1",
     "element_set": "F",
     "record_syntax": "SUTRS"
