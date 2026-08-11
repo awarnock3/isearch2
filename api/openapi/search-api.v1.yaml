@@ -7,7 +7,7 @@ info:
     This v1 contract provides anonymous read endpoints for searching,
     service health, capabilities discovery, and database listing.
 servers:
-  - url: /api/v1
+  - url: /v1/api
     description: Default API base path
 tags:
   - name: search
@@ -18,7 +18,7 @@ tags:
     description: Database discovery endpoint
 security: []
 paths:
-  /search:
+  /{database}/search:
     get:
       tags: [search]
       operationId: searchRecordsGet
@@ -26,18 +26,29 @@ paths:
       description: Executes a search request using query-string parameters.
       security: []
       parameters:
-        - $ref: '#/components/parameters/database'
+        - $ref: '#/components/parameters/databasePath'
         - $ref: '#/components/parameters/q'
         - $ref: '#/components/parameters/searchType'
         - $ref: '#/components/parameters/operator'
+        - $ref: '#/components/parameters/rpn'
+        - $ref: '#/components/parameters/infix'
+        - $ref: '#/components/parameters/andMode'
+        - $ref: '#/components/parameters/synonyms'
         - $ref: '#/components/parameters/term'
         - $ref: '#/components/parameters/field'
         - $ref: '#/components/parameters/weight'
         - $ref: '#/components/parameters/phrase'
         - $ref: '#/components/parameters/elementSet'
         - $ref: '#/components/parameters/recordSyntax'
+        - $ref: '#/components/parameters/docTypeOption'
+        - $ref: '#/components/parameters/highlightPrefix'
+        - $ref: '#/components/parameters/highlightSuffix'
+        - $ref: '#/components/parameters/byteRange'
         - $ref: '#/components/parameters/start'
         - $ref: '#/components/parameters/maxHits'
+        - $ref: '#/components/parameters/startDoc'
+        - $ref: '#/components/parameters/endDoc'
+        - $ref: '#/components/parameters/rect'
         - $ref: '#/components/parameters/includeUrl'
         - $ref: '#/components/parameters/includeHeadline'
         - $ref: '#/components/parameters/includeRecordKey'
@@ -281,6 +292,14 @@ paths:
         type: string
         example: no-store
   parameters:
+    databasePath:
+      name: database
+      in: path
+      required: true
+      description: Database root/stem (equivalent to CGI DATABASE).
+      schema:
+        type: string
+        minLength: 1
     database:
       name: database
       in: query
@@ -314,6 +333,38 @@ paths:
         type: string
         enum: [and, or, andnot, near]
         default: or
+    rpn:
+      name: rpn
+      in: query
+      required: false
+      description: Interpret query as Reverse Polish Notation (CLI -rpn). Mutually exclusive with infix and and_mode.
+      schema:
+        type: boolean
+        default: false
+    infix:
+      name: infix
+      in: query
+      required: false
+      description: Interpret query as boolean algebra infix expression (CLI -infix). Mutually exclusive with rpn and and_mode.
+      schema:
+        type: boolean
+        default: false
+    andMode:
+      name: and_mode
+      in: query
+      required: false
+      description: Perform boolean AND across terms (CLI -and). Mutually exclusive with rpn and infix.
+      schema:
+        type: boolean
+        default: false
+    synonyms:
+      name: synonyms
+      in: query
+      required: false
+      description: Enable synonym expansion (CLI -syn).
+      schema:
+        type: boolean
+        default: false
     term:
       name: term
       in: query
@@ -370,11 +421,62 @@ paths:
       name: record_syntax
       in: query
       required: false
-      description: Record syntax used when presenting the `content` field of each result.
+      description: Record syntax used when presenting results. Accepts friendly names and supported syntax OIDs from Isearch -f.
       schema:
         type: string
-        enum: [HTML, SUTRS]
-        default: SUTRS
+        enum:
+          - TEXT
+          - SUTRS
+          - USMARC
+          - HTML
+          - SGML
+          - XML
+          - GRS-1
+          - 1.2.840.10003.5.101
+          - 1.2.840.10003.5.10
+          - 1.2.840.10003.5.109.3
+          - 1.2.840.10003.5.108
+          - 1.2.840.10003.5.1000.34.1
+          - 1.2.840.10003.5.109.9
+          - 1.2.840.10003.5.1000.34.2
+          - 1.2.840.10003.5.109.10
+          - 1.2.840.10003.5.105
+          - 1.2.840.10003.5.109
+        default: HTML
+    docTypeOption:
+      name: doc_type_option
+      in: query
+      required: false
+      description: Repeated document type specific options (CLI -o). Order preserved.
+      style: form
+      explode: true
+      schema:
+        type: array
+        items:
+          type: string
+    highlightPrefix:
+      name: highlight_prefix
+      in: query
+      required: false
+      description: Prefix inserted before highlighted matched terms (CLI -prefix).
+      schema:
+        type: string
+    highlightSuffix:
+      name: highlight_suffix
+      in: query
+      required: false
+      description: Suffix inserted after highlighted matched terms (CLI -suffix).
+      schema:
+        type: string
+    byteRange:
+      name: byte_range
+      in: query
+      required: false
+      description: Include byte range metadata for each match (CLI -byterange).
+      schema:
+        type: boolean
+        default: false
+>>>>>>> api-refactor
     start:
       name: start
       in: query
@@ -394,6 +496,35 @@ paths:
         minimum: 1
         maximum: 1000
         default: 50
+    startDoc:
+      name: start_doc
+      in: query
+      required: false
+      description: First document rank to present (CLI -startdoc). 1-based.
+      schema:
+        type: integer
+        minimum: 1
+    endDoc:
+      name: end_doc
+      in: query
+      required: false
+      description: Last document rank to present (CLI -enddoc). Must be greater than or equal to start_doc when both set.
+      schema:
+        type: integer
+        minimum: 1
+    rect:
+      name: rect
+      in: query
+      required: false
+      description: Geographic rectangle filter corresponding to CLI -RECT {North South West East}.
+      style: form
+      explode: false
+      schema:
+        type: array
+        minItems: 4
+        maxItems: 4
+        items:
+          type: number
     includeUrl:
       name: include_url
       in: query
@@ -529,11 +660,8 @@ paths:
     SearchRequest:
       type: object
       additionalProperties: false
-      required: [database]
+      required: []
       properties:
-        database:
-          type: string
-          minLength: 1
         q:
           type: string
         search_type:
@@ -544,6 +672,22 @@ paths:
           type: string
           enum: [and, or, andnot, near]
           default: or
+        rpn:
+          type: boolean
+          default: false
+          description: Interpret query as Reverse Polish Notation (CLI -rpn). Mutually exclusive with infix and and_mode.
+        infix:
+          type: boolean
+          default: false
+          description: Interpret query as boolean algebra infix expression (CLI -infix). Mutually exclusive with rpn and and_mode.
+        and_mode:
+          type: boolean
+          default: false
+          description: Perform boolean AND across terms (CLI -and). Mutually exclusive with rpn and infix.
+        synonyms:
+          type: boolean
+          default: false
+          description: Enable synonym expansion (CLI -syn).
         terms:
           type: array
           items:
@@ -553,8 +697,40 @@ paths:
           default: B
         record_syntax:
           type: string
-          enum: [HTML, SUTRS]
-          default: SUTRS
+          enum:
+            - TEXT
+            - SUTRS
+            - USMARC
+            - HTML
+            - SGML
+            - XML
+            - GRS-1
+            - 1.2.840.10003.5.101
+            - 1.2.840.10003.5.10
+            - 1.2.840.10003.5.109.3
+            - 1.2.840.10003.5.108
+            - 1.2.840.10003.5.1000.34.1
+            - 1.2.840.10003.5.109.9
+            - 1.2.840.10003.5.1000.34.2
+            - 1.2.840.10003.5.109.10
+            - 1.2.840.10003.5.105
+            - 1.2.840.10003.5.109
+          default: HTML
+        doc_type_options:
+          type: array
+          description: Document type specific options (CLI -o). Order preserved.
+          items:
+            type: string
+        highlight_prefix:
+          type: string
+          description: Prefix inserted before highlighted matched terms (CLI -prefix).
+        highlight_suffix:
+          type: string
+          description: Suffix inserted after highlighted matched terms (CLI -suffix).
+        byte_range:
+          type: boolean
+          default: false
+          description: Include byte range metadata for each match (CLI -byterange).
         start:
           type: integer
           minimum: 1
@@ -564,6 +740,21 @@ paths:
           minimum: 1
           maximum: 1000
           default: 50
+        start_doc:
+          type: integer
+          minimum: 1
+          description: First document rank to present (CLI -startdoc). 1-based.
+        end_doc:
+          type: integer
+          minimum: 1
+          description: Last document rank to present (CLI -enddoc). Must be greater than or equal to start_doc.
+        rect:
+          type: array
+          description: Geographic rectangle filter corresponding to CLI -RECT {North South West East}.
+          minItems: 4
+          maxItems: 4
+          items:
+            type: number
         include_url:
           type: boolean
           default: true
@@ -665,6 +856,12 @@ paths:
         url:
           type: string
           format: uri
+        record_start:
+          type: integer
+          description: Byte offset where record starts in source file. Present when byte_range=true.
+        record_end:
+          type: integer
+          description: Byte offset where record ends in source file. Present when byte_range=true.
     PaginationLinks:
       type: object
       additionalProperties: false

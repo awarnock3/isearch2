@@ -297,3 +297,30 @@ void escape_url(PCHR url, PCHR out) {
   out[y] = '\0';
   spacetoplus(out);
 }
+
+STRING ExtractPathParam(const CHR *pathInfo, INT paramIndex) {
+  STRING result;
+  if (!pathInfo) return result;
+  
+  const CHR *ptr = pathInfo;
+  INT index = 0;
+  
+  // Skip leading slash if present
+  if (*ptr == '/') ptr++;
+  
+  // Extract path segments separated by '/'
+  while (*ptr && index <= paramIndex) {
+    if (index == paramIndex) {
+      // Found target segment, extract until next '/' or end
+      const CHR *start = ptr;
+      while (*ptr && *ptr != '/') ptr++;
+      result = STRING(start, ptr - start);
+      return result;
+    }
+    // Move to next segment
+    while (*ptr && *ptr != '/') ptr++;
+    if (*ptr == '/') ptr++;
+    index++;
+  }
+  return result;
+}

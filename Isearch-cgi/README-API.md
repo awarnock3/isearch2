@@ -10,6 +10,41 @@ The API endpoints are:
 - `/api/v1/databases`
 - `/api/v1/search` (GET and POST JSON)
 
+## Search request options
+
+Both GET `/api/v1/search` and POST `/api/v1/search` support path-style
+database routing and request fields aligned with `Isearch` options.
+
+Core fields:
+
+- `database` (required when not supplied by path)
+- `q` or `terms[]`
+- `search_type` (`simple|advanced|boolean`)
+- `operator` (`and|or|andnot|near`)
+- `element_set`
+- `record_syntax` (`TEXT|SUTRS|USMARC|HTML|SGML|XML|GRS-1` and supported OIDs)
+- `start`, `max_hits`
+- `include_url`, `include_headline`, `include_record_key`
+- `score_scale`
+
+Additional option fields:
+
+- `rpn`, `infix`, `and_mode` (mutually exclusive controls)
+- `synonyms`
+- `doc_type_option` (GET repeatable) / `doc_type_options` (POST array)
+- `highlight_prefix`, `highlight_suffix`
+- `byte_range` (include structured byte offsets in response hits)
+- `start_doc`, `end_doc`
+- `rect` (north,south,west,east)
+
+Byte range response fields:
+
+- When `byte_range=true`, each hit may include:
+  - `record_start`
+  - `record_end`
+
+These are structured JSON fields, not text appended to `headline`.
+
 ## 1. Build and prepare wrappers
 
 From the repository root:
@@ -103,6 +138,7 @@ curl -sS 'http://127.0.0.1/api/v1/search?database=XMLtest&q=dust'
 curl -sS -X POST 'http://127.0.0.1/api/v1/search' \
   -H 'Content-Type: application/json' \
   -d '{"database":"XMLtest","q":"dust"}'
+curl -sS 'http://127.0.0.1/api/v1/search?database=XMLtest&q=xml&byte_range=true&max_hits=1'
 ```
 
 ## 4. Nginx + fcgiwrap deployment
