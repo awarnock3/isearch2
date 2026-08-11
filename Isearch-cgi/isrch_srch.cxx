@@ -143,8 +143,8 @@ INT main(int argc, char **argv)
 
   // Try path parameter extraction first (/{database}/search)
   STRING pathDb = ExtractPathParam(getenv("PATH_INFO"), 0);
-  if (!pathDb.IsEmpty()) {
-    db = (CHR *)pathDb.GetBuffer();
+  if (pathDb.GetLength() > 0) {
+    db = (CHR *)(const CHR *)pathDb;
   } else {
     db = cgidata->GetValueByName("DATABASE");
   }

@@ -47,6 +47,7 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 #define _CGIUTIL_HXX
 
 #include "gdt.h"
+#include "string.hxx"
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>

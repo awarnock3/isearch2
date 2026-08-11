@@ -103,12 +103,14 @@ static bool BuildSquery(const ApiRequest& req, SQUERY *search_query,
 
   *interpreted_query = query_text;
 
-  if (req.search_type == SEARCH_SIMPLE) {
+  const bool force_rpn = req.rpn || req.infix || req.search_type == SEARCH_BOOLEAN;
+
+  if (!force_rpn && req.search_type == SEARCH_SIMPLE) {
     search_query->SetTerm(query_text);
     return true;
   }
 
-  if (req.search_type == SEARCH_ADVANCED) {
+  if (!force_rpn && req.search_type == SEARCH_ADVANCED) {
     if (HasBooleanTokens(query_text)) {
       STRING processed;
       INFIX2RPN parser;
@@ -201,7 +203,8 @@ int ExecuteSearch(const ApiRequest& req, const ApiConfig& cfg,
 
   const time_t start_time = time(NULL);
   PIRSET pirset = NULL;
-  if (req.op == OP_AND && req.search_type == SEARCH_SIMPLE) {
+  if ((req.op == OP_AND || req.and_mode) && req.search_type == SEARCH_SIMPLE &&
+      !req.rpn && !req.infix) {
     pirset = pdb->AndSearch(query);
   } else {
     pirset = pdb->Search(query);
@@ -217,16 +220,23 @@ int ExecuteSearch(const ApiRequest& req, const ApiConfig& cfg,
   pirset->SortByScore();
 
   INT hit_count = pirset->GetTotalEntries();
+  INT present_start = req.start;
+  INT present_limit = req.max_hits;
+  if (req.has_start_doc) present_start = req.start_doc;
+  if (req.has_end_doc && req.end_doc >= present_start) {
+    const INT ranged = req.end_doc - present_start + 1;
+    if (ranged < present_limit) present_limit = ranged;
+  }
   PRSET prset = pirset->GetRset(0, hit_count);
   pirset->Fill(0, hit_count, prset);
   prset->SetScoreRange(pirset->GetMaxScore(), pirset->GetMinScore());
   hit_count = (INT)prset->GetTotalEntries();
 
   INT fetch_count = 0;
-  if (req.start <= hit_count) {
-    fetch_count = hit_count > (req.start + req.max_hits - 1)
-                  ? req.max_hits
-                  : (hit_count - req.start + 1);
+  if (present_start <= hit_count) {
+    fetch_count = hit_count > (present_start + present_limit - 1)
+                  ? present_limit
+                  : (hit_count - present_start + 1);
   }
 
   meta.matching_record_count = hit_count;
@@ -240,7 +250,7 @@ int ExecuteSearch(const ApiRequest& req, const ApiConfig& cfg,
   STRING record_key;
   STRING headline;
 
-  for (INT i = req.start; i <= (req.start + fetch_count - 1); i++) {
+  for (INT i = present_start; i <= (present_start + fetch_count - 1); i++) {
     prset->GetEntry(i, &rs_record);
     pdb->Present(rs_record, req.element_set, req.record_syntax, &headline);
     rs_record.GetFullFileName(&full_name);
@@ -252,6 +262,11 @@ int ExecuteSearch(const ApiRequest& req, const ApiConfig& cfg,
     if (req.include_headline) hit.headline = headline;
     if (req.include_record_key) hit.record_key = record_key;
     if (req.include_url) BuildResultUrl(full_name, &hit.url);
+    if (req.byte_range) {
+      hit.has_byte_range = true;
+      hit.record_start = (LONG)rs_record.GetRecordStart();
+      hit.record_end = (LONG)rs_record.GetRecordEnd();
+    }
     hit.filename = file;
     hits.push_back(hit);
   }

@@ -46,24 +46,67 @@ static bool WantsProblemOnly(const CHR *accept_header)
 
 static STRING BuildSearchLink(const ApiRequest& req, INT start)
 {
-  STRING link = "/v1/api/search?database=";
+  STRING link = "/v1/api/";
   link.Cat(req.database);
-  if (req.q.GetLength() > 0) {
-    link.Cat("&q=");
-    link.Cat(req.q);
+  link.Cat("/search");
+
+  bool has_param = false;
+#define APPEND_PARAM(K, V) \
+  do { \
+    if (has_param) link.Cat("&"); else { link.Cat("?"); has_param = true; } \
+    link.Cat((K)); link.Cat("="); link.Cat((V)); \
+  } while (0)
+
+  if (req.q.GetLength() > 0) APPEND_PARAM("q", req.q);
+  if (req.search_type == SEARCH_ADVANCED) APPEND_PARAM("search_type", "advanced");
+  if (req.search_type == SEARCH_BOOLEAN) APPEND_PARAM("search_type", "boolean");
+  if (req.op == OP_AND) APPEND_PARAM("operator", "and");
+  if (req.op == OP_ANDNOT) APPEND_PARAM("operator", "andnot");
+  if (req.op == OP_NEAR) APPEND_PARAM("operator", "near");
+  if (req.rpn) APPEND_PARAM("rpn", "true");
+  if (req.infix) APPEND_PARAM("infix", "true");
+  if (req.and_mode) APPEND_PARAM("and_mode", "true");
+  if (req.synonyms) APPEND_PARAM("synonyms", "true");
+
+  for (size_t i = 0; i < req.terms.size(); i++) {
+    const ApiTerm& t = req.terms[i];
+    if (t.term.GetLength() > 0) APPEND_PARAM("term", t.term);
+    if (t.field.GetLength() > 0) APPEND_PARAM("field", t.field);
+    if (t.weight.GetLength() > 0) APPEND_PARAM("weight", t.weight);
+    if (t.phrase) APPEND_PARAM("phrase", "true");
   }
-  if (req.element_set.GetLength() > 0) {
-    link.Cat("&element_set=");
-    link.Cat(req.element_set);
+
+  for (size_t i = 0; i < req.doc_type_options.size(); i++) {
+    if (req.doc_type_options[i].GetLength() > 0) {
+      APPEND_PARAM("doc_type_option", req.doc_type_options[i]);
+    }
   }
-  if (req.record_syntax.GetLength() > 0) {
-    link.Cat("&record_syntax=");
-    link.Cat(req.record_syntax);
+
+  if (req.element_set.GetLength() > 0) APPEND_PARAM("element_set", req.element_set);
+  if (req.record_syntax.GetLength() > 0) APPEND_PARAM("record_syntax", req.record_syntax);
+  if (req.highlight_prefix.GetLength() > 0) APPEND_PARAM("highlight_prefix", req.highlight_prefix);
+  if (req.highlight_suffix.GetLength() > 0) APPEND_PARAM("highlight_suffix", req.highlight_suffix);
+  if (req.byte_range) APPEND_PARAM("byte_range", "true");
+  if (req.has_start_doc) APPEND_PARAM("start_doc", req.start_doc);
+  if (req.has_end_doc) APPEND_PARAM("end_doc", req.end_doc);
+  if (req.has_rect) {
+    STRING rect;
+    CHR rectbuf[256];
+    snprintf(rectbuf, sizeof(rectbuf), "%g,%g,%g,%g",
+             (double)req.rect_north, (double)req.rect_south,
+             (double)req.rect_west, (double)req.rect_east);
+    rect = rectbuf;
+    APPEND_PARAM("rect", rect);
   }
-  link.Cat("&start=");
-  link.Cat((INT)start);
-  link.Cat("&max_hits=");
-  link.Cat((INT)req.max_hits);
+  if (!req.include_url) APPEND_PARAM("include_url", "false");
+  if (!req.include_headline) APPEND_PARAM("include_headline", "false");
+  if (!req.include_record_key) APPEND_PARAM("include_record_key", "false");
+  if (req.score_scale != 100) APPEND_PARAM("score_scale", req.score_scale);
+  if (req.request_id.GetLength() > 0) APPEND_PARAM("request_id", req.request_id);
+
+  APPEND_PARAM("start", start);
+  APPEND_PARAM("max_hits", req.max_hits);
+  #undef APPEND_PARAM
   return link;
 }
 
@@ -86,6 +129,19 @@ static STRING NormalizePath(const CHR *raw_path)
     }
   }
   return path;
+}
+
+static bool InAllowListNoCase(const STRLIST& allow_list, const STRING& value)
+{
+  const INT total = allow_list.GetTotalEntries();
+  for (INT i = 1; i <= total; i++) {
+    STRING entry;
+    allow_list.GetEntry(i, &entry);
+    if (entry.CaseEquals(value)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 int main(int argc, char **argv)
@@ -128,7 +184,11 @@ int main(int argc, char **argv)
     HandleDatabases(cfg);
     return 0;
   }
-  if (!(path == "/search")) {
+  CHR *path_cstr = path.NewCString();
+  STRING endpoint = ExtractPathParam(path_cstr, 1);
+  delete [] path_cstr;
+  const bool is_search_path = (path == "/search") || endpoint.CaseEquals("search");
+  if (!is_search_path) {
     WriteHttpHeader(404, true);
     WriteProblem(404, "https://isearch.invalid/problems/not-found",
                  "Not found", "Unknown API endpoint.");
@@ -171,6 +231,24 @@ int main(int argc, char **argv)
     return 0;
   }
 
+  if (cfg.allow_list.GetTotalEntries() > 0 &&
+      !InAllowListNoCase(cfg.allow_list, req.database)) {
+    if (cgi != NULL) delete cgi;
+    WriteHttpHeader(404, true);
+    WriteProblem(404, "https://isearch.invalid/problems/not-found",
+                 "Not found", "Requested database is not available.");
+    return 0;
+  }
+
+  if (req.max_hits > cfg.max_hits_ceiling) {
+    if (cgi != NULL) delete cgi;
+    WriteHttpHeader(400, true);
+    WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
+                 "Invalid request parameters",
+                 "max_hits exceeds configured API limit.");
+    return 0;
+  }
+
   ApiSearchMeta meta;
   std::vector<ApiHit> hits;
   STRING error_detail;
@@ -186,8 +264,10 @@ int main(int argc, char **argv)
 
   WriteHttpHeader(200, false);
   BeginSearchResponse(meta);
+  INT response_start = req.start;
+  if (req.has_start_doc) response_start = req.start_doc;
   for (size_t i = 0; i < hits.size(); i++) {
-    WriteSearchHit((INT)(req.start + (INT)i), hits[i], i == 0);
+    WriteSearchHit((INT)(response_start + (INT)i), hits[i], i == 0);
   }
 
   ApiLinks links;

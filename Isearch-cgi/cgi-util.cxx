@@ -314,7 +314,7 @@ STRING ExtractPathParam(const CHR *pathInfo, INT paramIndex) {
       // Found target segment, extract until next '/' or end
       const CHR *start = ptr;
       while (*ptr && *ptr != '/') ptr++;
-      result.Assign(start, ptr - start);
+      result = STRING(start, ptr - start);
       return result;
     }
     // Move to next segment
