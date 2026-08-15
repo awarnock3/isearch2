@@ -111,6 +111,13 @@ SRC_DIR=src
 #
 CGI_DIR=Isearch-cgi
 
+#
+# Isearch-tui Directory
+#
+# Where is the Terminal UI application?
+#
+TUI_DIR=Isearch-tui
+
 # 
 # That should be all you need to configure
 #
@@ -126,7 +133,7 @@ OSNAME=`uname -s`
 OSVER=`uname -r`
 OS=$(OSNAME)_$(OSVER)
 
-all: isearch isearch-cgi done
+all: isearch isearch-cgi isearch-tui done
 
 isearch::
 	`if [ ! -f src/conf.h ] ; \
@@ -145,6 +152,9 @@ isearch-cgi::
 			CFLAGS="$(CFLAGS) -DVERS=\\\"$(VER)\\\"" \
 			"CC=$(CC)" "DOCLIB=$(DOCLIB)" "LDFLAGS=$(LDFLAGS)"
 
+isearch-tui::
+	+cd $(TUI_DIR); make build
+
 done:
 	@echo ""
 	@echo "Welcome to CNIDR $(DIST), release $(VER)!"
@@ -159,6 +169,7 @@ clean:
 	+cd $(SRC_DIR); make -i clean
 	+cd $(DOCTYPE_DIR); make -i clean
 	+cd $(CGI_DIR); make -i clean
+	+cd $(TUI_DIR); make clean
 
 realclean:
 	$(RM) *~ $(BIN_DIR)/Iindex $(BIN_DIR)/Isearch $(BIN_DIR)/Iutil \
@@ -167,6 +178,7 @@ realclean:
 	+cd $(SRC_DIR); make -i realclean
 	+cd $(DOCTYPE_DIR); make -i clean
 	+cd $(CGI_DIR); make -i clean
+	+cd $(TUI_DIR); make clean
 
 distclean:
 	$(RM) *~ $(BIN_DIR)/Iindex $(BIN_DIR)/Isearch $(BIN_DIR)/Iutil \
@@ -175,6 +187,7 @@ distclean:
 	+cd $(SRC_DIR); make -i distclean
 	+cd $(DOCTYPE_DIR); make -i clean
 	+cd $(CGI_DIR); make -i clean
+	+cd $(TUI_DIR); make clean
 
 binclean:
 	$(RM) *~ $(BIN_DIR)/Iindex $(BIN_DIR)/Isearch $(BIN_DIR)/Iutil \
@@ -196,6 +209,8 @@ install:
 	cp $(BIN_DIR)/Iget $(INSTALL)
 	cp $(BIN_DIR)/zsearch $(INSTALL)
 	cp $(BIN_DIR)/zpresent $(INSTALL)
+	@echo "*** Installing isearch-tui ***"
+	cd $(TUI_DIR); make install INSTALL_PATH=$(INSTALL)
 	@echo ""
 	@echo "To install Isearch-cgi, cd into the Isearch-cgi directory"
 	@echo "Then run the configure script"
