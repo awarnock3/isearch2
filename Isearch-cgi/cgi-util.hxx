@@ -50,6 +50,7 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 #define _CGIUTIL_HXX
 
 #include "gdt.h"
+#include "string.hxx"
 #include <stdio.h>
 #include <stdlib.h>
 #include <iostream>
@@ -98,5 +99,8 @@ void unescape_url(PCHR p);
 void escape_url(PCHR url, PCHR out);
 void spacetoplus(PCHR str);
 CHR x2c(PCHR p);
+
+// Path parameter extraction
+STRING ExtractPathParam(const CHR *pathInfo, INT paramIndex);
 
 #endif

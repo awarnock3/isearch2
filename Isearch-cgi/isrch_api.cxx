@@ -49,6 +49,11 @@ static bool WantsProblemOnly(const CHR *accept_header)
 
 static STRING BuildSearchLink(const ApiRequest& req, INT start)
 {
+  STRING link = "/v1/api/";
+  link.Cat(req.database);
+  link.Cat("/search");
+
+  bool has_param = false;
   // BUGFIX #1 (docs/BUG_CATALOG.md#isearch-cgiisrch_apicxx): STRING has no
   // Cat(INT) overload, only Cat(UCHR) and Cat(const STRING&) (the latter
   // reachable via STRING's own INT-converting constructor). Passing an INT
@@ -57,21 +62,70 @@ static STRING BuildSearchLink(const ApiRequest& req, INT start)
   // it appended the raw byte value of the number (truncated mod 256)
   // instead of its decimal digits. Confirmed live against the real
   // isrch_api binary: start=65/max_hits=66 produced a raw 0x01 control
-  // byte (from a clamped prev_start of 1) and a literal "B" (byte value 66)
-  // in the emitted "prev" link instead of "1" and "66" -- silently
-  // corrupting every pagination link this file ever generates. Fixed by
-  // wrapping each value in STRING(...) explicitly so Cat(const STRING&)
-  // is the only viable overload.
-  STRING link = "/api/v1/search?database=";
-  link.Cat(req.database);
-  if (req.q.GetLength() > 0) {
-    link.Cat("&q=");
-    link.Cat(req.q);
+  // byte and a literal "B" (byte value 66) in the emitted "prev" link
+  // instead of "1" and "66". The 2026-08-17 upstream sync reintroduced
+  // this same trap in five more places at once (start, max_hits,
+  // start_doc, end_doc, score_scale) via this macro, all funneling INT
+  // values through Cat(V) below -- fixed once, here, by wrapping V in an
+  // explicit STRING(...) so Cat(const STRING&) is the only viable
+  // overload for every call site, present and future, not just the two
+  // this file had before.
+#define APPEND_PARAM(K, V) \
+  do { \
+    if (has_param) link.Cat("&"); else { link.Cat("?"); has_param = true; } \
+    link.Cat((K)); link.Cat("="); link.Cat(STRING(V)); \
+  } while (0)
+
+  if (req.q.GetLength() > 0) APPEND_PARAM("q", req.q);
+  if (req.search_type == SEARCH_ADVANCED) APPEND_PARAM("search_type", "advanced");
+  if (req.search_type == SEARCH_BOOLEAN) APPEND_PARAM("search_type", "boolean");
+  if (req.op == OP_AND) APPEND_PARAM("operator", "and");
+  if (req.op == OP_ANDNOT) APPEND_PARAM("operator", "andnot");
+  if (req.op == OP_NEAR) APPEND_PARAM("operator", "near");
+  if (req.rpn) APPEND_PARAM("rpn", "true");
+  if (req.infix) APPEND_PARAM("infix", "true");
+  if (req.and_mode) APPEND_PARAM("and_mode", "true");
+  if (req.synonyms) APPEND_PARAM("synonyms", "true");
+
+  for (size_t i = 0; i < req.terms.size(); i++) {
+    const ApiTerm& t = req.terms[i];
+    if (t.term.GetLength() > 0) APPEND_PARAM("term", t.term);
+    if (t.field.GetLength() > 0) APPEND_PARAM("field", t.field);
+    if (t.weight.GetLength() > 0) APPEND_PARAM("weight", t.weight);
+    if (t.phrase) APPEND_PARAM("phrase", "true");
   }
-  link.Cat("&start=");
-  link.Cat(STRING(start));
-  link.Cat("&max_hits=");
-  link.Cat(STRING(req.max_hits));
+
+  for (size_t i = 0; i < req.doc_type_options.size(); i++) {
+    if (req.doc_type_options[i].GetLength() > 0) {
+      APPEND_PARAM("doc_type_option", req.doc_type_options[i]);
+    }
+  }
+
+  if (req.element_set.GetLength() > 0) APPEND_PARAM("element_set", req.element_set);
+  if (req.record_syntax.GetLength() > 0) APPEND_PARAM("record_syntax", req.record_syntax);
+  if (req.highlight_prefix.GetLength() > 0) APPEND_PARAM("highlight_prefix", req.highlight_prefix);
+  if (req.highlight_suffix.GetLength() > 0) APPEND_PARAM("highlight_suffix", req.highlight_suffix);
+  if (req.byte_range) APPEND_PARAM("byte_range", "true");
+  if (req.has_start_doc) APPEND_PARAM("start_doc", req.start_doc);
+  if (req.has_end_doc) APPEND_PARAM("end_doc", req.end_doc);
+  if (req.has_rect) {
+    STRING rect;
+    CHR rectbuf[256];
+    snprintf(rectbuf, sizeof(rectbuf), "%g,%g,%g,%g",
+             (double)req.rect_north, (double)req.rect_south,
+             (double)req.rect_west, (double)req.rect_east);
+    rect = rectbuf;
+    APPEND_PARAM("rect", rect);
+  }
+  if (!req.include_url) APPEND_PARAM("include_url", "false");
+  if (!req.include_headline) APPEND_PARAM("include_headline", "false");
+  if (!req.include_record_key) APPEND_PARAM("include_record_key", "false");
+  if (req.score_scale != 100) APPEND_PARAM("score_scale", req.score_scale);
+  if (req.request_id.GetLength() > 0) APPEND_PARAM("request_id", req.request_id);
+
+  APPEND_PARAM("start", start);
+  APPEND_PARAM("max_hits", req.max_hits);
+  #undef APPEND_PARAM
   return link;
 }
 
@@ -81,6 +135,12 @@ static STRING NormalizePath(const CHR *raw_path)
   if (path.GetLength() == 0) {
     return "/";
   }
+  if (path.Search("/v1/api") == 1) {
+    path.EraseBefore(8);
+    if (path.GetLength() == 0) {
+      return "/";
+    }
+  }
   if (path.Search("/api/v1") == 1) {
     path.EraseBefore(8);
     if (path.GetLength() == 0) {
@@ -88,6 +148,19 @@ static STRING NormalizePath(const CHR *raw_path)
     }
   }
   return path;
+}
+
+static bool InAllowListNoCase(const STRLIST& allow_list, const STRING& value)
+{
+  const INT total = allow_list.GetTotalEntries();
+  for (INT i = 1; i <= total; i++) {
+    STRING entry;
+    allow_list.GetEntry(i, &entry);
+    if (entry.CaseEquals(value)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 int main(int argc, char **argv)
@@ -130,7 +203,73 @@ int main(int argc, char **argv)
     HandleDatabases(cfg);
     return 0;
   }
-  if (!(path == "/search")) {
+  if (path == "/fetch") {
+    if (!(StrCaseCmp(method, "GET") == 0 || StrCaseCmp(method, "POST") == 0)) {
+      WriteHttpHeader(400, true);
+      WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
+                   "Invalid request", "Only GET and POST are supported.");
+      return 0;
+    }
+    if (StrCaseCmp(method, "POST") == 0) {
+      const CHR *content_type = getenv("CONTENT_TYPE");
+      if (content_type == NULL || content_type[0] == '\0') {
+        content_type = getenv("HTTP_CONTENT_TYPE");
+      }
+      if (!ContainsNoCase(content_type, "application/json")) {
+        WriteHttpHeader(415, true);
+        WriteProblem(415, "https://isearch.invalid/problems/unsupported-media-type",
+                     "Unsupported media type",
+                     "Content-Type must be application/json.");
+        return 0;
+      }
+    }
+    HandleFetch(cfg, method, NULL);
+    return 0;
+  }
+  CHR *path_cstr = path.NewCString();
+  STRING endpoint = ExtractPathParam(path_cstr, 1);
+  STRING database = ExtractPathParam(path_cstr, 0);
+  delete [] path_cstr;
+  if (!(endpoint.CaseEquals("search") || endpoint.CaseEquals("fetch"))) {
+    // Support prefixed forms like /v1/api/{database}/search and /api/v1/{database}/search.
+    for (INT i = 2; i <= 5; i++) {
+      CHR *prefixed_cstr = path.NewCString();
+      endpoint = ExtractPathParam(prefixed_cstr, i);
+      database = ExtractPathParam(prefixed_cstr, i - 1);
+      delete [] prefixed_cstr;
+      if (endpoint.CaseEquals("search") || endpoint.CaseEquals("fetch")) {
+        break;
+      }
+    }
+  }
+  if (endpoint.CaseEquals("fetch")) {
+    if (!(StrCaseCmp(method, "GET") == 0 || StrCaseCmp(method, "POST") == 0)) {
+      WriteHttpHeader(400, true);
+      WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
+                   "Invalid request", "Only GET and POST are supported.");
+      return 0;
+    }
+    if (StrCaseCmp(method, "POST") == 0) {
+      const CHR *content_type = getenv("CONTENT_TYPE");
+      if (content_type == NULL || content_type[0] == '\0') {
+        content_type = getenv("HTTP_CONTENT_TYPE");
+      }
+      if (!ContainsNoCase(content_type, "application/json")) {
+        WriteHttpHeader(415, true);
+        WriteProblem(415, "https://isearch.invalid/problems/unsupported-media-type",
+                     "Unsupported media type",
+                     "Content-Type must be application/json.");
+        return 0;
+      }
+    }
+    if (database.GetLength() > 0 && !(path == "/fetch")) {
+      setenv("ISEARCH_API_DB_FROM_PATH", database.NewCString(), 1);
+    }
+    HandleFetch(cfg, method, NULL);
+    return 0;
+  }
+  const bool is_search_path = (path == "/search") || endpoint.CaseEquals("search");
+  if (!is_search_path) {
     WriteHttpHeader(404, true);
     WriteProblem(404, "https://isearch.invalid/problems/not-found",
                  "Not found", "Unknown API endpoint.");
@@ -173,6 +312,24 @@ int main(int argc, char **argv)
     return 0;
   }
 
+  if (cfg.allow_list.GetTotalEntries() > 0 &&
+      !InAllowListNoCase(cfg.allow_list, req.database)) {
+    if (cgi != NULL) delete cgi;
+    WriteHttpHeader(404, true);
+    WriteProblem(404, "https://isearch.invalid/problems/not-found",
+                 "Not found", "Requested database is not available.");
+    return 0;
+  }
+
+  if (req.max_hits > cfg.max_hits_ceiling) {
+    if (cgi != NULL) delete cgi;
+    WriteHttpHeader(400, true);
+    WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
+                 "Invalid request parameters",
+                 "max_hits exceeds configured API limit.");
+    return 0;
+  }
+
   ApiSearchMeta meta;
   std::vector<ApiHit> hits;
   STRING error_detail;
@@ -188,8 +345,10 @@ int main(int argc, char **argv)
 
   WriteHttpHeader(200, false);
   BeginSearchResponse(meta);
+  INT response_start = req.start;
+  if (req.has_start_doc) response_start = req.start_doc;
   for (size_t i = 0; i < hits.size(); i++) {
-    WriteSearchHit((INT)(req.start + (INT)i), hits[i], i == 0);
+    WriteSearchHit((INT)(response_start + (INT)i), hits[i], i == 0);
   }
 
   ApiLinks links;

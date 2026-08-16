@@ -118,8 +118,8 @@ in the OpenAPI spec, including backward-compatible CGI aliases.
    - `struct ApiTerm { STRING term; STRING field; STRING weight; bool phrase; }`
    - `struct ApiRequest` with all validated fields:
      `database`, `q`, `search_type`, `op`, `terms`, `element_set`,
-     `start`, `max_hits`, `include_url`, `include_headline`, `include_record_key`,
-     `score_scale`, `request_id`
+     `record_syntax`, `start`, `max_hits`, `include_url`, `include_headline`,
+     `include_record_key`, `score_scale`, `request_id`
    - `bool ParseRequest(CGIAPP* cgi, const char* method, const char* body,
      ApiRequest& out, STRING& error_detail)` — returns false and sets
      `error_detail` on validation failure
@@ -128,7 +128,8 @@ in the OpenAPI spec, including backward-compatible CGI aliases.
    - For `GET`: read parameters via `CGIAPP::GetValueByName`, apply new
      canonical names first then fall back to CGI aliases
      (`DATABASE`, `ISEARCH_TERM`, `SEARCH_TYPE`, `OPERATOR`, `TERM_n`,
-     `FIELD_n`, `WEIGHT_n`, `PHRASE_n`, `ELEMENT_SET`, `START`, `MAXHITS`)
+     `FIELD_n`, `WEIGHT_n`, `PHRASE_n`, `ELEMENT_SET`, `RecordSyntax`,
+     `START`, `MAXHITS`)
    - For `POST`: read `Content-Type` header; if `application/json`, parse the
      JSON body from `stdin` using a minimal hand-rolled parser (no external
      library required — the body is a flat object)
@@ -167,7 +168,7 @@ bridge between the API layer and the Isearch engine.
    - Sort by score; apply `start`/`max_hits` window
    - Populate `ApiSearchMeta` (counts, timing, db size)
    - Populate `vector<ApiHit>` (score, filename, headline, record_key, url)
-     using `pdb->Present(…, ESName, HtmlRecordSyntax, …)` for headline
+     using `pdb->Present(…, ESName, req.record_syntax, …)` for headline
    - Compute `ApiLinks` `next`/`prev` URLs using the request's own query
      string as a template
 3. Add `api_search.o` compile rule to `Isearch-cgi/Makefile`.
@@ -191,7 +192,7 @@ function, before writing the router.
 1. Create `Isearch-cgi/api_endpoints.hxx` declaring:
    - `void HandleHealth()` — writes `{"status":"ok","version":"1"}` with 200
    - `void HandleCapabilities(const ApiConfig& cfg)` — writes search modes,
-     element sets, default/max hit limits, supported operators
+     element sets, record syntaxes, default/max hit limits, supported operators
    - `void HandleDatabases(const ApiConfig& cfg)` — if `ISEARCH_DB_PATH` is set,
      enumerate `*.mdt` files in that directory and return their stems; otherwise
      return 501 Not Implemented

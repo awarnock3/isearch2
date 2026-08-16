@@ -154,7 +154,8 @@ done:
 
 clean:
 	$(RM) *~ $(BIN_DIR)/Iindex $(BIN_DIR)/Isearch $(BIN_DIR)/Iutil \
-		$(BIN_DIR)/Iget $(BIN_DIR)/libIsearch.a $(BIN_DIR)/core
+		$(BIN_DIR)/Iget $(BIN_DIR)/libIsearch.a $(BIN_DIR)/core \
+		$(BIN_DIR)/zsearch $(BIN_DIR)/zpresent
 	+cd $(SRC_DIR); make -i clean
 	+cd $(DOCTYPE_DIR); make -i clean
 	+cd $(CGI_DIR); make -i clean
@@ -270,7 +271,7 @@ TEST_ENGINE_OBJS_ASAN := $(patsubst src/%.cxx,tests/obj-asan/%.o,$(TEST_ENGINE_S
 # Same idea as TEST_ENGINE_SRCS above, for engine sources living outside
 # src/ (e.g. Isearch-cgi/). Kept as a separate list/pattern rule because
 # TEST_ENGINE_OBJS's patsubst assumes a src/ prefix.
-TEST_ENGINE_CGI_SRCS := Isearch-cgi/config.cxx Isearch-cgi/cgi-util.cxx Isearch-cgi/api_config.cxx Isearch-cgi/api_response.cxx Isearch-cgi/api_request.cxx Isearch-cgi/api_endpoints.cxx Isearch-cgi/api_search.cxx
+TEST_ENGINE_CGI_SRCS := Isearch-cgi/config.cxx Isearch-cgi/cgi-util.cxx Isearch-cgi/api_config.cxx Isearch-cgi/api_response.cxx Isearch-cgi/api_request.cxx Isearch-cgi/api_endpoints.cxx Isearch-cgi/api_search.cxx Isearch-cgi/api_fetch.cxx
 TEST_ENGINE_CGI_OBJS      := $(patsubst Isearch-cgi/%.cxx,tests/obj/cgi-%.o,$(TEST_ENGINE_CGI_SRCS))
 TEST_ENGINE_CGI_OBJS_ASAN := $(patsubst Isearch-cgi/%.cxx,tests/obj-asan/cgi-%.o,$(TEST_ENGINE_CGI_SRCS))
 

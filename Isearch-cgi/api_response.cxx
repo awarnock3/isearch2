@@ -14,7 +14,7 @@ ApiSearchMeta::ApiSearchMeta()
     query_time_seconds(0), start(1), max_hits(0) {}
 
 ApiHit::ApiHit()
-  : score(0) {}
+  : score(0), has_byte_range(false), record_start(0), record_end(0) {}
 
 ApiLinks::ApiLinks()
 {
@@ -108,6 +108,10 @@ void WriteSearchHit(const INT index, const ApiHit& hit, const bool first)
     WriteJsonEscaped(hit.url);
   } else {
     cout << "null";
+  }
+  if (hit.has_byte_range) {
+    cout << ",\"record_start\":" << hit.record_start;
+    cout << ",\"record_end\":" << hit.record_end;
   }
   cout << "}";
 }

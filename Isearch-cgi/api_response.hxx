@@ -28,6 +28,9 @@ struct ApiHit {
   STRING headline;
   STRING record_key;
   STRING url;
+  bool has_byte_range;
+  LONG record_start;
+  LONG record_end;
 
   ApiHit();
 };

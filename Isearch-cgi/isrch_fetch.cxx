@@ -75,6 +75,7 @@ int main(int argc, char **argv)
   IDB *pdb;
   RESULT RsRecord;
   STRING RecordKey, ESet;
+  STRING pathDb;
 
   if (!setlocale(LC_CTYPE,"")) {
     cout << "Warning: Failed to set the locale!" << endl;

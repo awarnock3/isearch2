@@ -83,6 +83,9 @@ api_request.o: api_request.cxx api_request.hxx
 api_search.o: api_search.cxx api_search.hxx
 	$(CC) $(CFLAGS) $(INC) -o $@ -c api_search.cxx
 
+api_fetch.o: api_fetch.cxx api_fetch.hxx
+	$(CC) $(CFLAGS) $(INC) -o $@ -c api_fetch.cxx
+
 api_endpoints.o: api_endpoints.cxx api_endpoints.hxx
 	$(CC) $(CFLAGS) $(INC) -o $@ -c api_endpoints.cxx
 
@@ -98,8 +101,8 @@ isrch_html:isrch_html.o $(H) $(OBJ)
 	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ isrch_html.o $(OBJ) \
 		-L$(LIB_DIR) $(LIB)
 
-isrch_api:isrch_api.o api_config.o api_response.o api_request.o api_search.o api_endpoints.o cgi-util.o config.o $(LIB_DIR)/$(ISEARCH_LIB)
-	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ isrch_api.o api_config.o api_response.o api_request.o api_search.o api_endpoints.o cgi-util.o config.o \
+isrch_api:isrch_api.o api_config.o api_response.o api_request.o api_search.o api_fetch.o api_endpoints.o cgi-util.o config.o $(LIB_DIR)/$(ISEARCH_LIB)
+	$(CC) $(CFLAGS) $(LDFLAGS) -o $@ isrch_api.o api_config.o api_response.o api_request.o api_search.o api_fetch.o api_endpoints.o cgi-util.o config.o \
 		-L$(LIB_DIR) $(LIB)
 
 search_form:search_form.o $(H) $(OBJ) # $(LIB_DIR)/$(ISEARCH_LIB)

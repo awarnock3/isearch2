@@ -20,8 +20,11 @@ ApiTerm::ApiTerm()
 }
 
 ApiRequest::ApiRequest()
-  : search_type(SEARCH_SIMPLE), op(OP_OR), element_set("B"), start(1),
-    max_hits(API_DEFAULT_MAX_HITS), include_url(true),
+  : search_type(SEARCH_SIMPLE), op(OP_OR), element_set("B"),
+    rpn(false), infix(false), and_mode(false), synonyms(false),
+    record_syntax("HTML"), byte_range(false), start(1), max_hits(API_DEFAULT_MAX_HITS),
+    start_doc(1), end_doc(1), has_start_doc(false), has_end_doc(false), has_rect(false),
+    rect_north(0.0), rect_south(0.0), rect_west(0.0), rect_east(0.0), include_url(true),
     include_headline(true), include_record_key(true), score_scale(100)
 {
 }
@@ -34,6 +37,50 @@ static bool IsMethod(const CHR *method, const CHR *target)
     return false;
   }
   return StrCaseCmp(method, target) == 0;
+}
+
+static bool ParseRecordSyntax(const CHR *raw, STRING *out)
+{
+  if (raw == NULL || out == NULL) {
+    return true;
+  }
+  if (StrCaseCmp(raw, "TEXT") == 0 || StrCaseCmp(raw, "SUTRS") == 0 ||
+      StrCaseCmp(raw, "1.2.840.10003.5.101") == 0 ||
+      StrCaseCmp(raw, "1.2.840.10003.5.109") == 0) {
+    *out = "SUTRS";
+    return true;
+  }
+  if (StrCaseCmp(raw, "USMARC") == 0 || StrCaseCmp(raw, "1.2.840.10003.5.10") == 0) {
+    *out = "USMARC";
+    return true;
+  }
+  if (StrCaseCmp(raw, "HTML") == 0) {
+    *out = "HTML";
+    return true;
+  }
+  if (StrCaseCmp(raw, "1.2.840.10003.5.109.3") == 0 ||
+      StrCaseCmp(raw, "1.2.840.10003.5.108") == 0 ||
+      StrCaseCmp(raw, "1.2.840.10003.5.1000.34.1") == 0) {
+    *out = "HTML";
+    return true;
+  }
+  if (StrCaseCmp(raw, "SGML") == 0 ||
+      StrCaseCmp(raw, "1.2.840.10003.5.109.9") == 0 ||
+      StrCaseCmp(raw, "1.2.840.10003.5.1000.34.2") == 0) {
+    *out = "SGML";
+    return true;
+  }
+  if (StrCaseCmp(raw, "XML") == 0 ||
+      StrCaseCmp(raw, "1.2.840.10003.5.109.10") == 0) {
+    *out = "XML";
+    return true;
+  }
+  if (StrCaseCmp(raw, "GRS-1") == 0 ||
+      StrCaseCmp(raw, "1.2.840.10003.5.105") == 0) {
+    *out = "GRS-1";
+    return true;
+  }
+  return false;
 }
 
 static void SetError(STRING& error_detail, const CHR *message)
@@ -88,6 +135,20 @@ static bool ParseBoolean(const CHR *raw, bool *value_out)
     return true;
   }
   return false;
+}
+
+static bool ParseDouble(const CHR *raw, DOUBLE *value_out)
+{
+  if (raw == NULL || raw[0] == '\0' || value_out == NULL) {
+    return false;
+  }
+  CHR *endptr = NULL;
+  const double parsed = strtod(raw, &endptr);
+  if (endptr == raw || *endptr != '\0') {
+    return false;
+  }
+  *value_out = (DOUBLE)parsed;
+  return true;
 }
 
 static const CHR *GetValue(CGIAPP *cgi, const CHR *primary, const CHR *alias)
@@ -248,6 +309,30 @@ static bool ValidateRequest(const ApiRequest& req, STRING& error_detail)
   }
   if (req.max_hits > API_HARD_MAX_HITS) {
     SetError(error_detail, "max_hits exceeds configured hard limit.");
+    return false;
+  }
+  if (req.rpn && req.infix) {
+    SetError(error_detail, "rpn and infix cannot both be true.");
+    return false;
+  }
+  if (req.rpn && req.and_mode) {
+    SetError(error_detail, "rpn and and_mode cannot both be true.");
+    return false;
+  }
+  if (req.infix && req.and_mode) {
+    SetError(error_detail, "infix and and_mode cannot both be true.");
+    return false;
+  }
+  if (req.has_start_doc && req.start_doc < 1) {
+    SetError(error_detail, "start_doc must be >= 1.");
+    return false;
+  }
+  if (req.has_end_doc && req.end_doc < 1) {
+    SetError(error_detail, "end_doc must be >= 1.");
+    return false;
+  }
+  if (req.has_start_doc && req.has_end_doc && req.end_doc < req.start_doc) {
+    SetError(error_detail, "end_doc must be >= start_doc.");
     return false;
   }
   if (req.score_scale < 1) {
@@ -551,6 +636,34 @@ static bool ParsePostJson(const CHR *body, ApiRequest& out, STRING& error_detail
           SetError(error_detail, "operator must be and, or, andnot, or near.");
           return false;
         }
+      } else if (key.CaseEquals("rpn")) {
+        bool value = false;
+        if (!jr.ParseBool(&value)) {
+          SetError(error_detail, "rpn must be boolean.");
+          return false;
+        }
+        out.rpn = value;
+      } else if (key.CaseEquals("infix")) {
+        bool value = false;
+        if (!jr.ParseBool(&value)) {
+          SetError(error_detail, "infix must be boolean.");
+          return false;
+        }
+        out.infix = value;
+      } else if (key.CaseEquals("and_mode")) {
+        bool value = false;
+        if (!jr.ParseBool(&value)) {
+          SetError(error_detail, "and_mode must be boolean.");
+          return false;
+        }
+        out.and_mode = value;
+      } else if (key.CaseEquals("synonyms")) {
+        bool value = false;
+        if (!jr.ParseBool(&value)) {
+          SetError(error_detail, "synonyms must be boolean.");
+          return false;
+        }
+        out.synonyms = value;
       } else if (key.CaseEquals("terms")) {
         if (!ParseJsonTerms(&jr, &out.terms, error_detail)) {
           return false;
@@ -560,6 +673,51 @@ static bool ParsePostJson(const CHR *body, ApiRequest& out, STRING& error_detail
           SetError(error_detail, "element_set must be a string.");
           return false;
         }
+      } else if (key.CaseEquals("record_syntax") || key.CaseEquals("RecordSyntax")) {
+        STRING value;
+        if (!jr.ParseString(&value) ||
+            !ParseRecordSyntax(value, &value)) {
+          SetError(error_detail, "record_syntax must be SUTRS or HTML.");
+          return false;
+        }
+        out.record_syntax = value;
+      } else if (key.CaseEquals("doc_type_options")) {
+        if (!jr.Consume('[')) {
+          SetError(error_detail, "doc_type_options must be an array.");
+          return false;
+        }
+        if (!jr.Consume(']')) {
+          while (true) {
+            STRING opt;
+            if (!jr.ParseString(&opt)) {
+              SetError(error_detail, "doc_type_options entries must be strings.");
+              return false;
+            }
+            out.doc_type_options.push_back(opt);
+            if (jr.Consume(']')) break;
+            if (!jr.Consume(',')) {
+              SetError(error_detail, "Invalid doc_type_options delimiter.");
+              return false;
+            }
+          }
+        }
+      } else if (key.CaseEquals("highlight_prefix")) {
+        if (!jr.ParseString(&out.highlight_prefix)) {
+          SetError(error_detail, "highlight_prefix must be a string.");
+          return false;
+        }
+      } else if (key.CaseEquals("highlight_suffix")) {
+        if (!jr.ParseString(&out.highlight_suffix)) {
+          SetError(error_detail, "highlight_suffix must be a string.");
+          return false;
+        }
+      } else if (key.CaseEquals("byte_range")) {
+        bool value = false;
+        if (!jr.ParseBool(&value)) {
+          SetError(error_detail, "byte_range must be boolean.");
+          return false;
+        }
+        out.byte_range = value;
       } else if (key.CaseEquals("start")) {
         STRING token;
         if (!jr.ParseNumberToken(&token) || !ParsePositiveInt(token, &out.start)) {
@@ -572,6 +730,46 @@ static bool ParsePostJson(const CHR *body, ApiRequest& out, STRING& error_detail
           SetError(error_detail, "max_hits must be a positive integer.");
           return false;
         }
+      } else if (key.CaseEquals("start_doc")) {
+        STRING token;
+        if (!jr.ParseNumberToken(&token) || !ParsePositiveInt(token, &out.start_doc)) {
+          SetError(error_detail, "start_doc must be a positive integer.");
+          return false;
+        }
+        out.has_start_doc = true;
+      } else if (key.CaseEquals("end_doc")) {
+        STRING token;
+        if (!jr.ParseNumberToken(&token) || !ParsePositiveInt(token, &out.end_doc)) {
+          SetError(error_detail, "end_doc must be a positive integer.");
+          return false;
+        }
+        out.has_end_doc = true;
+      } else if (key.CaseEquals("rect")) {
+        STRING token;
+        if (!jr.Consume('[')) {
+          SetError(error_detail, "rect must be an array of four numbers.");
+          return false;
+        }
+        DOUBLE values[4];
+        for (INT i = 0; i < 4; i++) {
+          if (!jr.ParseNumberToken(&token) || !ParseDouble(token, &values[i])) {
+            SetError(error_detail, "rect must contain four numeric values.");
+            return false;
+          }
+          if (i < 3 && !jr.Consume(',')) {
+            SetError(error_detail, "rect must contain four numeric values.");
+            return false;
+          }
+        }
+        if (!jr.Consume(']')) {
+          SetError(error_detail, "rect must contain exactly four values.");
+          return false;
+        }
+        out.has_rect = true;
+        out.rect_north = values[0];
+        out.rect_south = values[1];
+        out.rect_west = values[2];
+        out.rect_east = values[3];
       } else if (key.CaseEquals("include_url")) {
         bool value = false;
         if (!jr.ParseBool(&value)) {
@@ -657,6 +855,40 @@ static bool ContainsNoCase(const CHR *value, const CHR *needle)
   return false;
 }
 
+static bool PathProvidesDatabase(STRING *database_out)
+{
+  if (database_out == NULL) {
+    return false;
+  }
+
+  const CHR *path_info = getenv("PATH_INFO");
+  if (path_info == NULL || path_info[0] == '\0') {
+    return false;
+  }
+
+  STRING endpoint = ExtractPathParam(path_info, 1);
+  STRING database = ExtractPathParam(path_info, 0);
+
+  if (!(endpoint.CaseEquals("search") || endpoint.CaseEquals("fetch"))) {
+    // Support prefixed forms like /v1/api/{database}/search and /api/v1/{database}/search.
+    for (INT i = 2; i <= 5; i++) {
+      endpoint = ExtractPathParam(path_info, i);
+      if (endpoint.CaseEquals("search") || endpoint.CaseEquals("fetch")) {
+        database = ExtractPathParam(path_info, i - 1);
+        break;
+      }
+    }
+  }
+
+  if (!(endpoint.CaseEquals("search") || endpoint.CaseEquals("fetch")) ||
+      database.GetLength() == 0) {
+    return false;
+  }
+
+  *database_out = database;
+  return true;
+}
+
 static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
 {
   if (cgi == nullptr) {
@@ -664,7 +896,79 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
     return false;
   }
 
-  const CHR *value = nullptr;
+  // Reject unknown parameter names so typos (e.g. max_hist) are caught.
+  static const CHR *const known_params[] = {
+    "database", "DATABASE",
+    "q", "ISEARCH_TERM",
+    "search_type", "SEARCH_TYPE",
+    "operator", "OPERATOR",
+    "term", "field", "weight", "phrase",
+    "element_set", "ELEMENT_SET",
+    "record_syntax", "RecordSyntax",
+    "start", "START",
+    "max_hits", "MAXHITS",
+    "include_url",
+    "include_headline",
+    "include_record_key",
+    "score_scale",
+    "request_id",
+    // Merge-conflict fix (2026-08-17 sync from upstream): the allowlist
+    // below was missing every one of the parameter names this same
+    // upstream commit's own ParseGetRequest() body parses a few lines
+    // down (rpn/infix/and_mode/synonyms/highlight_prefix/
+    // highlight_suffix/byte_range/start_doc/end_doc/rect) -- without
+    // these, the loop below would reject any GET request using upstream's
+    // own new features with "Unknown parameter" before ever reaching the
+    // code that handles them. doc_type_option_N/OPTION_N are indexed like
+    // term_N/field_N/weight_N/phrase_N above, so they get the same
+    // prefix-skip treatment instead of a fixed-name entry here.
+    "rpn", "RPN",
+    "infix", "INFIX",
+    "and_mode", "AND",
+    "synonyms", "SYN",
+    "highlight_prefix", "PREFIX",
+    "highlight_suffix", "SUFFIX",
+    "byte_range", "BYTERANGE",
+    "start_doc", "STARTDOC",
+    "end_doc", "ENDDOC",
+    "rect",
+    NULL
+  };
+
+  for (INT4 i = 0; ; i++) {
+    const CHR *name = cgi->GetName(i);
+    if (name == NULL) break;
+    if (name[0] == '\0') continue;
+
+    // Skip indexed term/field/weight/phrase (term_0, field_1, …) and
+    // doc_type_option/OPTION (doc_type_option_1, OPTION_2, …).
+    if (strncasecmp(name, "term",   4) == 0 ||
+        strncasecmp(name, "field",  5) == 0 ||
+        strncasecmp(name, "weight", 6) == 0 ||
+        strncasecmp(name, "phrase", 6) == 0 ||
+        strncasecmp(name, "doc_type_option", 15) == 0 ||
+        strncasecmp(name, "option", 6) == 0) {
+      continue;
+    }
+
+    bool found = false;
+    for (int k = 0; known_params[k] != NULL; k++) {
+      if (StrCaseCmp(name, known_params[k]) == 0) {
+        found = true;
+        break;
+      }
+    }
+    if (!found) {
+      STRING msg = "Unknown parameter: ";
+      msg.Cat(name);
+      CHR *msg_cstr = msg.NewCString();
+      SetError(error_detail, msg_cstr);
+      delete [] msg_cstr;
+      return false;
+    }
+  }
+
+  const CHR *value = NULL;
 
   value = GetValue(cgi, "database", "DATABASE");
   if (value != nullptr) out.database = value;
@@ -683,11 +987,61 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
     SetError(error_detail, "operator must be and, or, andnot, or near.");
     return false;
   }
+  value = GetValue(cgi, "rpn", "RPN");
+  if (value != NULL && value[0] != '\0' && !ParseBoolean(value, &out.rpn)) {
+    SetError(error_detail, "rpn must be boolean.");
+    return false;
+  }
+  value = GetValue(cgi, "infix", "INFIX");
+  if (value != NULL && value[0] != '\0' && !ParseBoolean(value, &out.infix)) {
+    SetError(error_detail, "infix must be boolean.");
+    return false;
+  }
+  value = GetValue(cgi, "and_mode", "AND");
+  if (value != NULL && value[0] != '\0' && !ParseBoolean(value, &out.and_mode)) {
+    SetError(error_detail, "and_mode must be boolean.");
+    return false;
+  }
+  value = GetValue(cgi, "synonyms", "SYN");
+  if (value != NULL && value[0] != '\0' && !ParseBoolean(value, &out.synonyms)) {
+    SetError(error_detail, "synonyms must be boolean.");
+    return false;
+  }
 
   AddGetTerms(cgi, &out.terms);
 
   value = GetValue(cgi, "element_set", "ELEMENT_SET");
   if (value != nullptr && value[0] != '\0') out.element_set = value;
+
+  value = GetValue(cgi, "record_syntax", "RecordSyntax");
+  if (value != NULL && value[0] != '\0') {
+    if (!ParseRecordSyntax(value, &out.record_syntax)) {
+      SetError(error_detail, "record_syntax must be SUTRS or HTML.");
+      return false;
+    }
+  }
+  for (INT i = 1; i <= 32; i++) {
+    CHR key[32];
+    snprintf(key, sizeof(key), "doc_type_option_%d", i);
+    value = cgi->GetValueByName(key);
+    if (value != NULL && value[0] != '\0') {
+      out.doc_type_options.push_back(STRING(value));
+    }
+    snprintf(key, sizeof(key), "OPTION_%d", i);
+    value = cgi->GetValueByName(key);
+    if (value != NULL && value[0] != '\0') {
+      out.doc_type_options.push_back(STRING(value));
+    }
+  }
+  value = GetValue(cgi, "highlight_prefix", "PREFIX");
+  if (value != NULL && value[0] != '\0') out.highlight_prefix = value;
+  value = GetValue(cgi, "highlight_suffix", "SUFFIX");
+  if (value != NULL && value[0] != '\0') out.highlight_suffix = value;
+  value = GetValue(cgi, "byte_range", "BYTERANGE");
+  if (value != NULL && value[0] != '\0' && !ParseBoolean(value, &out.byte_range)) {
+    SetError(error_detail, "byte_range must be boolean.");
+    return false;
+  }
 
   value = GetValue(cgi, "start", "START");
   if (value != nullptr && value[0] != '\0') {
@@ -703,6 +1057,56 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
       SetError(error_detail, "max_hits must be a positive integer.");
       return false;
     }
+  }
+  value = GetValue(cgi, "start_doc", "STARTDOC");
+  if (value != NULL && value[0] != '\0') {
+    if (!ParsePositiveInt(value, &out.start_doc)) {
+      SetError(error_detail, "start_doc must be a positive integer.");
+      return false;
+    }
+    out.has_start_doc = true;
+  }
+  value = GetValue(cgi, "end_doc", "ENDDOC");
+  if (value != NULL && value[0] != '\0') {
+    if (!ParsePositiveInt(value, &out.end_doc)) {
+      SetError(error_detail, "end_doc must be a positive integer.");
+      return false;
+    }
+    out.has_end_doc = true;
+  }
+  value = cgi->GetValueByName("rect");
+  if (value != NULL && value[0] != '\0') {
+    CHR *buf = strdup(value);
+    if (buf == NULL) {
+      SetError(error_detail, "Failed to parse rect.");
+      return false;
+    }
+    CHR *save = NULL;
+    CHR *tok = strtok_r(buf, ",", &save);
+    DOUBLE vals[4];
+    INT idx = 0;
+    while (tok != NULL && idx < 4) {
+      STRING t = tok;
+      t.Trim();
+      if (!ParseDouble(t, &vals[idx])) {
+        free(buf);
+        SetError(error_detail, "rect must contain four numeric values.");
+        return false;
+      }
+      idx++;
+      tok = strtok_r(NULL, ",", &save);
+    }
+    if (idx != 4 || tok != NULL) {
+      free(buf);
+      SetError(error_detail, "rect must contain exactly four values.");
+      return false;
+    }
+    free(buf);
+    out.has_rect = true;
+    out.rect_north = vals[0];
+    out.rect_south = vals[1];
+    out.rect_west = vals[2];
+    out.rect_east = vals[3];
   }
 
   value = cgi->GetValueByName("include_url");
@@ -740,6 +1144,10 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
   value = cgi->GetValueByName("request_id");
   if (value != nullptr && value[0] != '\0') out.request_id = value;
 
+  if (out.database.GetLength() == 0) {
+    PathProvidesDatabase(&out.database);
+  }
+
   return ValidateRequest(out, error_detail);
 }
 
@@ -768,6 +1176,11 @@ static bool ParsePostRequest(const CHR *body, ApiRequest& out, STRING& error_det
   if (!ParsePostJson(body, out, error_detail)) {
     return false;
   }
+
+  if (out.database.GetLength() == 0) {
+    PathProvidesDatabase(&out.database);
+  }
+
   return ValidateRequest(out, error_detail);
 }
 
