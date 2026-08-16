@@ -43,7 +43,7 @@ Description:    CGI app that searches against Iindex-ed databases
 Author:         Kevin Gamiel, kgamiel@cnidr.org
 @@@*/
 
-// ISEARCH2-CLEANUP: processed 2026-08-09
+// ISEARCH2-CLEANUP: processed 2026-08-16
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <iostream>

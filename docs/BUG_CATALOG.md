@@ -9364,6 +9364,22 @@ sites in source instead, plus the runtime/ASan confirmation above.
 (unaffected by this file) still pass clean (745 test cases, 2850
 assertions).
 
+**Reopened 2026-08-16 by `/sync-upstream`**: the only change was a
+single added, entirely unused `STRING pathDb;` declaration in `main()`
+-- never assigned to, never read. Almost certainly a leftover from an
+incomplete port of the same `PATH_INFO`-based database-extraction
+fallback upstream added to `Isearch-cgi/isrch_srch.cxx` in the same
+commit set (see that file's own reopened note), never finished here.
+Confirmed harmless: compiles with zero new warnings under
+`-Wall -Wextra` (GCC doesn't warn on an unused class-typed local with a
+non-trivial constructor/destructor), no behavior change of any kind.
+Left in place rather than either deleting it or guessing at what the
+finished integration was meant to look like -- this file still only
+accepts its database via `argv[1]`/`argv[2]` exactly as before.
+**Zero bugs found.** `make isearch-cgi`: clean; `make tests`/`make
+tests-asan` unaffected (this file was never linked into the test
+tree).
+
 ## Isearch-cgi/isrch_html.cxx
 
 **Scope note, read first:** same `main()`-only structural limitation as

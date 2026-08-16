@@ -235,7 +235,7 @@
 | 231 | doctype/uspat.cxx | done | 2026-08-09 | [BUG_CATALOG.md#doctypeuspatcxx](BUG_CATALOG.md#doctypeuspatcxx) |
 | 232 | Isearch-cgi/cgi-util.cxx | done | 2026-08-16 | [Isearch-cgi/cgi-util.hxx](BUG_CATALOG.md#isearch-cgicgi-utilhxx) |
 | 233 | Isearch-cgi/config.cxx | done | 2026-08-09 | [Isearch-cgi/config.cxx](BUG_CATALOG.md#isearch-cgiconfigcxx) |
-| 234 | Isearch-cgi/isrch_fetch.cxx | pending | | |
+| 234 | Isearch-cgi/isrch_fetch.cxx | done | 2026-08-16 | [Isearch-cgi/isrch_fetch.cxx](BUG_CATALOG.md#isearch-cgiisrch_fetchcxx) |
 | 235 | Isearch-cgi/isrch_html.cxx | done | 2026-08-09 | [Isearch-cgi/isrch_html.cxx](BUG_CATALOG.md#isearch-cgiisrch_htmlcxx) |
 | 236 | Isearch-cgi/isrch_srch.cxx | pending | | |
 | 237 | Isearch-cgi/search_form.cxx | done | 2026-08-09 | [Isearch-cgi/search_form.cxx](BUG_CATALOG.md#isearch-cgisearch_formcxx) |
