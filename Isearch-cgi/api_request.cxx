@@ -1,4 +1,4 @@
-// ISEARCH2-CLEANUP: processed 2026-08-10
+// ISEARCH2-CLEANUP: processed 2026-08-16
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include "api_request.hxx"
@@ -20,9 +20,16 @@ ApiTerm::ApiTerm()
 }
 
 ApiRequest::ApiRequest()
-  : search_type(SEARCH_SIMPLE), op(OP_OR), element_set("B"),
-    rpn(false), infix(false), and_mode(false), synonyms(false),
-    record_syntax("HTML"), byte_range(false), start(1), max_hits(API_DEFAULT_MAX_HITS),
+  // Member-init order below must match declaration order in
+  // api_request.hxx (rpn/infix/and_mode/synonyms sit between op and
+  // element_set there) -- upstream's 2026-08-17 sync inserted those
+  // fields into the header without reordering this list, which
+  // compiled but triggered -Wreorder (member init always follows
+  // declaration order regardless of list order; harmless here since no
+  // initializer references another member, but not warning-clean).
+  : search_type(SEARCH_SIMPLE), op(OP_OR), rpn(false), infix(false),
+    and_mode(false), synonyms(false), element_set("B"), record_syntax("HTML"),
+    byte_range(false), start(1), max_hits(API_DEFAULT_MAX_HITS),
     start_doc(1), end_doc(1), has_start_doc(false), has_end_doc(false), has_rect(false),
     rect_north(0.0), rect_south(0.0), rect_west(0.0), rect_east(0.0), include_url(true),
     include_headline(true), include_record_key(true), score_scale(100)
@@ -41,7 +48,7 @@ static bool IsMethod(const CHR *method, const CHR *target)
 
 static bool ParseRecordSyntax(const CHR *raw, STRING *out)
 {
-  if (raw == NULL || out == NULL) {
+  if (raw == nullptr || out == nullptr) {
     return true;
   }
   if (StrCaseCmp(raw, "TEXT") == 0 || StrCaseCmp(raw, "SUTRS") == 0 ||
@@ -139,10 +146,10 @@ static bool ParseBoolean(const CHR *raw, bool *value_out)
 
 static bool ParseDouble(const CHR *raw, DOUBLE *value_out)
 {
-  if (raw == NULL || raw[0] == '\0' || value_out == NULL) {
+  if (raw == nullptr || raw[0] == '\0' || value_out == nullptr) {
     return false;
   }
-  CHR *endptr = NULL;
+  CHR *endptr = nullptr;
   const double parsed = strtod(raw, &endptr);
   if (endptr == raw || *endptr != '\0') {
     return false;
@@ -857,12 +864,12 @@ static bool ContainsNoCase(const CHR *value, const CHR *needle)
 
 static bool PathProvidesDatabase(STRING *database_out)
 {
-  if (database_out == NULL) {
+  if (database_out == nullptr) {
     return false;
   }
 
   const CHR *path_info = getenv("PATH_INFO");
-  if (path_info == NULL || path_info[0] == '\0') {
+  if (path_info == nullptr || path_info[0] == '\0') {
     return false;
   }
 
@@ -932,12 +939,12 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
     "start_doc", "STARTDOC",
     "end_doc", "ENDDOC",
     "rect",
-    NULL
+    nullptr
   };
 
   for (INT4 i = 0; ; i++) {
     const CHR *name = cgi->GetName(i);
-    if (name == NULL) break;
+    if (name == nullptr) break;
     if (name[0] == '\0') continue;
 
     // Skip indexed term/field/weight/phrase (term_0, field_1, …) and
@@ -952,7 +959,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
     }
 
     bool found = false;
-    for (int k = 0; known_params[k] != NULL; k++) {
+    for (int k = 0; known_params[k] != nullptr; k++) {
       if (StrCaseCmp(name, known_params[k]) == 0) {
         found = true;
         break;
@@ -968,7 +975,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
     }
   }
 
-  const CHR *value = NULL;
+  const CHR *value = nullptr;
 
   value = GetValue(cgi, "database", "DATABASE");
   if (value != nullptr) out.database = value;
@@ -988,22 +995,22 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
     return false;
   }
   value = GetValue(cgi, "rpn", "RPN");
-  if (value != NULL && value[0] != '\0' && !ParseBoolean(value, &out.rpn)) {
+  if (value != nullptr && value[0] != '\0' && !ParseBoolean(value, &out.rpn)) {
     SetError(error_detail, "rpn must be boolean.");
     return false;
   }
   value = GetValue(cgi, "infix", "INFIX");
-  if (value != NULL && value[0] != '\0' && !ParseBoolean(value, &out.infix)) {
+  if (value != nullptr && value[0] != '\0' && !ParseBoolean(value, &out.infix)) {
     SetError(error_detail, "infix must be boolean.");
     return false;
   }
   value = GetValue(cgi, "and_mode", "AND");
-  if (value != NULL && value[0] != '\0' && !ParseBoolean(value, &out.and_mode)) {
+  if (value != nullptr && value[0] != '\0' && !ParseBoolean(value, &out.and_mode)) {
     SetError(error_detail, "and_mode must be boolean.");
     return false;
   }
   value = GetValue(cgi, "synonyms", "SYN");
-  if (value != NULL && value[0] != '\0' && !ParseBoolean(value, &out.synonyms)) {
+  if (value != nullptr && value[0] != '\0' && !ParseBoolean(value, &out.synonyms)) {
     SetError(error_detail, "synonyms must be boolean.");
     return false;
   }
@@ -1014,7 +1021,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
   if (value != nullptr && value[0] != '\0') out.element_set = value;
 
   value = GetValue(cgi, "record_syntax", "RecordSyntax");
-  if (value != NULL && value[0] != '\0') {
+  if (value != nullptr && value[0] != '\0') {
     if (!ParseRecordSyntax(value, &out.record_syntax)) {
       SetError(error_detail, "record_syntax must be SUTRS or HTML.");
       return false;
@@ -1024,21 +1031,21 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
     CHR key[32];
     snprintf(key, sizeof(key), "doc_type_option_%d", i);
     value = cgi->GetValueByName(key);
-    if (value != NULL && value[0] != '\0') {
+    if (value != nullptr && value[0] != '\0') {
       out.doc_type_options.push_back(STRING(value));
     }
     snprintf(key, sizeof(key), "OPTION_%d", i);
     value = cgi->GetValueByName(key);
-    if (value != NULL && value[0] != '\0') {
+    if (value != nullptr && value[0] != '\0') {
       out.doc_type_options.push_back(STRING(value));
     }
   }
   value = GetValue(cgi, "highlight_prefix", "PREFIX");
-  if (value != NULL && value[0] != '\0') out.highlight_prefix = value;
+  if (value != nullptr && value[0] != '\0') out.highlight_prefix = value;
   value = GetValue(cgi, "highlight_suffix", "SUFFIX");
-  if (value != NULL && value[0] != '\0') out.highlight_suffix = value;
+  if (value != nullptr && value[0] != '\0') out.highlight_suffix = value;
   value = GetValue(cgi, "byte_range", "BYTERANGE");
-  if (value != NULL && value[0] != '\0' && !ParseBoolean(value, &out.byte_range)) {
+  if (value != nullptr && value[0] != '\0' && !ParseBoolean(value, &out.byte_range)) {
     SetError(error_detail, "byte_range must be boolean.");
     return false;
   }
@@ -1059,7 +1066,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
     }
   }
   value = GetValue(cgi, "start_doc", "STARTDOC");
-  if (value != NULL && value[0] != '\0') {
+  if (value != nullptr && value[0] != '\0') {
     if (!ParsePositiveInt(value, &out.start_doc)) {
       SetError(error_detail, "start_doc must be a positive integer.");
       return false;
@@ -1067,7 +1074,7 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
     out.has_start_doc = true;
   }
   value = GetValue(cgi, "end_doc", "ENDDOC");
-  if (value != NULL && value[0] != '\0') {
+  if (value != nullptr && value[0] != '\0') {
     if (!ParsePositiveInt(value, &out.end_doc)) {
       SetError(error_detail, "end_doc must be a positive integer.");
       return false;
@@ -1075,17 +1082,17 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
     out.has_end_doc = true;
   }
   value = cgi->GetValueByName("rect");
-  if (value != NULL && value[0] != '\0') {
+  if (value != nullptr && value[0] != '\0') {
     CHR *buf = strdup(value);
-    if (buf == NULL) {
+    if (buf == nullptr) {
       SetError(error_detail, "Failed to parse rect.");
       return false;
     }
-    CHR *save = NULL;
+    CHR *save = nullptr;
     CHR *tok = strtok_r(buf, ",", &save);
     DOUBLE vals[4];
     INT idx = 0;
-    while (tok != NULL && idx < 4) {
+    while (tok != nullptr && idx < 4) {
       STRING t = tok;
       t.Trim();
       if (!ParseDouble(t, &vals[idx])) {
@@ -1094,9 +1101,9 @@ static bool ParseGetRequest(CGIAPP *cgi, ApiRequest& out, STRING& error_detail)
         return false;
       }
       idx++;
-      tok = strtok_r(NULL, ",", &save);
+      tok = strtok_r(nullptr, ",", &save);
     }
-    if (idx != 4 || tok != NULL) {
+    if (idx != 4 || tok != nullptr) {
       free(buf);
       SetError(error_detail, "rect must contain exactly four values.");
       return false;

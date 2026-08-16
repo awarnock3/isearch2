@@ -9884,6 +9884,71 @@ cases, 2949 assertions — up from 768/2903, the 46-assertion increase
 being this new file's own coverage). `make isearch-cgi` also confirmed
 to still build clean (`api_request.cxx` links into `isrch_api`).
 
+**Reopened 2026-08-16 by `/sync-upstream`**: the largest single
+addition of this whole sync — RPN/infix query syntax, `and_mode`,
+synonyms, doc-type filtering, record-syntax negotiation, result
+highlighting, byte-range requests, and geo-rect search, across both
+the GET-parameter and POST/JSON parsing paths, plus
+`PathProvidesDatabase()` (a `PATH_INFO`-based fallback for both GET
+and POST when no explicit `database` field is given, feeding the new
+`/v1/api/{database}/search` routing scheme). The
+`known_params`-allowlist gap this merge's own conflict exposed (it was
+missing every one of these new parameter names, which would have
+rejected all of them as "Unknown parameter") was already found and
+fixed during the merge itself — see the merge commit's own comment at
+the allowlist's definition site in source, cross-referenced here since
+it's this file's own bug, just caught one step earlier than usual.
+
+One additional issue found and fixed during this reprocessing pass:
+
+3. **Constructor member-init list order didn't match the header's
+   declaration order — confirmed a real, if harmless, `-Wreorder`
+   warning under `-Wall -Wextra`.** Upstream inserted
+   `rpn`/`infix`/`and_mode`/`synonyms` into `ApiRequest`'s declaration
+   between `op` and `element_set`, but `ApiRequest::ApiRequest()`'s
+   initializer list still listed `element_set("B")` before
+   `rpn(false)` etc. — C++ always initializes members in declaration
+   order regardless of initializer-list order, so this compiled and
+   ran correctly (no initializer references another member, so the
+   actual *values* were never at risk), but violated this project's
+   "compile clean under `-Wall -Wextra`" standard. Fixed by reordering
+   the initializer list to match the header exactly.
+
+Also modernized: 27 more code-level `NULL` uses (all in upstream's new
+code) converted to `nullptr`.
+
+Also fixed, while extending `tests/Isearch-cgi/test_api_request.cxx`:
+a latent test-isolation bug in the *existing* test file, exposed (not
+introduced) by adding one more POST-style test. `CGIAPP`'s constructor
+calls `GetInput()` immediately, which `exit(1)`s if `REQUEST_METHOD`
+isn't set in the environment — every existing POST test constructed a
+bare `CGIAPP cgi;` without ever setting it explicitly, silently
+relying on a *different*, earlier-run GET test having already called
+`setenv("REQUEST_METHOD", "GET", 1)` and left it there (env vars
+persist process-wide across `TEST_CASE`s). Confirmed real: adding this
+turn's own new POST test shifted Catch2's execution enough that a
+POST-style test now sometimes ran before any GET test had set the env
+var, crashing the whole binary with `exit(1)` (no Catch2 summary at
+all — a hard process exit bypasses it) rather than a normal test
+failure. Fixed all 8 affected `TEST_CASE`s (7 pre-existing plus this
+turn's own new one) by adding an explicit
+`setenv("REQUEST_METHOD", "POST", 1)` before constructing `CGIAPP`,
+removing the hidden ordering dependency entirely. Confirmed fixed by
+running the full suite under `--order rand` five times in a row (5/5
+clean) after the fix, versus a real crash reproduced before it.
+
+11 new test cases added covering the new surface area: an unknown GET
+parameter name still correctly rejected (proving the allowlist fix);
+`rpn`/`infix`/`and_mode`/`synonyms` accepted individually; `rpn`+`infix`
+both set rejected (mutual exclusivity); `doc_type_option_N`/`OPTION_N`
+collection; a valid four-value `rect`; a malformed `rect`; `end_doc` <
+`start_doc` rejected; the `PATH_INFO`-based database fallback; the
+equivalent JSON-body path for `rpn`/`byte_range`/`doc_type_options`;
+and the new fields' defaults added to the existing
+default-construction test. `make tests`/`make tests-asan`: 817 test
+cases, 3042 assertions, clean (up from 808/3006). `make isearch-cgi`:
+clean.
+
 ## Isearch-cgi/api_endpoints.hxx, Isearch-cgi/api_endpoints.cxx
 
 **Processed together**, same pairing convention as the other JSON-API
