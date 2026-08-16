@@ -6576,8 +6576,11 @@ function-level doc comments on `ExtractMarkdownBrief()` and
 non-empty line when there's no heading; preferring a heading that
 appears *after* an earlier plain line (confirms the "keep scanning,
 don't stop at the first line" behavior); an all-blank record leaving
-the brief empty; and a non-`"B"` element set deferring to
-`DOCTYPE::Present()` without crashing. Unlike
+the brief empty; and an unrecognized element set falling through to
+the raw record text unchanged (not a `DOCTYPE::Present()` defer -- this
+file has never had one; see the reopened note below, this was a
+pre-existing inaccuracy in this test's own name/comment, unrelated to
+the 2026-08-16 upstream changes). Unlike
 `tests/doctype/test_emacsinfo.cxx`/`test_bibtex.cxx` (which left
 `Present()` untested because `RESULT::GetRecordData()` crashes on a
 default-constructed `RESULT`), this file's entire logic lives behind
@@ -6589,6 +6592,28 @@ file + `SetPathName()`/`SetFileName()`/`SetRecordStart()`/
 `RecordEnd` set to `content.size() - 1` per `RESULT::GetRecordSize()`'s
 documented inclusive-end convention), the same technique available to
 those earlier files but not attempted there.
+
+**Reopened 2026-08-16 by `/sync-upstream`**: upstream added a second
+customized element set, `"S"`, via a new file-local
+`ExtractMarkdownHeaders()` -- collects every line in the record
+starting with `#` (trimmed of surrounding whitespace, but *not*
+stripped of the `#` markers or normalized the way `"B"`'s heading
+extraction is), newline-joining multiple headings. Traced by hand the
+same way as `ExtractMarkdownBrief()` above: every exit path frees the
+`NewCString()` buffer (only one exit path here, no early return, so no
+double-free/leak risk to check), the `new[]`/`delete[]` pairing
+confirmed correct against `STRING::NewCString()`'s own contract in
+`src/string.cxx`, and traced through an empty record, a
+heading-only record with no trailing newline, and a record with no
+headings at all -- all return cleanly. **Zero bugs found.** Also fixed
+a pre-existing (not upstream-introduced) stale test name/comment
+while here: `tests/doctype/test_markdown.cxx` had a test claiming
+unrecognized element sets "defer to `DOCTYPE::Present()`", which was
+never actually true -- this file has always fallen through to the raw
+record text directly. Corrected the test's name/comment and added
+explicit coverage for `"F"` and the new `"S"` (both a multi-heading
+record and a no-headings record). `make tests`/`make tests-asan`: 806
+test cases, 2999 assertions, clean (up from 803/2996).
 
 ## doctype/memodoc.cxx
 

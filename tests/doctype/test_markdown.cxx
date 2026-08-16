@@ -135,7 +135,10 @@ TEST_CASE("MARKDOWN::Present leaves the brief empty for a blank record", "[markd
 	REQUIRE(STRING("") == out);
 }
 
-TEST_CASE("MARKDOWN::Present defers non-\"B\" element sets to DOCTYPE::Present", "[markdown]") {
+TEST_CASE("MARKDOWN::Present returns the raw record text for an unrecognized element set", "[markdown]") {
+	// Not a DOCTYPE::Present() defer -- this file has never had one; "B"
+	// and "S" are handled explicitly, everything else (including this
+	// unrecognized "X") falls through to the raw record text unchanged.
 	std::string content = "# Title\nBody\n";
 	TempFile file(content);
 	TESTIDBOBJ db;
@@ -143,6 +146,42 @@ TEST_CASE("MARKDOWN::Present defers non-\"B\" element sets to DOCTYPE::Present",
 	RESULT r = MakeResult(file, content.size());
 
 	STRING out;
-	md.Present(r, "X", &out);  // Must not crash.
-	SUCCEED();
+	md.Present(r, "X", &out);
+	REQUIRE(STRING(content.c_str()) == out);
+}
+
+TEST_CASE("MARKDOWN::Present \"F\" returns the raw record text unchanged", "[markdown]") {
+	std::string content = "# Title\nBody text\nMore body\n";
+	TempFile file(content);
+	TESTIDBOBJ db;
+	MARKDOWN md(&db);
+	RESULT r = MakeResult(file, content.size());
+
+	STRING out;
+	md.Present(r, "F", &out);
+	REQUIRE(STRING(content.c_str()) == out);
+}
+
+TEST_CASE("MARKDOWN::Present \"S\" joins every '#'-prefixed heading line, trimmed", "[markdown]") {
+	std::string content = "Intro\n  ## Section One  \nBody\n# Section Two\nMore body\n";
+	TempFile file(content);
+	TESTIDBOBJ db;
+	MARKDOWN md(&db);
+	RESULT r = MakeResult(file, content.size());
+
+	STRING out;
+	md.Present(r, "S", &out);
+	REQUIRE(STRING("## Section One\n# Section Two") == out);
+}
+
+TEST_CASE("MARKDOWN::Present \"S\" returns empty when the record has no headings", "[markdown]") {
+	std::string content = "Just a plain line\nAnother plain line\n";
+	TempFile file(content);
+	TESTIDBOBJ db;
+	MARKDOWN md(&db);
+	RESULT r = MakeResult(file, content.size());
+
+	STRING out;
+	md.Present(r, "S", &out);
+	REQUIRE(STRING("") == out);
 }

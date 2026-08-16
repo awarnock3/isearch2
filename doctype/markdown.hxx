@@ -1,4 +1,4 @@
-// ISEARCH2-CLEANUP: processed 2026-08-08
+// ISEARCH2-CLEANUP: processed 2026-08-16
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 /*@@@
@@ -16,10 +16,13 @@ Author:		Copilot
 
 // A DOCTYPE for Markdown documents. Record splitting and field parsing
 // are entirely inherited from DOCTYPE's own defaults (no ParseRecords()/
-// ParseFields() override); only the "B" (brief) element set is
-// customized, via Present() -> ExtractMarkdownBrief() in the source,
-// to prefer the document's first ATX heading ("# Heading") and fall
-// back to its first non-empty line.
+// ParseFields() override); two element sets are customized via
+// Present() in the source: "B" (brief) prefers the document's first
+// ATX heading ("# Heading"), falling back to its first non-empty line
+// (ExtractMarkdownBrief()); "S" returns every "#"-prefixed heading line
+// in the record, newline-joined and otherwise unmodified
+// (ExtractMarkdownHeaders()). Every other element set, including "F",
+// returns the raw record text unchanged.
 class MARKDOWN : public DOCTYPE {
 public:
   MARKDOWN(PIDBOBJ DbParent);
