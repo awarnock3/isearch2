@@ -10288,3 +10288,105 @@ tests-asan` unaffected (823 test cases, 3053 assertions, unchanged —
 still never linked into the test tree). `make isearch`/`make
 isearch-cgi`/`make smoke-test` all pass clean.
 
+## Isearch-cgi/api_fetch.hxx, Isearch-cgi/api_fetch.cxx
+
+**Processed together**, same pairing convention as the other JSON-API
+files above. **Brand new this sync** (no prior turn, no prior
+`ISEARCH2-CLEANUP` marker) — the fourth JSON API endpoint, `/fetch`,
+retrieving a single record by `database`+`record_key`. Dispatched from
+[`Isearch-cgi/isrch_api.cxx`](#isearch-cgiisrch_apicxx) via
+[`Isearch-cgi/api_endpoints.hxx`](#isearch-cgiapi_endpointshxx-isearch-cgiapi_endpointscxx)'s
+`HandleFetch()` (both already reviewed in their own reopened turns this
+sync). Confirmed self-contained.
+
+Notably less rigorous than its sibling
+[`Isearch-cgi/api_request.cxx`](#isearch-cgiapi_requesthxx-isearch-cgiapi_requestcxx):
+where that file parses POST JSON bodies with a proper recursive-descent
+`JsonReader` class, this file's `GetJsonField()` is a hand-rolled
+`strstr()`-based field extractor — finds the literal substring
+`"fieldname"` anywhere in the body, then reads whatever string follows.
+Considered whether this creates a field-name-collision risk (a crafted
+value containing another field's `"name"` text) — concluded it doesn't
+in practice: a raw, unescaped `"` inside a JSON string value always
+terminates that string per the JSON grammar itself, so an attacker
+can't smuggle a literal `"record_key"` sequence inside a different
+field's value without an intervening (and JSON-mandatory) backslash
+before the embedded quote, which changes the raw bytes enough that the
+exact-substring search no longer matches. Not something to "fix"
+further absent a concrete reachable exploit.
+
+1. **`GetJsonField()`'s escape handling had no `\uXXXX` case at all —
+   confirmed real data corruption, the identical bug class as
+   `Isearch-cgi/api_request.cxx`'s own `BUGFIX #2`, independently
+   reintroduced here in a different, hand-rolled parser.** With no
+   `'u'` case, a `\u` escape fell into `default:`, which appends the
+   character *right after* the backslash literally (here, `u`) and
+   then keeps walking the string one character at a time — so
+   `10` (meant to decode to `"10"`) came out as the literal
+   6-character garbage string `"u0031u0030"`, not even a recognizable
+   placeholder. Confirmed with a live repro through the real `isrch_api`
+   binary and a real `Iindex`-built database before this fix: a POST
+   `/fetch` body with `record_key` given as `"10"` failed to
+   match the real record (whose key is `"10"`) at all, returning `404
+   "Record not found"` instead of the expected `200`. Fixed the same
+   way as `api_request.cxx`'s `JsonReader` (decode `0x00`-`0xFF` to the
+   matching Latin-1 byte — this codebase is single-byte/`ISO-8859-1`
+   throughout) — but this function has no way to *fail* the parse and
+   report an error back to its caller (`GetJsonField()` just returns a
+   `STRING`, no success/failure signal), so a codepoint above `0xFF`
+   (no lossless single-byte representation) is silently **dropped**
+   (nothing appended) rather than guessed at with a placeholder —
+   confirmed live that this doesn't crash and doesn't corrupt the rest
+   of the value (`"1☃0"` → `"10"`, the snowman contributing
+   nothing). Re-verified live post-fix: the same `10` request
+   now correctly returns `200` with the right record. Also added the
+   `\b`/`\f` escapes this function was missing entirely (present in
+   `JsonReader` but absent here) while touching this code. See
+   `BUGFIX #1` in source. Regression-tested via a full revert-and-repro
+   on the two new escape-decoding tests: reverted just the fix, reran
+   them, watched both fail with the exact corrupted strings the live
+   repro showed (`u0031u0030` and `1u26030`), then restored it.
+
+No other issues found: the `database` parameter's
+`ISEARCH_API_DB_FROM_PATH`-env-var precedence over an explicit query
+param (confirmed live, matches the same precedence already established
+for `Isearch-cgi/isrch_srch.cxx`'s own reopened turn); the
+`known_params` GET allowlist (correctly includes every field this file
+actually parses, unlike the gap found and fixed in
+`api_request.cxx`'s own allowlist during the merge); `record_syntax`
+validation (rejects anything but `HTML`/`SUTRS`, matching this file's
+own narrower support versus `api_request.cxx`'s broader
+`ParseRecordSyntax()` — a deliberate difference between the two
+endpoints, not a bug); and `ExecuteFetch()`'s `VIDB`
+allocate-then-`delete`-on-every-exit-path lifecycle (all three real
+paths — bad database, record not found, success — correctly free
+`pdb`). Modernized all 14 code-level `NULL` uses to `nullptr`. No
+`sprintf` calls present.
+
+`tests/Isearch-cgi/test_api_fetch.cxx` (new, wired into
+`TEST_ENGINE_CGI_SRCS`, picked up automatically by the `find`-based
+`TEST_SRCS` glob) covers: missing `database`/`record_key` rejections;
+an unknown GET parameter rejection; an unsupported `record_syntax`
+rejection; `element_set`/`record_syntax` defaults (`"F"`/`"SUTRS"`);
+an explicit `record_syntax` override; the `ISEARCH_API_DB_FROM_PATH`
+precedence case; a minimal valid POST/JSON request; an empty POST body
+rejection; the `BUGFIX #1` `\u00XX`-decodes and `\uXXXX`-above-`0xFF`-
+drops-safely cases; standard JSON escape decoding
+(`\"`/`\\`/`\n`/`\t`); and `ExecuteFetch()`'s `404` for a nonexistent
+database (including the empty-`db_path`-falls-back-to-`"."` branch,
+matching `test_api_search.cxx`'s established pattern for that exact
+gotcha). The successful-fetch path was instead verified with live
+repros against a real `Iindex`-built database before this turn was
+committed (confirmed `status=200`, correct `filename`/`content`,
+matching this batch's established convention for that class of test).
+Every `CGIAPP`-constructing test sets `REQUEST_METHOD` explicitly
+before construction, avoiding the ordering fragility discovered and
+fixed in `api_request.cxx`'s own reopened turn earlier this batch.
+`make tests`/`make tests-asan`: 837 test cases, 3080 assertions, clean
+(up from 823/3053); confirmed stable across 3 runs under `--order
+rand`. `make isearch`/`make isearch-cgi`/`make smoke-test`: clean.
+
+This was the last `pending` row in `docs/PROCESSING_STATUS.md` after
+this `/sync-upstream` — every file reopened or newly added by the
+2026-08-16 merge has now been reprocessed.
+
