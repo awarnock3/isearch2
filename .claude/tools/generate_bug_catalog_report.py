@@ -65,6 +65,33 @@ def parse_processing_status(status_file):
     return by_path
 
 
+def resolve_section_status(path, status_by_path):
+    """Resolve a catalog section's '## <path>' header against status_by_path.
+
+    BUGFIX: a header covering a processed-together pair (e.g.
+    "Isearch-cgi/api_response.hxx, Isearch-cgi/api_response.cxx") is a
+    single comma-joined string that never equals either individual File
+    column value in docs/PROCESSING_STATUS.md -- status_by_path.get(path)
+    always missed for every paired-file section, regardless of its real
+    status, so every such section was unconditionally reported as
+    "reopened"/"not tracked". Confirmed via a real run: every done pair
+    (api_response, api_request, api_endpoints, api_search, cgi-util,
+    markdown, ...) still showed up in the Reopened Since Cataloged table.
+    Fixed by splitting on ',' and checking each component path
+    individually: if any component is tracked and not 'done', that's the
+    section's real status (so a still-pending file in an otherwise-done
+    pair is correctly caught); if every tracked component is 'done', the
+    section is 'done'; only a header with no tracked component at all
+    falls back to None ("not tracked").
+    """
+    component_paths = [p.strip() for p in path.split(',')]
+    known = [status_by_path[p] for p in component_paths if p in status_by_path]
+    if not known:
+        return None
+    not_done = [info for info in known if info['status'] != 'done']
+    return not_done[0] if not_done else known[0]
+
+
 def parse_bug_catalog(catalog_path):
     """Parse docs/BUG_CATALOG.md into an ordered list of per-file sections.
 
@@ -284,11 +311,16 @@ def generate_html_report(catalog_sections, status_by_path):
 
     dead_files, dead_code = find_dead_code(catalog_sections)
 
+    # 'generated' is excluded from "reopened": it's a structurally
+    # different, never-hand-processed status (machine-produced by
+    # another in-scope file's own turn, per CLAUDE.md), not a done file
+    # that regressed back to needing rework -- unlike 'pending'/
+    # 'blocked', it doesn't mean this catalog entry is stale or unsettled.
     reopened = []
     for path, intro, items, deferred in catalog_sections:
-        info = status_by_path.get(path)
+        info = resolve_section_status(path, status_by_path)
         status = info['status'] if info else 'unknown'
-        if status != 'done':
+        if status not in ('done', 'generated'):
             reopened.append((path, len(items), status, info.get('last_processed', '') if info else ''))
 
     now = datetime.now()
@@ -342,7 +374,7 @@ def generate_html_report(catalog_sections, status_by_path):
     # --- Per-file catalog listing ---
     file_blocks = []
     for path, intro, items, deferred in catalog_sections:
-        info = status_by_path.get(path)
+        info = resolve_section_status(path, status_by_path)
         status = info['status'] if info else 'unknown'
         last_processed = info.get('last_processed', '') if info else ''
 
@@ -368,7 +400,7 @@ def generate_html_report(catalog_sections, status_by_path):
       </div>"""
 
         status_note = ''
-        if status != 'done':
+        if status not in ('done', 'generated'):
             status_note = (
                 '      <p class="section-note">&#9888; Reopened since these bugs were cataloged '
                 '&mdash; current status is '
@@ -833,7 +865,7 @@ def main():
         total_bugs = sum(len(items) for _, _, items, _ in catalog_sections)
         reopened = sum(
             1 for path, _, _, _ in catalog_sections
-            if status_by_path.get(path, {}).get('status', 'unknown') != 'done'
+            if (resolve_section_status(path, status_by_path) or {}).get('status', 'unknown') not in ('done', 'generated')
         )
         print(f"✓ Bug catalog report generated successfully")
         print(f"  Path: {output_pdf}")
