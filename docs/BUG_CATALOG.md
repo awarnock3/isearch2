@@ -9991,6 +9991,37 @@ tests-asan` pass clean (790 test cases, 2969 assertions — up from
 coverage). `make isearch-cgi` also confirmed to still build clean
 (`api_endpoints.cxx` links into `isrch_api`).
 
+**Reopened 2026-08-16 by `/sync-upstream`**: upstream added
+`HandleFetch()`, the fourth JSON API endpoint (a thin wrapper around
+[`Isearch-cgi/api_fetch.hxx`](#isearch-cgiapi_fetchhxx-isearch-cgiapi_fetchcxx)'s
+`ParseFetchRequest()`/`ExecuteFetch()`, still `pending` at the time of
+this file's own turn — read for context here, processed on its own
+turn separately), plus `"S"`/`record_syntaxes`/`record_syntax`
+additions to `HandleCapabilities()`'s output matching the same fields
+added to `Isearch-cgi/api_request.hxx`/`Isearch-cgi/api_endpoints.hxx`
+(the `"S"` element set) this sync. **Zero bugs found** in this file's
+own code: `HandleFetch()` mirrors `Isearch-cgi/isrch_api.cxx`'s own
+already-verified `cgi`-allocate-only-for-GET/delete-on-every-exit-path
+pattern exactly, and correctly maps `ExecuteFetch()`'s `404` into a
+distinct `problem_type` from other failure codes. Confirmed live
+end-to-end against the real `isrch_api` binary and a real
+`Iindex`-built database (not just unit tests): a `PATH_INFO=/v1/api/
+fetch` request for a real record key returned `200` with the correct
+filename/content, and a bogus record key correctly returned `404`.
+
+Modernized the 4 new code-level `NULL` uses in `HandleFetch()` to
+`nullptr`. Added a `HandleCapabilities()` test for the new `"S"`/
+`record_syntaxes`/`record_syntax` fields, plus 4 new `HandleFetch()`
+tests covering the paths reachable without a real on-disk database
+(missing `record_key`, an unknown GET parameter, an unsupported
+`record_syntax`, and a nonexistent database) — the successful-fetch
+path was instead verified via the live repro above, same scope-note
+precedent as `tests/Isearch-cgi/test_api_search.cxx`. `make tests`/
+`make tests-asan`: 822 test cases, 3051 assertions, clean (up from
+817/3042); confirmed stable across 3 runs under `--order rand` given
+this session's earlier discovery of `CGIAPP`'s `REQUEST_METHOD`
+ordering fragility. `make isearch-cgi`/`make smoke-test`: clean.
+
 ## Isearch-cgi/api_search.hxx, Isearch-cgi/api_search.cxx
 
 **Processed together**, same pairing convention as the other JSON-API

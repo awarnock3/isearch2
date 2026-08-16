@@ -87,6 +87,17 @@ TEST_CASE("HandleCapabilities reports search types, operators, defaults, and lim
 	REQUIRE(out.find("\"max_hits_ceiling\":") != std::string::npos);
 }
 
+TEST_CASE("HandleCapabilities reports the \"S\" element set and record syntaxes added by upstream", "[api_endpoints]") {
+	ClearApiEnv();
+	ApiConfig cfg = LoadApiConfig();
+	CoutCapture cap;
+	HandleCapabilities(cfg);
+	std::string out = cap.str();
+	REQUIRE(out.find("\"element_sets\":[\"B\",\"F\",\"S\"]") != std::string::npos);
+	REQUIRE(out.find("\"record_syntaxes\":[\"HTML\",\"SUTRS\"]") != std::string::npos);
+	REQUIRE(out.find("\"record_syntax\":\"SUTRS\"") != std::string::npos);
+}
+
 TEST_CASE("HandleDatabases reports a 501 problem when ISEARCH_DB_PATH is unset", "[api_endpoints]") {
 	ClearApiEnv();
 	ApiConfig cfg = LoadApiConfig();
@@ -138,4 +149,54 @@ TEST_CASE("HandleDatabases reports an empty list for a database-free directory",
 	HandleDatabases(cfg);
 	REQUIRE(cap.str().find("\"databases\":[]") != std::string::npos);
 	ClearApiEnv();
+}
+
+// HandleFetch() (new, delegates to Isearch-cgi/api_fetch.hxx/.cxx --
+// processed separately). Only the error paths reachable without a real
+// on-disk database are covered here; ExecuteFetch()'s happy path needs a
+// real Iindex-built database, same scope note as test_api_search.cxx.
+
+TEST_CASE("HandleFetch reports a 400 problem when record_key is missing", "[api_endpoints]") {
+	setenv("REQUEST_METHOD", "GET", 1);
+	setenv("QUERY_STRING", "database=mydb", 1);
+	ApiConfig cfg;
+	cfg.db_path = "/tmp";
+	CoutCapture cap;
+	HandleFetch(cfg, "GET", nullptr);
+	std::string out = cap.str();
+	REQUIRE(out.find("Status: 400") != std::string::npos);
+	REQUIRE(out.find("record_key") != std::string::npos);
+}
+
+TEST_CASE("HandleFetch reports a 400 problem for an unknown GET parameter", "[api_endpoints]") {
+	setenv("REQUEST_METHOD", "GET", 1);
+	setenv("QUERY_STRING", "database=mydb&record_key=42&bogus=1", 1);
+	ApiConfig cfg;
+	cfg.db_path = "/tmp";
+	CoutCapture cap;
+	HandleFetch(cfg, "GET", nullptr);
+	std::string out = cap.str();
+	REQUIRE(out.find("Status: 400") != std::string::npos);
+	REQUIRE(out.find("Unknown parameter") != std::string::npos);
+}
+
+TEST_CASE("HandleFetch reports a 400 problem for an unsupported record_syntax", "[api_endpoints]") {
+	setenv("REQUEST_METHOD", "GET", 1);
+	setenv("QUERY_STRING", "database=mydb&record_key=42&record_syntax=XML", 1);
+	ApiConfig cfg;
+	cfg.db_path = "/tmp";
+	CoutCapture cap;
+	HandleFetch(cfg, "GET", nullptr);
+	REQUIRE(cap.str().find("Status: 400") != std::string::npos);
+}
+
+TEST_CASE("HandleFetch reports a 404 problem for a nonexistent database", "[api_endpoints]") {
+	setenv("REQUEST_METHOD", "GET", 1);
+	setenv("QUERY_STRING",
+	       "database=isearch2_test_api_endpoints_fetch_does_not_exist&record_key=42", 1);
+	ApiConfig cfg;
+	cfg.db_path = "/tmp";
+	CoutCapture cap;
+	HandleFetch(cfg, "GET", nullptr);
+	REQUIRE(cap.str().find("Status: 404") != std::string::npos);
 }

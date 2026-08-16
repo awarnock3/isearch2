@@ -1,4 +1,4 @@
-// ISEARCH2-CLEANUP: processed 2026-08-10
+// ISEARCH2-CLEANUP: processed 2026-08-16
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include "api_endpoints.hxx"
@@ -111,15 +111,15 @@ void HandleDatabases(const ApiConfig& cfg)
 
 void HandleFetch(const ApiConfig& cfg, const CHR* method, const CHR* body)
 {
-  CGIAPP *cgi = NULL;
-  if (method != NULL && StrCaseCmp(method, "GET") == 0) {
+  CGIAPP *cgi = nullptr;
+  if (method != nullptr && StrCaseCmp(method, "GET") == 0) {
     cgi = new CGIAPP();
   }
 
   ApiFetchRequest req;
   STRING parse_error;
   if (!ParseFetchRequest(cgi, method, body, req, parse_error)) {
-    if (cgi != NULL) delete cgi;
+    if (cgi != nullptr) delete cgi;
     WriteHttpHeader(400, true);
     WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
                  "Invalid request parameters", parse_error);
@@ -129,7 +129,7 @@ void HandleFetch(const ApiConfig& cfg, const CHR* method, const CHR* body)
   ApiFetchResult result;
   STRING error_detail;
   const int status = ExecuteFetch(req, cfg, result, error_detail);
-  if (cgi != NULL) delete cgi;
+  if (cgi != nullptr) delete cgi;
 
   if (status != 200) {
     const CHR *problem_type = (status == 404)
