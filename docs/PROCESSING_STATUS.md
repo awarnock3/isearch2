@@ -251,6 +251,6 @@
 | 247 | Isearch-cgi/api_request.cxx | done | 2026-08-16 | [Isearch-cgi/api_request.hxx](BUG_CATALOG.md#isearch-cgiapi_requesthxx-isearch-cgiapi_requestcxx) |
 | 248 | Isearch-cgi/api_response.cxx | done | 2026-08-16 | [Isearch-cgi/api_response.hxx](BUG_CATALOG.md#isearch-cgiapi_responsehxx-isearch-cgiapi_responsecxx) |
 | 249 | Isearch-cgi/api_search.cxx | done | 2026-08-16 | [Isearch-cgi/api_search.hxx](BUG_CATALOG.md#isearch-cgiapi_searchhxx-isearch-cgiapi_searchcxx) |
-| 250 | Isearch-cgi/isrch_api.cxx | pending | | |
+| 250 | Isearch-cgi/isrch_api.cxx | done | 2026-08-16 | [Isearch-cgi/isrch_api.cxx](BUG_CATALOG.md#isearch-cgiisrch_apicxx) |
 | 251 | Isearch-cgi/api_fetch.hxx | pending | | |
 | 252 | Isearch-cgi/api_fetch.cxx | pending | | |

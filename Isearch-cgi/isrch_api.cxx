@@ -1,4 +1,4 @@
-// ISEARCH2-CLEANUP: processed 2026-08-10
+// ISEARCH2-CLEANUP: processed 2026-08-16
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <stdlib.h>
@@ -212,7 +212,7 @@ int main(int argc, char **argv)
     }
     if (StrCaseCmp(method, "POST") == 0) {
       const CHR *content_type = getenv("CONTENT_TYPE");
-      if (content_type == NULL || content_type[0] == '\0') {
+      if (content_type == nullptr || content_type[0] == '\0') {
         content_type = getenv("HTTP_CONTENT_TYPE");
       }
       if (!ContainsNoCase(content_type, "application/json")) {
@@ -223,7 +223,7 @@ int main(int argc, char **argv)
         return 0;
       }
     }
-    HandleFetch(cfg, method, NULL);
+    HandleFetch(cfg, method, nullptr);
     return 0;
   }
   CHR *path_cstr = path.NewCString();
@@ -251,7 +251,7 @@ int main(int argc, char **argv)
     }
     if (StrCaseCmp(method, "POST") == 0) {
       const CHR *content_type = getenv("CONTENT_TYPE");
-      if (content_type == NULL || content_type[0] == '\0') {
+      if (content_type == nullptr || content_type[0] == '\0') {
         content_type = getenv("HTTP_CONTENT_TYPE");
       }
       if (!ContainsNoCase(content_type, "application/json")) {
@@ -265,7 +265,7 @@ int main(int argc, char **argv)
     if (database.GetLength() > 0 && !(path == "/fetch")) {
       setenv("ISEARCH_API_DB_FROM_PATH", database.NewCString(), 1);
     }
-    HandleFetch(cfg, method, NULL);
+    HandleFetch(cfg, method, nullptr);
     return 0;
   }
   const bool is_search_path = (path == "/search") || endpoint.CaseEquals("search");
@@ -314,7 +314,7 @@ int main(int argc, char **argv)
 
   if (cfg.allow_list.GetTotalEntries() > 0 &&
       !InAllowListNoCase(cfg.allow_list, req.database)) {
-    if (cgi != NULL) delete cgi;
+    if (cgi != nullptr) delete cgi;
     WriteHttpHeader(404, true);
     WriteProblem(404, "https://isearch.invalid/problems/not-found",
                  "Not found", "Requested database is not available.");
@@ -322,7 +322,7 @@ int main(int argc, char **argv)
   }
 
   if (req.max_hits > cfg.max_hits_ceiling) {
-    if (cgi != NULL) delete cgi;
+    if (cgi != nullptr) delete cgi;
     WriteHttpHeader(400, true);
     WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
                  "Invalid request parameters",
@@ -352,14 +352,34 @@ int main(int argc, char **argv)
   }
 
   ApiLinks links;
-  if (req.start > 1) {
-    INT prev_start = req.start - req.max_hits;
-    if (prev_start < 1) prev_start = 1;
-    links.prev = BuildSearchLink(req, prev_start);
-  }
-  INT next_start = req.start + req.max_hits;
-  if (next_start <= meta.matching_record_count) {
-    links.next = BuildSearchLink(req, next_start);
+  // BUGFIX #2 (docs/BUG_CATALOG.md#isearch-cgiisrch_apicxx): this
+  // prev/next math is only correct for plain start/max_hits pagination.
+  // When start_doc/end_doc is used instead, ExecuteSearch() applies a
+  // *different*, potentially smaller effective page size (see
+  // api_search.cxx's present_start/present_limit) that isn't exposed
+  // outside that function -- ApiSearchMeta (api_response.hxx, header-
+  // frozen) has no field for it, and BuildSearchLink() has no way to
+  // express "the next start_doc/end_doc window" in the first place, only
+  // a plain start/max_hits step. Confirmed live: start_doc=1&end_doc=2
+  // against 5 real matches produced links:{"next":null,...} -- silently
+  // missing a real next page -- because req.start(1)+req.max_hits(a
+  // default 50, unrelated to the actual 2-record window shown) never
+  // satisfies next_start<=matching_record_count for a mere 5 matches.
+  // Properly computing a correct link needs either a header change or a
+  // BuildSearchLink() redesign, neither of which is a same-turn call to
+  // make unattended -- so this suppresses the links in that mode
+  // instead of emitting ones that quietly lie about whether more data
+  // exists.
+  if (!req.has_start_doc && !req.has_end_doc) {
+    if (req.start > 1) {
+      INT prev_start = req.start - req.max_hits;
+      if (prev_start < 1) prev_start = 1;
+      links.prev = BuildSearchLink(req, prev_start);
+    }
+    INT next_start = req.start + req.max_hits;
+    if (next_start <= meta.matching_record_count) {
+      links.next = BuildSearchLink(req, next_start);
+    }
   }
   EndSearchResponse(links);
   return 0;

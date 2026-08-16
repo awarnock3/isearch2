@@ -10236,7 +10236,55 @@ assertions, unchanged — this file was never linked into the test
 tree). `make isearch`/`make isearch-cgi`/`make smoke-test` all pass
 clean.
 
-This was also the last `pending` row in `docs/PROCESSING_STATUS.md` —
-every file in `src/`, `doctype/`, and `Isearch-cgi/` has now been
-processed.
+**Reopened 2026-08-16 by `/sync-upstream`**: a large addition —
+`/fetch` routing (dispatching to the also-reopened
+[`Isearch-cgi/api_endpoints.hxx`](#isearch-cgiapi_endpointshxx-isearch-cgiapi_endpointscxx)'s
+`HandleFetch()`), prefixed-path support (`/v1/api/{database}/search`
+and `/api/v1/{database}/search`, via `ExtractPathParam()`), an
+allowlist check against `cfg.allow_list`, and a `max_hits_ceiling`
+enforcement check.
+
+2. **`links.prev`/`links.next` pagination math used `req.start`/
+   `req.max_hits` unconditionally, even when `start_doc`/`end_doc`
+   pagination was used instead — confirmed a real, silently-missing
+   "next" link, not a crash.**
+   [`Isearch-cgi/api_search.cxx`](#isearch-cgiapi_searchhxx-isearch-cgiapi_searchcxx)'s
+   own reopened turn added `start_doc`/`end_doc` range pagination,
+   which computes a *different*, potentially much smaller effective
+   page size internally (`present_limit`) than `req.max_hits` — but
+   that effective size was never exposed outside `ExecuteSearch()`
+   (`ApiSearchMeta`, in the header-frozen `api_response.hxx`, has no
+   field for it), so this file's link math had no way to know it.
+   Confirmed live against the real production binary and a real
+   `Iindex`-built 5-document database: `start_doc=1&end_doc=2` (showing
+   2 of 5 matches) produced `"links":{"next":null,...}` — silently
+   claiming no further results existed, with no way for a client to
+   reach documents 3-5 via the API's own pagination links. Properly
+   computing a *correct* link for this mode would need either a header
+   change (exposing the effective page size through `ApiSearchMeta`)
+   or a redesign of `BuildSearchLink()` (which only knows how to step a
+   plain `start` offset, not a `start_doc`/`end_doc` window) — neither
+   of which is a same-turn call to make without guessing at a bigger
+   design than this fix warrants. Fixed conservatively instead: suppress
+   both links (leave them `null`, an already-well-defined "no page"
+   value in this schema) whenever `req.has_start_doc || req.has_end_doc`
+   is set, rather than ship a link that quietly lies about whether more
+   data exists. Confirmed live post-fix: the same `start_doc=1&end_doc=2`
+   request now returns `"links":{"next":null,"prev":null}` (honest
+   omission), while plain `start`/`max_hits` pagination is unaffected
+   (confirmed live: a real "next" link with the correct `start=3`
+   still generates normally). See `BUGFIX #2` in source.
+
+Also modernized: 6 more `NULL` → `nullptr` in the newly-added routing
+code. No `sprintf` calls to convert.
+
+Still no test file, for the reasons in the scope note above — both
+fixes documented here and at their `BUGFIX #n` comment sites in
+source, verified via live repros against the real production binary
+and a real `Iindex`-built database (the `/health`, `/capabilities`,
+`/databases`, `/fetch`, and `/search` endpoints were also each
+re-verified live end to end as part of this turn). `make tests`/`make
+tests-asan` unaffected (823 test cases, 3053 assertions, unchanged —
+still never linked into the test tree). `make isearch`/`make
+isearch-cgi`/`make smoke-test` all pass clean.
 
