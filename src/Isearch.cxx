@@ -42,6 +42,21 @@ Description:	Command-line search utility
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+// NOTE: this is a `main()`-only CLI entry point (like src/Iget.cxx and
+// src/Iindex.cxx), so it cannot be linked into the shared Catch2 test
+// binary (its `main()` would collide with catch_amalgamated.cpp's
+// own). At 754 lines the deep audit prioritized the search/result-set
+// pipeline (VIDB::Search()/AndSearch() and their return-value handling)
+// and the argument-parsing loop over the JSON-output/interactive-
+// browsing tail of main(). Verified via compile-clean confirmation and
+// manual trace-through, including reading VIDB::Search()/AndSearch()'s
+// own implementation in src/vidb.cxx to confirm a real (not
+// hypothetical) nullptr-return path; see docs/BUG_CATALOG.md for the
+// full note, including a documented-but-unimplemented `-RECT{...}`
+// flag left as-is rather than guessed-at.
+
 #include <stdio.h>
 #include <string.h>
 #include <locale.h>
@@ -86,6 +101,9 @@ static void PrintJsonEscaped(const STRING& Value) {
   delete [] text;
 }
 
+/// Parses search flags (-d/-p/-f/-json/-and/-rpn/-infix/-syn/...) and a
+/// trailing word list, runs the query against the named database, then
+/// either prints JSON (-json) or an interactive/terse result listing.
 int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr,"Isearch v%s\n", IsearchVersion);
@@ -470,6 +488,19 @@ int main(int argc, char** argv) {
     pirset = pdb->AndSearch(squery);
   } else {
     pirset = pdb->Search(squery);
+  }
+
+  // BUGFIX #1 (docs/BUG_CATALOG.md#srcisearchcxx): VIDB::Search()/
+  // AndSearch() (src/vidb.cxx) both return nullptr when the virtual
+  // database has no usable sub-databases ("Bail out if no databases",
+  // c_dbcount <= 0) -- a real, reachable state for a misconfigured or
+  // empty virtual-database registry, not just a defensive guess. The
+  // very next line used to dereference pirset unconditionally.
+  if (!pirset) {
+    fprintf(stderr,"ERROR: Search failed (no usable databases).\n");
+    delete [] WordList;
+    delete pdb;
+    RETURN_ERROR;
   }
 
   n = pirset->GetTotalEntries();

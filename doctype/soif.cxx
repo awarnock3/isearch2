@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 // $Id: soif.cxx,v 1.2 2000/09/06 21:33:31 cnidr Exp $
 /*
 File:        soif.cxx
@@ -17,12 +20,13 @@ SOIF::SOIF(PIDBOBJ DbParent) : DOCTYPE(DbParent) {
 }
 
 
-void 
+// Reads FileRecord's underlying file whole and adds it to Db as a
+// single RECORD spanning the entire file -- unlike most other
+// doctypes, this one does not split a file into multiple records.
+void
 SOIF::ParseRecords(const RECORD& FileRecord) {
 
   GPTYPE Start = 0;
-  GPTYPE i = 0;
-  int    lastBrace = 0;		// this is an int because I need signed.
   CHR   *RecBuffer;
   GPTYPE RecStart, RecEnd, RecLength;
   GPTYPE ActualLength=0;
@@ -107,16 +111,23 @@ SOIF::ParseRecords(const RECORD& FileRecord) {
   Record.SetRecordEnd(ActualLength);
   Db->DocTypeAddRecord(Record);
 
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypesoifcxx): RecBuffer was freed
+  // on the early-error paths above (failed/short fread()) but never
+  // here, on the normal success path -- a straightforward memory leak
+  // on every file this function successfully processes. Same bug
+  // already fixed in doctype/para.cxx's BUGFIX #2, confirmed there via
+  // ASan and fixed identically here without re-deriving.
+  delete [] RecBuffer;
 }
 
 
-//
-//
-// The new goal:  scan the record looking for (title = ") and (") pairs
-// and mark them as a field named "title".
-//
-//
-void 
+// Reads NewRecord's bytes off disk (or, if RecordEnd is unset, treats
+// the whole file as a single record), and parses either a leading
+// "@FILE { <url>\n" line (mapped to a "url" field) or "name{len}:\t"
+// attribute headers followed by exactly len bytes of value and a
+// trailing '\n', up to the closing "}\n", adding one DF field per
+// attribute to NewRecord's DFT.
+void
 SOIF::ParseFields(PRECORD NewRecord) {
   FILE 	*fp;
   STRING 	fn;
@@ -130,11 +141,19 @@ SOIF::ParseFields(PRECORD NewRecord) {
 
   // Open the file
   NewRecord->GetFullFileName(&fn);
-  file = fn.NewCString();
   fp = fopen(fn, "rb");
   if (!fp) {
     cout << "SOIF::ParseRecords(): Failed to open file\n\t";
+    // BUGFIX #3 (docs/BUG_CATALOG.md#doctypesoifcxx): `file` used to be
+    // allocated unconditionally at the top of the function (before
+    // this, now-removed, line) via `fn.NewCString()`, but was only
+    // ever read here and at the other perror() call below -- and never
+    // freed anywhere in the function, leaking on every single call.
+    // Allocated lazily right where it's needed instead, and freed
+    // immediately after use.
+    file = fn.NewCString();
     perror(file);
+    delete [] file;
     return;
   }
 
@@ -179,7 +198,9 @@ SOIF::ParseFields(PRECORD NewRecord) {
   ActualLength = (GPTYPE)fread(RecBuffer, 1, RecLength, fp);
   if(ActualLength == 0) {
     cout << "SOIF::ParseRecords(): Failed to fread\n\t";
+    file = fn.NewCString();
     perror(file);
+    delete [] file;
     delete [] RecBuffer;
     fclose(fp);
     return;
@@ -221,9 +242,15 @@ SOIF::ParseFields(PRECORD NewRecord) {
 
     FieldName = "";
     if (strncmp(p, "@FILE { ", 8) == 0) {
-      if ( (q = strchr(p, '\n')) == NULL) {
+      if ( (q = strchr(p, '\n')) == nullptr) {
         cout << "SOIF::ParseRecords(): Badly started record - ";
         cout << fn << "\n";
+        // BUGFIX #2 (docs/BUG_CATALOG.md#doctypesoifcxx): this and the
+        // two other early returns below this point freed RecBuffer but
+        // never pdft (allocated above the loop via `new DFT()`) -- a
+        // memory leak on malformed input reaching any of these three
+        // error paths.
+        delete pdft;
         delete [] RecBuffer;
         return;
       }
@@ -242,6 +269,7 @@ SOIF::ParseFields(PRECORD NewRecord) {
       if (strcmp (p, "}\n") != 0) {
         cout << "SOIF::ParseRecords(): Badly ended record - ";
         cout << fn << "\n";
+        delete pdft;
         delete [] RecBuffer;
         return;
       }
@@ -266,6 +294,7 @@ SOIF::ParseFields(PRECORD NewRecord) {
     if (RecBuffer[val_end] != '\n') {
       cout << "SOIF::ParseRecords(): Badly formatted record (missing nl) - ";
       cout << fn << "\n";
+      delete pdft;
       delete [] RecBuffer;
       return;
     }

@@ -34,6 +34,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "glist.hxx"
 #include "gdt.h"
 
@@ -44,8 +47,8 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 GLIST::GLIST()
 {
   Length=0;
-  Head=(GPOSITION *)NULL;
-  Tail=(GPOSITION *)NULL;
+  Head=nullptr;
+  Tail=nullptr;
 }
 
 /*
@@ -79,9 +82,9 @@ GPOSITION* GLIST::First()
 */
 GPOSITION* GLIST::Last()
 {
-  if(Tail == NULL)
+  if(Tail == nullptr)
     // Attempt to access first position of empty list
-    return NULL;
+    return nullptr;
 
   return Tail;
 }
@@ -96,7 +99,7 @@ GPOSITION* GLIST::Next(GPOSITION *c)
 {
   if(Tail == c)
     // Attempt to access one position past end of list
-    return NULL;
+    return nullptr;
 
   return c->Next;
 }
@@ -111,26 +114,41 @@ GPOSITION* GLIST::Prev(GPOSITION *c)
 {
   if(Head == c)
     // Attempt to access one position before start of list
-    return NULL;
+    return nullptr;
 
   return c->Prev;
 }
 
 GDT_BOOLEAN GLIST::InsertBefore(GPOSITION *c, GATOM *a, int Type)
 {
-  GATOM *ta;
-
-  if(a==NULL)
+  if(a==nullptr)
     return GDT_FALSE;
 
   if(IsEmpty())
     InsertAfter(c,a,Type);
   else {
+    // "Insert before c" is implemented by inserting the new cell AFTER
+    // c, then swapping c and the new cell's contents -- c keeps its
+    // identity/position for existing GPOSITION* holders, but now holds
+    // the new data.
     InsertAfter(c,a,Type);
-    ta = Retrieve(c);
-    Update(c,a);
-    Update(Next(c), ta);
-  }	
+    GPOSITION *nc = Next(c);
+    // BUGFIX #2: this used to swap only Atom (via Update(), which sets
+    // Atom and nothing else) and leave Type untouched on both cells,
+    // so after the swap `a`'s Type tag stayed on the OLD cell (still
+    // holding the old Atom) while the OLD Atom ended up tagged with
+    // the NEW Type -- confirmed with a standalone repro: InsertBefore
+    // an atom with Type 99 next to one with Type 42 and the two ended
+    // up with their Atom/Type pairings crossed. Swap Type along with
+    // Atom so they stay paired correctly. See
+    // docs/BUG_CATALOG.md#srcglisthxx.
+    GATOM *ta = c->Atom;
+    int tt = c->Type;
+    c->Atom = nc->Atom;
+    c->Type = nc->Type;
+    nc->Atom = ta;
+    nc->Type = tt;
+  }
   return GDT_TRUE;
 
 }
@@ -142,7 +160,7 @@ GDT_BOOLEAN GLIST::InsertBefore(GPOSITION *c, GATOM *a)
 
 GDT_BOOLEAN GLIST::Update(GPOSITION *c, GATOM *a)
 {
-  if(a==NULL)
+  if(a==nullptr)
     return GDT_FALSE;
 
   c->Atom = a;
@@ -161,18 +179,18 @@ GDT_BOOLEAN GLIST::InsertAfter(GPOSITION *c, GATOM *a, int Type)
 {
   GPOSITION *nc, *tc;
 
-  if(Head == NULL) {
+  if(Head == nullptr) {
     // Inserting into empty list
-    if((Head = new GPOSITION()) == NULL)
+    if((Head = new GPOSITION()) == nullptr)
       return GDT_FALSE;
     Head->Atom = a;
     Head->Type = Type;
-    Head->Next = (GPOSITION *)NULL;
-    Head->Prev = (GPOSITION *)NULL;
+    Head->Next = nullptr;
+    Head->Prev = nullptr;
     Tail = Head;
   } else {
     // Inserting into non-empty list
-    if((nc =  new GPOSITION()) == NULL)
+    if((nc =  new GPOSITION()) == nullptr)
       return GDT_FALSE;
     nc->Atom = a;
     nc->Type = Type;
@@ -223,22 +241,30 @@ void GLIST::Delete(GPOSITION *c)
   if(Head == c) {
     if(Tail == c) {
       // singleton list
-      Head = (GPOSITION *)NULL;
-      Tail = (GPOSITION *)NULL;
+      Head = nullptr;
+      Tail = nullptr;
     } else {
       // deleting first cell from non-singleton
       Head = c->Next;
-      c->Next->Prev = (GPOSITION *)NULL;
+      c->Next->Prev = nullptr;
     }
   } else {
     if(Tail == c) {
       // deleting last cell from non-singleton
       Tail = c->Prev;
-      c->Prev->Next = (GPOSITION *)NULL;
+      c->Prev->Next = nullptr;
     } else {
+      // BUGFIX #1: this set `c->Next = c->Prev` -- overwriting a
+      // pointer field on the cell about to be deleted, achieving
+      // nothing -- instead of `c->Next->Prev = c->Prev`, which is what
+      // actually needs updating to skip over `c`. The cell after `c`
+      // was left with Prev still pointing at the just-freed `c`,
+      // confirmed a real heap-use-after-free with a standalone repro
+      // (delete an interior cell, then Prev()/Retrieve() the following
+      // one). See docs/BUG_CATALOG.md#srcglisthxx.
       // deleting cell from interior
       c->Prev->Next = c->Next;
-      c->Next = c->Prev;
+      c->Next->Prev = c->Prev;
     }
   }
   delete c;

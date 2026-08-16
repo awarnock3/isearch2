@@ -34,6 +34,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:		taglist.hxx
 Version:	1.0
@@ -52,13 +55,20 @@ Changes:	See taglist.cxx
 #include "doctype.hxx"
 #include "sgmltag.hxx"
 
+// Byte offset/length of one indexed tag pair's content, relative to
+// the record buffer ParseFields() built m_TagPos from.
 struct EntryType
 {
 	int	offset;
 	int length;
 };
 
-class TAGLIST 
+// An SGML-like DOCTYPE derived from SGMLTAG: only tag pairs whose name
+// appears on UsefulSearchField()'s fixed allowlist (TITLE/H1-H4) are
+// indexed as fields; ParseWords() then restricts word-position
+// extraction to just those allowed tags' own byte ranges (m_TagPos),
+// so unrelated markup/text never contributes search terms.
+class TAGLIST
   : public SGMLTAG {
 public:
     TAGLIST(PIDBOBJ DbParent);

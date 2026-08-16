@@ -43,6 +43,8 @@ $Revision: 1.4 $
 Description:	Class FPREC - File Pointer Record
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include "fprec.hxx"
 
@@ -53,11 +55,19 @@ FPREC::FPREC() {
 }
 
 
-FPREC& 
+FPREC&
 FPREC::operator=(const FPREC& OtherFprec) {
+  // BUGFIX #1: Priority and Closed were never copied here. Confirmed
+  // live, not just latent: src/fpt.cxx:158 does `Fprec = Table[z-1];`
+  // into a freshly default-constructed local (Closed == GDT_FALSE from
+  // FPREC's own constructor), then reads `Fprec.GetClosed()` a couple
+  // of lines later expecting Table[z-1]'s actual value -- it silently
+  // got the default instead.
   FileName = OtherFprec.FileName;
   FilePointer = OtherFprec.FilePointer;
   OpenMode = OtherFprec.OpenMode;
+  Priority = OtherFprec.Priority;
+  Closed = OtherFprec.Closed;
   return *this;
 }
 

@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-16
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "api_fetch.hxx"
 
 #include <stdlib.h>
@@ -23,17 +26,17 @@ ApiFetchResult::ApiFetchResult() {}
 
 static STRING GetParam(CGIAPP* cgi, const CHR* name)
 {
-  if (name != NULL && StrCaseCmp(name, "database") == 0) {
+  if (name != nullptr && StrCaseCmp(name, "database") == 0) {
     const CHR *db_from_path = getenv("ISEARCH_API_DB_FROM_PATH");
-    if (db_from_path != NULL && db_from_path[0] != '\0') {
+    if (db_from_path != nullptr && db_from_path[0] != '\0') {
       return db_from_path;
     }
   }
-  if (cgi == NULL || name == NULL) {
+  if (cgi == nullptr || name == nullptr) {
     return "";
   }
   const CHR *raw = cgi->GetValueByName(name);
-  return (raw != NULL) ? raw : "";
+  return (raw != nullptr) ? raw : "";
 }
 
 static std::string ReadStdinBody()
@@ -48,7 +51,7 @@ static std::string ReadStdinBody()
 
 static STRING GetJsonField(const CHR* body, const CHR* field)
 {
-  if (body == NULL || field == NULL) {
+  if (body == nullptr || field == nullptr) {
     return "";
   }
   STRING needle = "\"";
@@ -57,7 +60,7 @@ static STRING GetJsonField(const CHR* body, const CHR* field)
   CHR *needle_cstr = needle.NewCString();
   const CHR *start = strstr(body, needle_cstr);
   delete [] needle_cstr;
-  if (start == NULL) {
+  if (start == nullptr) {
     return "";
   }
   start += needle.GetLength();
@@ -74,9 +77,56 @@ static STRING GetJsonField(const CHR* body, const CHR* field)
         case '"':  result.Cat("\""); break;
         case '\\': result.Cat("\\"); break;
         case '/':  result.Cat("/"); break;
+        case 'b':  result.Cat("\b"); break;
+        case 'f':  result.Cat("\f"); break;
         case 'n':  result.Cat("\n"); break;
         case 'r':  result.Cat("\r"); break;
         case 't':  result.Cat("\t"); break;
+        // BUGFIX #1 (docs/BUG_CATALOG.md#isearch-cgiapi_fetchhxx-isearch-cgiapi_fetchcxx):
+        // this had no 'u' case at all, so it fell into `default:`, which
+        // appends the byte *after* the backslash literally and then keeps
+        // walking the string one character at a time -- a `10`
+        // escape (meant to decode to "10") came out as the literal text
+        // "u0031u0030" instead, six garbage characters in place of two
+        // real ones. Confirmed with a live repro through the real
+        // isrch_api binary before this fix: a POST /fetch body with
+        // record_key given as `"10"` (a \uXXXX-escaped "10")
+        // failed to match the real record ("10") at all, returning 404
+        // "Record not found" instead of the expected 200. Fixed the same
+        // way as the identical gap in api_request.cxx's JsonReader
+        // (BUGFIX #2 there): decode 0x00-0xFF to the matching Latin-1
+        // byte (this codebase is single-byte/ISO-8859-1 throughout, per
+        // every CGI file's own Content-Type declaration). Unlike
+        // JsonReader, this function has no way to fail the parse and
+        // report an error back to its caller (it just returns a STRING),
+        // so a codepoint above 0xFF -- for which there's no lossless
+        // single-byte representation -- is silently dropped (nothing
+        // appended) rather than guessed at with a placeholder; still
+        // strictly better than emitting garbage that looks like real
+        // (wrong) data.
+        case 'u': {
+          if (*(start + 1) && *(start + 2) && *(start + 3) && *(start + 4)) {
+            unsigned int code = 0;
+            bool valid = true;
+            for (int k = 1; k <= 4; k++) {
+              const CHR h = *(start + k);
+              code <<= 4;
+              if (h >= '0' && h <= '9') code |= (unsigned int)(h - '0');
+              else if (h >= 'a' && h <= 'f') code |= (unsigned int)(h - 'a' + 10);
+              else if (h >= 'A' && h <= 'F') code |= (unsigned int)(h - 'A' + 10);
+              else { valid = false; break; }
+            }
+            if (valid) {
+              start += 4;
+              if (code <= 0xFF) {
+                result.Cat((UCHR)code);
+              }
+              break;
+            }
+          }
+          result.Cat(*start);
+          break;
+        }
         default:   result.Cat(*start); break;
       }
     } else {
@@ -96,21 +146,21 @@ bool ParseFetchRequest(CGIAPP* cgi, const CHR* method, const CHR* body,
 {
   out = ApiFetchRequest();
 
-  const bool is_post = (method != NULL && StrCaseCmp(method, "POST") == 0);
+  const bool is_post = (method != nullptr && StrCaseCmp(method, "POST") == 0);
 
   if (!is_post) {
     // Reject unknown GET parameters so typos are caught.
     static const CHR *const known_params[] = {
       "database", "record_key", "element_set", "record_syntax", "request_id",
-      NULL
+      nullptr
     };
-    if (cgi != NULL) {
+    if (cgi != nullptr) {
       for (INT4 i = 0; ; i++) {
         const CHR *name = cgi->GetName(i);
-        if (name == NULL) break;
+        if (name == nullptr) break;
         if (name[0] == '\0') continue;
         bool found = false;
-        for (int k = 0; known_params[k] != NULL; k++) {
+        for (int k = 0; known_params[k] != nullptr; k++) {
           if (StrCaseCmp(name, known_params[k]) == 0) {
             found = true;
             break;
@@ -130,11 +180,11 @@ bool ParseFetchRequest(CGIAPP* cgi, const CHR* method, const CHR* body,
 
   if (is_post) {
     std::string stdin_body;
-    if (body == NULL) {
+    if (body == nullptr) {
       stdin_body = ReadStdinBody();
       body = stdin_body.c_str();
     }
-    if (body == NULL || body[0] == '\0') {
+    if (body == nullptr || body[0] == '\0') {
       error_detail = "Request body is empty.";
       return false;
     }
@@ -191,7 +241,7 @@ int ExecuteFetch(const ApiFetchRequest& req, const ApiConfig& cfg,
   }
 
   VIDB *pdb = new VIDB(db_path, req.database);
-  if (pdb == NULL) {
+  if (pdb == nullptr) {
     error_detail = "Failed to open database.";
     return 500;
   }

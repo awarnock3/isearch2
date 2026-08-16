@@ -41,6 +41,9 @@ Description:	Class MDT - Multiple Document Table
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdlib.h>
 #include <string.h>
 
@@ -118,6 +121,27 @@ MDT::MDT(const STRING& DbFileStem, const GDT_BOOLEAN WrongEndian)
     if (MdtFp) {
       fclose(MdtFp);
       MdtFp = fopen(Fn, "r+b");
+      // BUGFIX #6: this reopen's result went unchecked -- every other
+      // fopen() in this constructor either falls through to a further
+      // fallback or exit()s, but this one didn't, so a failure here
+      // (the file we just created a moment ago becoming briefly
+      // unreadable -- another process racing to delete/replace it, or
+      // a permissions/umask edge case) left MdtFp null with ReadOnly
+      // still GDT_FALSE. Every subsequent fseek/fread/fwrite/fileno on
+      // a null FILE* is undefined behavior, and so is the destructor's
+      // unconditional fclose(MdtFp). Defensive fix, not a demonstrated
+      // crash: the window (the file we just successfully created
+      // becoming unreadable before we reopen it) is narrow enough that
+      // it couldn't be forced without mocking fopen() or a genuine
+      // race with another process, so this is hardening a real gap,
+      // not a confirmed live bug. Matches the same
+      // perror-then-exit(1) convention already used one branch below
+      // for the analogous "rb" fallback failure. See
+      // docs/BUG_CATALOG.md#srcmdtcxx.
+      if (!MdtFp) {
+	perror(Fn);
+	exit(1);
+      }
     } else {
       MdtFp = fopen(Fn, "rb");
       if (!MdtFp) {
@@ -178,14 +202,29 @@ void MDT::AddEntry(const MDTREC& MdtRecord) {
   GpIndexSorted = GDT_FALSE;
 }
 
+// BUGFIX #2: these three comparators used to compute their result as a
+// plain subtraction of GPTYPE (unsigned) fields narrowed to int -- the
+// classic unsigned-subtraction-in-a-comparator bug. For a pair far
+// enough apart, the unsigned wraparound produces the wrong sign once
+// narrowed to int, so qsort/bsearch order incorrectly. Not exercised by
+// this batch's repro (Index values stay small in test-sized tables),
+// but GpStart/GpEnd are byte offsets that can realistically span the
+// affected range in a large database. Fixed with explicit comparisons.
+// See docs/BUG_CATALOG.md.
 static int MdtCompareKeysByIndex(const void* KeyRecPtr1, const void* KeyRecPtr2) {
-  return ( (((KEYREC*)KeyRecPtr1)->Index) -
-	  (((KEYREC*)KeyRecPtr2)->Index) );
+  GPTYPE a = ((KEYREC*)KeyRecPtr1)->Index;
+  GPTYPE b = ((KEYREC*)KeyRecPtr2)->Index;
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
 }
 
 static int MdtCompareGpByIndex(const void* GpRecPtr1, const void* GpRecPtr2) {
-  return ( (((GPREC*)GpRecPtr1)->Index) -
-	  (((GPREC*)GpRecPtr2)->Index) );
+  GPTYPE a = ((GPREC*)GpRecPtr1)->Index;
+  GPTYPE b = ((GPREC*)GpRecPtr2)->Index;
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
 }
 
 void MDT::IndexSortByIndex() {
@@ -239,7 +278,12 @@ void MDT::GetEntry(const SIZE_T Index, MDTREC* MdtrecPtr) const {
     fseek(MdtFp, (Index - 1) * sizeof(MDTREC), SEEK_SET);
     const size_t mdtRead = fread((char*)MdtrecPtr, 1, sizeof(MDTREC), MdtFp);
     if (mdtRead != sizeof(MDTREC)) {
-      memset(MdtrecPtr, 0, sizeof(MDTREC));
+      // BUGFIX #4: was `memset(MdtrecPtr, 0, sizeof(MDTREC));` -- safe in
+      // practice (MDTREC has no owned pointers), but MDTREC's
+      // user-declared operator= makes it non-trivial, so GCC flags
+      // memset on it under -Wclass-memaccess. Using the class's own
+      // default constructor is equally correct and warning-free.
+      *MdtrecPtr = MDTREC();
       return;
     }
     if (MdtWrongEndian) {
@@ -356,9 +400,13 @@ SIZE_T MDT::GetMdtRecord(const STRING& Key, MDTREC* MdtrecPtr) {
   return x;
 }
 
+// BUGFIX #2 (continued): same unsigned-subtraction shape as above.
 static int MdtCompareGpStarts(const void* GpRecPtr1, const void* GpRecPtr2) {
-  return ((((GPREC*)GpRecPtr1)->GpStart) -
-	  (((GPREC*)GpRecPtr2)->GpStart));
+  GPTYPE a = ((GPREC*)GpRecPtr1)->GpStart;
+  GPTYPE b = ((GPREC*)GpRecPtr2)->GpStart;
+  if (a < b) return -1;
+  if (a > b) return 1;
+  return 0;
 }
 
 static int MdtCompareGps(const void* GpPtr, const void* GpRecPtr) {
@@ -436,7 +484,7 @@ void MDT::GetUniqueKey(STRING* StringPtr)
   if (*StringPtr != "") {
     x = StringPtr->GetInt();
   }
-  sprintf(s, "%d%d", y, x);
+  snprintf(s, sizeof(s), "%d%d", y, x);  // BUGFIX #3: sprintf -> snprintf
   y++;
   
   *StringPtr = s;
@@ -451,7 +499,7 @@ SIZE_T MDT::GetTotalEntries() const {
 
 
 void MDT::Dump() const {
-  INT x;
+  SIZE_T x;  // BUGFIX #5: was INT, compared against SIZE_T TotalEntries
   STRING s;
   MDTREC Mdtrec;
   for (x=1; x<=TotalEntries; x++) {

@@ -33,14 +33,23 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "gstack.hxx"
 #include "gdt.h"
 
 /* 
    Stack Routines
 */
-GSTACK::GSTACK()
+GSTACK::GSTACK() : CurrentIndex(nullptr)
 {
+  // BUGFIX #1: CurrentIndex used to be left uninitialized here. Never
+  // read before Push()/Top()/Pop() all unconditionally overwrite it
+  // first, so this was never reachable as a live bug, but it's the
+  // same class of fix as every other "constructor leaves a raw pointer
+  // uninitialized" turn this batch (src/index.cxx, src/infix2rpn.cxx).
+  // See docs/BUG_CATALOG.md#srcgstackhxx.
 }
 
 INT GSTACK::GetSize(void)
@@ -57,14 +66,32 @@ void GSTACK::Push(GATOM* a)
 
 GATOM* GSTACK::Top(void)
 {
+  // BUGFIX #2: this used to call Stack.Retrieve(nullptr) on an empty
+  // stack -- GLIST::Retrieve() dereferences its argument unconditionally
+  // -- a real null-pointer-dereference crash, confirmed with a
+  // standalone repro (`GSTACK().Top()`) before fixing:
+  // AddressSanitizer: SEGV ... in GLIST::Retrieve. Every real caller
+  // found in the tree (doctype/cipc.cxx, cipp.cxx, anzmeta.cxx,
+  // anzlic.cxx, fgdc.cxx) happens to only reach Top()/Pop() after
+  // confirming GetSize() != 0 first via its own surrounding logic, so
+  // this wasn't observed to crash in practice, but GSTACK itself
+  // shouldn't rely on every future caller getting that right. See
+  // docs/BUG_CATALOG.md#srcgstackhxx.
   CurrentIndex = Stack.First();
+  if (CurrentIndex == nullptr)
+    return nullptr;
   return(Stack.Retrieve(CurrentIndex));
 }
 
-GATOM* GSTACK::Pop(void) 
+GATOM* GSTACK::Pop(void)
 {
+  // BUGFIX #2 (same as Top(), see above): guard the empty-stack case
+  // here too, rather than dereferencing a null CurrentIndex via
+  // Retrieve()/Delete().
   GATOM *p;
   CurrentIndex = Stack.First();
+  if (CurrentIndex == nullptr)
+    return nullptr;
   p = Stack.Retrieve(CurrentIndex);
   Stack.Delete(CurrentIndex);
   CurrentIndex = Stack.First();

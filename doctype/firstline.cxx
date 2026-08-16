@@ -105,10 +105,13 @@ ________________________________________________________________________________
 (*)Basis Systeme netzwerk, Brecherspitzstr. 8, 81541 Muenchen, Germany 
 
 ************************************************************************/
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		firstline.cxx
 Version:	1.00
-Description:	Class FIRSTLINE - TEXT with headline as first line 
+Description:	Class FIRSTLINE - TEXT with headline as first line
 Author:		Edward C. Zimmermann, edz@bsn.com
 @@@-*/
 
@@ -129,6 +132,9 @@ FIRSTLINE::FIRSTLINE (PIDBOBJ DbParent): DOCTYPE (DbParent)
 {
 }
 
+// Reads the record's file up through (but not including) its first
+// '\r' or '\n' -- or the whole file, if it has neither -- and indexes
+// that span as a single "Headline" field.
 void FIRSTLINE::ParseFields (PRECORD NewRecord)
  {
   STRING fn;
@@ -161,7 +167,15 @@ void FIRSTLINE::ParseFields (PRECORD NewRecord)
   dfd.SetFieldName (FieldName);
   Db->DfdtAddEntry (dfd);
   fc.SetFieldStart (0);
-  fc.SetFieldEnd (val_len);
+  // BUGFIX #2 (docs/BUG_CATALOG.md#doctypefirstlinecxx): FC's end is
+  // inclusive of the last byte in the field (confirmed via
+  // src/index.cxx's own `fLen = fc.GetFieldEnd() - fc.GetFieldStart()
+  // + 1;`), but val_len is a *count* of characters read (indices
+  // 0..val_len-1), not the inclusive end index itself -- the Headline
+  // field's end was off by one, either pulling in the line's trailing
+  // '\r'/'\n' delimiter or, for a file with no delimiter at all,
+  // pointing one byte past EOF.
+  fc.SetFieldEnd (val_len - 1);
   PFCT pfct = new FCT ();
   pfct->AddEntry (fc);
   df.SetFct (*pfct);

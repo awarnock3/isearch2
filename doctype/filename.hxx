@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*
 
 File:        filename.hxx
@@ -15,6 +18,13 @@ Author:      Erik Scott, Scott Technologies, Inc.
 #include "doctype.hxx"
 #endif
 
+// Indexes a file by its *filename* rather than its content: ParseRecords()
+// writes the filename text out to a sibling "<name>.fn" file and indexes
+// that instead (Iindex can only index text it can get a file pointer to),
+// so a search matches records whose filename contains the query term.
+// Present() with ElementSet "B" returns that indexed filename text;
+// anything else strips the ".fn" suffix and returns the original file's
+// real contents.
 class FILENAME : public DOCTYPE {
 public:
    FILENAME(PIDBOBJ DbParent);

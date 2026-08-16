@@ -40,6 +40,9 @@ Description:	Class OPSTACK - Operand/operator Stack
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "defs.hxx"
 #include "string.hxx"
 #include "vlist.hxx"
@@ -68,7 +71,33 @@ OPSTACK::OPSTACK() {
 	Head = 0;
 }
 
+// BUGFIX #2: see the declaration in opstack.hxx for why this is needed.
+// Mirrors operator='s push-then-Reverse() logic below (there's nothing
+// to pop first here, since a freshly constructed stack starts empty).
+OPSTACK::OPSTACK(const OPSTACK& OtherOpstack) {
+	Head = 0;
+	POPOBJ OpPtr = OtherOpstack.Head;
+	while (OpPtr) {
+		*this << *OpPtr;
+		OpPtr = OpPtr->Next;
+	}
+	Reverse();
+}
+
 OPSTACK& OPSTACK::operator=(const OPSTACK& OtherOpstack) {
+	// BUGFIX #4 (docs/BUG_CATALOG.md#srcopstackcxx): no self-assignment
+	// guard -- the "pop everything off this stack" loop below drains
+	// and deletes every node in *this before OtherOpstack.Head is ever
+	// read, so on self-assignment (`x = x;`, where OtherOpstack *is*
+	// *this) it drains and deletes OtherOpstack's own nodes too, and
+	// the "push OtherOpstack's ops" loop then reads an already-emptied
+	// Head. Confirmed real with a standalone repro: self-assigning a
+	// 2-entry OPSTACK left it with 0 entries. The same "drain *this
+	// before reading OtherObj's state" shape already fixed for
+	// ATTRLIST/IRSET/DFT/STERM's operator= this project.
+	if (this == &OtherOpstack) {
+		return *this;
+	}
 	// [faster method using OPSTACK::Reverse()]
 	// pop everything off this stack
 	POPOBJ OpPtr;
@@ -162,5 +191,16 @@ POPOBJ OPSTACK::Pop() {
 	}
 }
 
+// BUGFIX #3: was empty, so any OPSTACK destroyed with entries still on
+// it (Head non-null) leaked every remaining node -- confirmed real with
+// a standalone repro (LeakSanitizer) that caught a full leak from a
+// single un-popped entry. Live impact: OPSTACK is constructed and
+// destroyed constantly in src/squery.cxx's query evaluation. Fixed by
+// popping and deleting everything still on the stack, the same pattern
+// operator= already used to clear *this before reassigning.
 OPSTACK::~OPSTACK() {
+	POPOBJ OpPtr;
+	while (*this >> OpPtr) {
+		delete OpPtr;
+	}
 }

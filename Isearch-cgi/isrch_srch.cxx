@@ -46,6 +46,9 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 		Archie Warnock, warnock@clark.net
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-16
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <iostream>
 #include <stdio.h>
 #include <sys/types.h>
@@ -95,7 +98,9 @@ PCHR get_field(const CHR *fmt, INT n);
 
 INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
 	INT Start, INT MaxHits, INT TYPE, INT ScoreScale,
-	const STRING& RequestId, GDT_BOOLEAN JsonOutput);
+	const STRING& RequestId, GDT_BOOLEAN IncludeUrl,
+	GDT_BOOLEAN IncludeHeadline, GDT_BOOLEAN IncludeRecordKey,
+	GDT_BOOLEAN JsonOutput);
 void  PutHTTPHeader(GDT_BOOLEAN JsonOutput);
 void  PutHTMLHead(void);
 void  PutHTMLBodyStart(void);
@@ -149,7 +154,7 @@ INT main(int argc, char **argv)
     db = cgidata->GetValueByName("DATABASE");
   }
 
-  if (db == NULL || *db == '\0') {
+  if (db == nullptr || *db == '\0') {
     if (JsonOutput) {
       PrintJsonError("You must specify a database name.");
     } else {
@@ -162,7 +167,7 @@ INT main(int argc, char **argv)
 
   // Randy.Wood@nau.edu
   // if cgi-bin was specified by the web form, use it instead of cgi-bin
-  if ((cgiDir = cgidata->GetValueByName("CGI_BIN")) == NULL) {
+  if ((cgiDir = cgidata->GetValueByName("CGI_BIN")) == nullptr) {
     cgiDir = new CHR[10];
     strcpy(cgiDir,"cgi-bin");
   }
@@ -224,7 +229,7 @@ INT main(int argc, char **argv)
   RequestId = (p = cgidata->GetValueByName("REQUEST_ID")) ? p : "";
   if (RequestId.Equals("")) {
     CHR reqbuf[32];
-    sprintf(reqbuf, "req-%ld", (long)time(NULL));
+    snprintf(reqbuf, sizeof(reqbuf), "req-%ld", (long)time(nullptr));
     RequestId = reqbuf;
   }
 
@@ -240,15 +245,37 @@ INT main(int argc, char **argv)
       type = BOOLEAN;
 
   if (SEARCH_TYPE(type) == ADVANCED) {
-    query = cgidata->GetValueByName("ISEARCH_TERM");
+    // BUGFIX #1 (docs/BUG_CATALOG.md#isearch-cgiisrch_srchcxx): same
+    // defect as Isearch-cgi/isrch_html.cxx's own BUGFIX #1 (this file
+    // and that one share a common ancestor -- isrch_html.cxx's header
+    // comment says as much). GetValueByName() returns nullptr when
+    // ISEARCH_TERM wasn't submitted; assigning that straight into a
+    // STRING calls STRING::operator=(const CHR*), which dereferences
+    // it unconditionally via strlen(). Confirmed with the real binary:
+    // SEARCH_TYPE=ADVANCED with no ISEARCH_TERM segfaulted before this
+    // fix. Fixed the same way: guard with the ternary-default idiom
+    // already used for every other field in this function.
+    p = cgidata->GetValueByName("ISEARCH_TERM");
+    query = p ? p : "";
     PrintQuery = query;
   }
   else if (SEARCH_TYPE(type) == BOOLEAN) {
     STRING TempQuery;
     terms = 0;
 
+    // BUGFIX #2 (docs/BUG_CATALOG.md#isearch-cgiisrch_srchcxx): same
+    // defect as isrch_html.cxx's own BUGFIX #2 -- p was left nullptr
+    // when OPERATOR wasn't submitted, then reused unconditionally in
+    // every StrCaseCmp(p, ...)/Cat(p) call below for the 2nd and later
+    // terms. Confirmed with the real binary: a BOOLEAN search with 2
+    // terms and no OPERATOR field segfaulted before this fix.
+    // Defaulted to "OR" (matching this file's own documented "implied
+    // OR" convention for the SIMPLE branch below) so p is never null
+    // going into the loop.
     if ((p = cgidata->GetValueByName("OPERATOR")))
       type = (StrCaseCmp(p, "AND") == 0) ? type | BOOLEAN_AND: type;
+    else
+      p = (PCHR)"OR";
 
     // Build up the infix query from the components
     // Might as well make a nice printable version, too
@@ -328,7 +355,12 @@ INT main(int argc, char **argv)
 
     // From Monty Walls
     if (Start >1) {
-      query = cgidata->GetValueByName("ISEARCH_TERM");
+      // BUGFIX #1, continued (docs/BUG_CATALOG.md#isearch-cgiisrch_srchcxx):
+      // same missing-field-crash shape as above -- a "next page"
+      // request (Start>1) with no ISEARCH_TERM field crashed here
+      // identically.
+      p = cgidata->GetValueByName("ISEARCH_TERM");
+      query = p ? p : "";
       // only 1 OPERATOR is possible, or get implied OR
       if ((p=cgidata->GetValueByName("OPERATOR")))
 	type = (StrCaseCmp(p,"AND") == 0) ? type|BOOLEAN_AND:type;
@@ -353,7 +385,8 @@ INT main(int argc, char **argv)
 
   INT nhits;
   nhits = Search(argv[1], db, query, ESName, Start, MaxHits, type,
-                 ScoreScale, RequestId, JsonOutput);
+                 ScoreScale, RequestId, IncludeUrl, IncludeHeadline,
+                 IncludeRecordKey, JsonOutput);
   if ((nhits > 0) && (!JsonOutput)) {
     cout << "<HR>" << endl;
   }
@@ -380,10 +413,10 @@ gettok(PCHR input)
   CHR *pos, *tok;
   CHR lc;
 
-  if (input == (PCHR)NULL && last == (PCHR)NULL)
-    return ((PCHR)NULL);
+  if (input == nullptr && last == nullptr)
+    return (nullptr);
 
-  pos = (input == (PCHR)NULL)? last: input;
+  pos = (input == nullptr)? last: input;
   
   for (lc = ' '; *pos != '\0'; ++pos) {
     if (*pos == ' ')
@@ -410,7 +443,7 @@ gettok(PCHR input)
     last = pos;
     return (tok);
   }
-  return ((PCHR)NULL);
+  return (nullptr);
 }
 
 PCHR
@@ -420,14 +453,14 @@ get_field(const CHR *f, INT n)
   PCHR field;
   bp = new CHR[MAXSTR+1];
 
-  sprintf(bp, f, n);
+  snprintf(bp, MAXSTR+1, f, n);
   if ((field = cgidata->GetValueByName(bp))) {
     delete [] bp;
     return (field);
   }
 
   delete [] bp;
-  return ((PCHR)NULL);
+  return (nullptr);
 }
 
 INT
@@ -440,14 +473,14 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
   PCHR weight;
   PCHR entry;
   INT w, terms;
-  PCHR phrase_term = (PCHR)NULL;
+  PCHR phrase_term = nullptr;
 
   buffer = new CHR[MAXSTR+1];
 
   // See if the form included a button to request phrase searching
   PCHR phrase;
   GDT_BOOLEAN do_phrase=GDT_FALSE;
-  if ((phrase = get_field("PHRASE_%i",i)) != (PCHR)NULL) {
+  if ((phrase = get_field("PHRASE_%i",i)) != nullptr) {
     if (StrCaseCmp(phrase,"YES") == 0) {
       do_phrase = GDT_TRUE;
     } else {
@@ -458,7 +491,7 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
   *buffer = '\0';
   terms = 0;
 
-  if ((argument = get_field("TERM_%i", i)) == (PCHR)NULL) {
+  if ((argument = get_field("TERM_%i", i)) == nullptr) {
     delete [] buffer;
     return (0);
   }
@@ -481,15 +514,20 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
     argument = phrase_term;
   }
 
-  if ((field = get_field("FIELD_%i", i)) != (PCHR)NULL) {
+  if ((field = get_field("FIELD_%i", i)) != nullptr) {
     if (StrCaseCmp(field, "FULLTEXT") == 0) {
       strcpy(field,"");
     }
   }
 
-  PrintField = field;
+  // BUGFIX #4 (docs/BUG_CATALOG.md#isearch-cgiisrch_srchcxx): same
+  // defect as isrch_html.cxx's own BUGFIX #4 -- field stays nullptr
+  // when FIELD_%i wasn't submitted (an entirely normal "search all
+  // fields" request), and this assigned it straight into a STRING
+  // unconditionally. Confirmed with the real binary.
+  PrintField = field ? field : "";
 
-  if ((weight = get_field("WEIGHT_%i", i)) != (PCHR)NULL) {
+  if ((weight = get_field("WEIGHT_%i", i)) != nullptr) {
     w = atoi(weight);
     PrintWeight = weight;
   }
@@ -500,37 +538,37 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
 
   PrintTerm = argument;
 
-  while ((s = gettok(argument)) != (PCHR)NULL) {
-    argument = (PCHR)NULL;
+  while ((s = gettok(argument)) != nullptr) {
+    argument = nullptr;
 
     entry = (PCHR)&buffer[0];
 
     if (do_phrase) {
-      if ((field != (PCHR)NULL) && (strlen(field) > 0)) {
+      if ((field != nullptr) && (strlen(field) > 0)) {
         if (w > 0)
-          sprintf(entry, "%.128s/\"%.256s\":%d", field, s, w);
+          snprintf(entry, MAXSTR+1, "%.128s/\"%.256s\":%d", field, s, w);
         else
-          sprintf(entry, "%.128s/\"%.256s\"", field, s);
+          snprintf(entry, MAXSTR+1, "%.128s/\"%.256s\"", field, s);
       }
       else {
         if (w > 0)
-          sprintf(entry, "\"%.256s\":%d", s, w);
+          snprintf(entry, MAXSTR+1, "\"%.256s\":%d", s, w);
         else
-          sprintf(entry, "\"%.256s\"", s);
+          snprintf(entry, MAXSTR+1, "\"%.256s\"", s);
       }
 
     } else {
-      if ((field != (PCHR)NULL) && (strlen(field) > 0)) {
+      if ((field != nullptr) && (strlen(field) > 0)) {
         if (w > 0)
-          sprintf(entry, "%.128s/%.256s:%d", field, s, w);
+          snprintf(entry, MAXSTR+1, "%.128s/%.256s:%d", field, s, w);
         else
-          sprintf(entry, "%.128s/%.256s", field, s);
+          snprintf(entry, MAXSTR+1, "%.128s/%.256s", field, s);
       }
       else {
         if (w > 0)
-          sprintf(entry, "%.256s:%d", s, w);
+          snprintf(entry, MAXSTR+1, "%.256s:%d", s, w);
         else
-          sprintf(entry, "%.256s", s);
+          snprintf(entry, MAXSTR+1, "%.256s", s);
       }
     }
 
@@ -541,7 +579,7 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
     ++terms;
   }
   delete [] buffer;
-  if (phrase_term != (PCHR)NULL) {
+  if (phrase_term != nullptr) {
     delete [] phrase_term;
   }
   return (terms);
@@ -562,7 +600,9 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
 
 INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
 	INT Start, INT MaxHits, INT type, INT ScoreScale,
-	const STRING& RequestId, GDT_BOOLEAN JsonOutput)
+	const STRING& RequestId, GDT_BOOLEAN IncludeUrl,
+	GDT_BOOLEAN IncludeHeadline, GDT_BOOLEAN IncludeRecordKey,
+	GDT_BOOLEAN JsonOutput)
 {
   PRSET prset;
   PIRSET pirset;
@@ -641,7 +681,7 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
   DBPathName=DBPath;
   DBRootName=DBName;
 
-  if ((pdb = new VIDB(DBPathName, DBRootName)) == NULL) {
+  if ((pdb = new VIDB(DBPathName, DBRootName)) == nullptr) {
     printf("Failed to open database [%s]\n", DBName);
     return -1;
   }
@@ -660,6 +700,24 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
   else
     pirset=pdb->Search(query);
   time(&EndTime);
+
+  // BUGFIX #3 (docs/BUG_CATALOG.md#isearch-cgiisrch_srchcxx): no null
+  // check on pirset before dereferencing it. pdb here is a VIDB* --
+  // the exact class src/Isearch.cxx's own BUGFIX #1 already confirmed
+  // returns nullptr from Search()/AndSearch() when there are no usable
+  // sub-databases ("Bail out if no databases"), and (per
+  // isrch_html.cxx's BUGFIX #3, traced one level deeper) also whenever
+  // the query tokenizes to zero real search terms. Fixed the same way
+  // Isearch.cxx was: check and bail before dereferencing.
+  if (!pirset) {
+    if (JsonOutput) {
+      PrintJsonError("Unable to process query.");
+    } else {
+      cout << "<B>Unable to process query.</B>" << endl;
+    }
+    delete pdb;
+    return -1;
+  }
 
   pirset->SortByScore();
 
@@ -701,10 +759,10 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
       NextUrl.Cat(DBName);
       NextUrl.Cat("/search?start=");
       CHR num[32];
-      sprintf(num, "%d", Start + MaxHits);
+      snprintf(num, sizeof(num), "%d", Start + MaxHits);
       NextUrl.Cat(num);
       NextUrl.Cat("&max_hits=");
-      sprintf(num, "%d", MaxHits);
+      snprintf(num, sizeof(num), "%d", MaxHits);
       NextUrl.Cat(num);
       cout << "\"";
       cout << NextUrl;
@@ -720,10 +778,10 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
       PrevUrl.Cat(DBName);
       PrevUrl.Cat("/search?start=");
       CHR num[32];
-      sprintf(num, "%d", PrevStart);
+      snprintf(num, sizeof(num), "%d", PrevStart);
       PrevUrl.Cat(num);
       PrevUrl.Cat("&max_hits=");
-      sprintf(num, "%d", MaxHits);
+      snprintf(num, sizeof(num), "%d", MaxHits);
       PrevUrl.Cat(num);
       cout << "\"";
       cout << PrevUrl;
@@ -784,7 +842,7 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
       if (url)
         url=url+strlen(HttpPath);
     } else
-      url=(PCHR)NULL;
+      url=nullptr;
 
     // Get the unique database key for this record to be use
     // in subsequent retrieval when URL is clicked.
@@ -793,6 +851,17 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
     Score = prset->GetScaledScore(RsRecord.GetScore(),ScoreScale);
 
     if (JsonOutput) {
+      // BUGFIX #5 (docs/BUG_CATALOG.md#isearch-cgiisrch_srchcxx):
+      // IncludeUrl/IncludeHeadline/IncludeRecordKey were computed from
+      // the INCLUDE_URL/INCLUDE_HEADLINE/INCLUDE_RECORD_KEY CGI
+      // parameters (matching api_request.hxx's identically-named,
+      // correctly-wired fields) but never actually used anywhere --
+      // every hit always included the real headline/record_key/url
+      // regardless of what the client asked to exclude. Fixed to match
+      // the rest of the JSON API family's own convention exactly (see
+      // Isearch-cgi/api_response.cxx's WriteSearchHit()): the key stays
+      // present either way, the value becomes "" (headline/record_key)
+      // or null (url) when excluded.
       if (i > Start) cout << ",";
       cout << "{";
       cout << "\"match_number\":" << i << ",";
@@ -800,11 +869,19 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
       cout << "\"filename\":";
       PrintJsonEscaped(File);
       cout << ",\"headline\":";
-      PrintJsonEscaped(Headline);
+      if (IncludeHeadline) {
+        PrintJsonEscaped(Headline);
+      } else {
+        PrintJsonEscaped("");
+      }
       cout << ",\"record_key\":";
-      PrintJsonEscaped(RecordKey);
+      if (IncludeRecordKey) {
+        PrintJsonEscaped(RecordKey);
+      } else {
+        PrintJsonEscaped("");
+      }
       cout << ",\"url\":";
-      if (url) {
+      if (IncludeUrl && url) {
 	STRING UrlString = url;
 	PrintJsonEscaped(UrlString);
       } else {
@@ -839,7 +916,7 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
 
 	/* Files not within the given WWW path must be accessed with ifetch
 	   for their full text */
-	if (url==NULL) {
+	if (url==nullptr) {
 #if defined(_WIN32) || defined (MSDOS)
 	  cout << "<a href=\"ifetch.cmd?";
 #else

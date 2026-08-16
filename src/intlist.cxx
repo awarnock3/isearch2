@@ -35,6 +35,8 @@ THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 /*@@@
 File:		intlist.cxx
@@ -63,6 +65,7 @@ SortGPCmp(const void* x, const void* y);
 
 
 
+/// Constructs an empty list with the default 3-coordinate entry shape.
 INTERVALLIST::INTERVALLIST()
 {
   Ncoords    = 3;
@@ -72,9 +75,18 @@ INTERVALLIST::INTERVALLIST()
   FileName   = "";
   Pointer    = 0;
   StartIndex = EndIndex = -1;
+  // BUGFIX #2 (docs/BUG_CATALOG.md#srcintlisthxx): Attribute/Relation
+  // (INTERVALLIST's own members, shadowing NUMERICLIST's identically-
+  // named ones -- see the shadowing note in docs/BUG_CATALOG.md) were
+  // left indeterminate by both constructors, the same "indeterminate
+  // primitive member" category already fixed for the base class's own
+  // copies in src/nlist.cxx's BUGFIX #2.
+  Attribute  = 0;
+  Relation   = 0;
 }
 
 
+/// Constructs an empty list whose entries hold n coordinate values.
 INTERVALLIST::INTERVALLIST(INT n)
 {
   Ncoords    = n;
@@ -84,6 +96,9 @@ INTERVALLIST::INTERVALLIST(INT n)
   FileName   = "";
   Pointer    = 0;
   StartIndex = EndIndex = -1;
+  // BUGFIX #2, second constructor -- see the default constructor above.
+  Attribute  = 0;
+  Relation   = 0;
 }
 
 
@@ -777,24 +792,38 @@ INTERVALLIST::DiskFind(STRING Fn, DOUBLE Key, INT4 Relation,
 	  // the key is bigger than anything indexed
 	  fclose(Fp);
 	  *Index = -1;
+	  // BUGFIX #3 (docs/BUG_CATALOG.md#srcintlistcxx): this cerr (and
+	  // the two below) was the only diagnostic output in this whole
+	  // file not gated behind #ifdef DEBUG -- every sibling message
+	  // here and in the END_BLOCK/PTR_BLOCK cases below it is. "No
+	  // match" is an ordinary, expected outcome for a range search
+	  // (e.g. a query outside the indexed date/numeric range), not an
+	  // error; left ungated, every such miss spammed stderr in a
+	  // normal production build.
+#ifdef DEBUG
 	  cerr << "No match at index " << X << ", State=TOO_HIGH" << endl;
+#endif
 	  return State;
 	} else if ((State == TOO_LOW) && (Type == AT_START)) {
-	  // We didn't get a match, but we ran off the lower end, so 
+	  // We didn't get a match, but we ran off the lower end, so
 	  // the key is smaller than anything indexed
 	  fclose(Fp);
 	  *Index = -1;
+#ifdef DEBUG
 	  cerr << "No match at index " << X << ", State=TOO_LOW" << endl;
+#endif
 	  return State;
 	} else if (Low >= High) {
 	  // If Low is >= High, there aren't any more values to check
 	  // so we're done whether we got a match or not, and if we got
-	  // here, there wasn't a match.  This probably won't happen - 
+	  // here, there wasn't a match.  This probably won't happen -
 	  // at least, we expect that these conditions will be caught
 	  // by one of the preceeding, but it pays to be safe.
 	  fclose(Fp);
 	  *Index = -1;
+#ifdef DEBUG
 	  cerr << "No match at index " << X << ", Low>High" << endl;
+#endif
 	  return NO_MATCH;
 	}
 

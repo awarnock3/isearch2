@@ -43,6 +43,9 @@ Description:    CGI app that builds a search html form for Iindex-ed databases
 Author:         Kevin Gamiel, kgamiel@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <iostream>
 #include <stdio.h>
 #include <sys/types.h>
@@ -93,34 +96,59 @@ int main(int argc, char **argv)
     exit(0);
   }
   type=0;
-  strcpy(temp,argv[1]);
-  if (temp[0]=='-') {
-    if (!strcmp(temp,"-simple")) {
+  // BUGFIX #2 (docs/BUG_CATALOG.md#isearch-cgisearch_formcxx): this
+  // used to strcpy(temp,argv[1]) into a fixed 64-byte buffer with no
+  // bounds check -- argv[1] is a flag in the "-pagetype ..." form, but
+  // it's the dbpath itself in the plain form, which can legitimately
+  // be longer than 63 characters. Confirmed a real stack buffer
+  // overflow (glibc's *** buffer overflow detected *** / SIGABRT) with
+  // a >64-char dbpath. The copy was never actually necessary --
+  // argv[1] itself is only ever read, never mutated, in this scope --
+  // so just use it directly instead of copying it into a small fixed
+  // buffer at all.
+  if (argv[1][0]=='-') {
+    if (!strcmp(argv[1],"-simple")) {
       type=SIMPLE;
     } else {
-      if (!strcmp(temp,"-boolean")) {
+      if (!strcmp(argv[1],"-boolean")) {
         type=BOOLEAN;
       } else {
-        if (!strcmp(temp,"-advanced")) {
+        if (!strcmp(argv[1],"-advanced")) {
           type=ADVANCED;
         } else {
-	  if (!strcmp(temp,"-html")) {
+	  if (!strcmp(argv[1],"-html")) {
 	    type=BOOLEAN;
 	    JustHTML=GDT_TRUE;
 	  } else {
-	    cout << "Form type " << temp << " not recognized.\n\n";
+	    cout << "Form type " << argv[1] << " not recognized.\n\n";
 	    exit(0);
 	  }
 	}
       }
     }
+    // BUGFIX #1 (docs/BUG_CATALOG.md#isearch-cgisearch_formcxx): the
+    // argc < 3 check above only guarantees argv[1] and argv[2] --
+    // nowhere near enough for this branch, which needs argv[1..3]
+    // (flag, dbpath, dbname). Reading db=argv[3] when argc==3 read the
+    // C++-standard-guaranteed nullptr sentinel at argv[argc] (harmless
+    // here since db is never used afterward), but www=argv[4] read
+    // *past* that guaranteed range entirely -- undefined behavior, not
+    // just null -- and DBRootName=argv[3] a few lines below (a real
+    // STRING assignment) crashed via strlen(nullptr). Confirmed with
+    // the real binary: `search_form -simple <onepath>` (argc==3)
+    // segfaulted before this fix. Fixed by requiring the 4 arguments
+    // this branch actually needs before reading any of them.
+    if (argc < 4) {
+      cout << "Usage:  search_form " << argv[1] << " <dbpath> <dbname> [www]\n";
+      exit(0);
+    }
     dbpath = argv[2];
     db = argv[3];
-    www = argv[4];
+    www = (argc > 4) ? argv[4] : nullptr;
   } else {
     dbpath = argv[1];
     db = argv[2];
-    www = argv[3];
+    www = (argc > 3) ? argv[3] : nullptr;
   }
 
 
@@ -205,7 +233,7 @@ int main(int argc, char **argv)
   switch (type) {
     case SIMPLE: {
       for (INT i=1;i <= 3;i++) {
-        sprintf(temp, "FIELD_%i", i);
+        snprintf(temp, sizeof(temp), "FIELD_%i", i);
         cout << "Field: <select name=\"" << temp << "\">" << endl;
         cout << "<option selected value=\"FULLTEXT\">FullText" << endl;
     
@@ -215,9 +243,9 @@ int main(int argc, char **argv)
           cout << "<option>" << Field << endl;
         }
         cout << "</select>" << endl;
-        sprintf(temp, "TERM_%i", i);
+        snprintf(temp, sizeof(temp), "TERM_%i", i);
         cout << "Term: <input name=\"" << temp << "\">" << endl;
-        sprintf(temp, "WEIGHT_%i", i);
+        snprintf(temp, sizeof(temp), "WEIGHT_%i", i);
         cout << "Weight: <select name=\"" << temp << "\">" << endl;
         cout << "<option selected>1" << endl;
         cout << "<option>2" << endl;
@@ -230,7 +258,7 @@ int main(int argc, char **argv)
     }
     case BOOLEAN: {
       for (INT i=1;i <= 2;i++) {
-        sprintf(temp, "FIELD_%i", i);
+        snprintf(temp, sizeof(temp), "FIELD_%i", i);
         cout << "Field: <select name=\"" << temp << "\">" << endl;
         cout << "<option selected value=\"FULLTEXT\">FullText" << endl;
     
@@ -240,9 +268,9 @@ int main(int argc, char **argv)
 	  cout << "<option>" << Field << endl;
 	}
         cout << "</select>" << endl;
-        sprintf(temp, "TERM_%i", i);
+        snprintf(temp, sizeof(temp), "TERM_%i", i);
         cout << "Term: <input name=\"" << temp << "\">" << endl;
-        sprintf(temp, "WEIGHT_%i", i);
+        snprintf(temp, sizeof(temp), "WEIGHT_%i", i);
         cout << "Weight: <select name=\"" << temp << "\">" << endl;
         cout << "<option selected>1" << endl;
         cout << "<option>2" << endl;

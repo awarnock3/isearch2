@@ -39,10 +39,23 @@ Version:	1.00
 Description:	Class OPOBJ - Operand/operator Base Class
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include "opobj.hxx"
 
 OPOBJ::OPOBJ() {
+  // BUGFIX #1: Next had no in-class initializer and wasn't set here,
+  // leaving it indeterminate until OPSTACK::Push() (the only writer --
+  // Next is private, OPSTACK is the sole friend) calls SetNext(). Every
+  // current OPSTACK code path already calls SetNext() before ever
+  // reading Next back, so this wasn't reachable as a live bug through
+  // OPSTACK's existing push/pop/Reverse() logic -- but leaving a raw
+  // pointer indeterminate rather than null is a latent trap for the
+  // next caller, fixed the same way as the identical finding in
+  // RESULT's constructor this batch (docs/BUG_CATALOG.md#srcresultcxx,
+  // BUGFIX #1).
+  Next = 0;
 }
 
 void OPOBJ::SetNext(OPOBJ* const OpPtr) {

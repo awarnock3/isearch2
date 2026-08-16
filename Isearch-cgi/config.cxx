@@ -41,8 +41,13 @@ Description:    Version number
 Authors:        Archie Warnock (warnock@clark.net), A/WWW Enterprises
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "gdt.h"
 
+/// Human-readable build/version string for the Isearch CGI frontends
+/// (see Isearch-cgi/config.hxx), set from the build-time VERS macro.
 const CHR *IsearchCGIVersion = VERS;
 
 

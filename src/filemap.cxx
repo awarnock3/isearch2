@@ -39,6 +39,8 @@ File:		filemap.cxx
 Version:	1.01
 Description:	Class FILEMAP
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-05
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include "defs.hxx"
 #include "string.hxx"
@@ -84,7 +86,6 @@ FILEMAP::FILEMAP(const PIDBOBJ DbParent)
   INT i;
   Parent=DbParent;
   MDTREC Mdtrec;
-  STRING a;
 
   mdt=Parent->GetMainMdt();
   MdtCount=mdt->GetTotalEntries();
@@ -96,8 +97,6 @@ FILEMAP::FILEMAP(const PIDBOBJ DbParent)
     Items[i-1].GpStart=Mdtrec.GetGlobalFileStart();
     Items[i-1].LocalStart=Mdtrec.GetLocalRecordStart();
     Items[i-1].LocalEnd=Mdtrec.GetLocalRecordEnd();
- //   cout << "("<<Items[i-1].GpStart<<") ("<<Items[i-1].LocalStart<<") ("<<Items[i-1].LocalEnd<<")";
-  //  cout <<Items[i-1].Path<<endl;
   }
 }
 static int TableCompareKeys(const void* GpPtr, const void* GpRecPtr) 
@@ -125,54 +124,55 @@ static int TableCompareKeys(const void* GpPtr, const void* GpRecPtr)
  
 GPTYPE FILEMAP::GetKeyByGlobal(GPTYPE gp)
 {
-//  INT i;
   GPTYPE Start;
   struct _table *t,key;
   key.GpStart=gp;
-//  key.GpEnd=0;
 #ifndef __SUNPRO_CC
-  t= (struct _table *)bsearch(&key, Items, MdtCount, 
+  t= (struct _table *)bsearch(&key, Items, MdtCount,
 			       sizeof(_table), TableCompareKeys);
 #else
-  t= (struct _table *)bsearch((char*)&key, (char*)Items, MdtCount, 
+  t= (struct _table *)bsearch((char*)&key, (char*)Items, MdtCount,
 			       sizeof(_table), TableCompareKeys);
 #endif
-  
+
   if(t){
     Start=t->GpStart+t->LocalStart;
   }else{
     Start=0;
-    printf("Lookup failed for %d\n", gp);
+    // BUGFIX #2: was "%d" for gp, a GPTYPE (unsigned int) -- the same
+    // signed/unsigned printf mismatch already cataloged for
+    // src/fc.cxx/src/fct.cxx's Write() functions. A large gp would print
+    // as negative.
+    printf("Lookup failed for %u\n", gp);
   }
-  
+
   return(Start);
 }
 
 GPTYPE FILEMAP::GetNameByGlobal(GPTYPE gp, PSTRING s, INT *size, INT *LS)
 {
-//  INT i;
   GPTYPE Start;
   struct _table *t,key;
   key.GpStart=gp;
-//  key.GpEnd=0;
 #ifndef __SUNPRO_CC
-  t= (struct _table *)bsearch(&key, Items, MdtCount, 
+  t= (struct _table *)bsearch(&key, Items, MdtCount,
 			       sizeof(_table), TableCompareKeys);
 #else
-  t= (struct _table *)bsearch((char*)&key, (char*)Items, MdtCount, 
+  t= (struct _table *)bsearch((char*)&key, (char*)Items, MdtCount,
 			       sizeof(_table), TableCompareKeys);
-#endif  
+#endif
   if(t){
     *size=t->LocalEnd-t->LocalStart+1;
     *LS=t->LocalStart;
     Start=t->GpStart+t->LocalStart;
     *s=t->Path;
-  
+
   }else{
     Start=0;
-    printf("Lookup failed for %d\n", gp);
+    // BUGFIX #2: see GetKeyByGlobal() above.
+    printf("Lookup failed for %u\n", gp);
   }
-  
+
   return(Start);
 }
   

@@ -50,6 +50,9 @@ History:
 		Archie Warnock, warnock@clark.net
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <iostream>
 #include <stdio.h>
 #include <sys/types.h>
@@ -134,7 +137,7 @@ INT main(int argc, char **argv)
   // cgidata->Display();
   // exit(0);
 
-  if ((db = cgidata->GetValueByName("DATABASE")) == NULL) {
+  if ((db = cgidata->GetValueByName("DATABASE")) == nullptr) {
     cout << "<B>You must specify a database name.</B>" << endl;
     PutHTMLBodyEnd();
     exit(0);
@@ -142,7 +145,7 @@ INT main(int argc, char **argv)
 
   // Randy.Wood@nau.edu
   // if cgi-bin was specified by the web form, use it instead of cgi-bin
-  if ((cgiDir = cgidata->GetValueByName("CGI_BIN")) == NULL) {
+  if ((cgiDir = cgidata->GetValueByName("CGI_BIN")) == nullptr) {
     cgiDir = new CHR[10];
     strcpy(cgiDir,"cgi-bin");
   }
@@ -176,15 +179,39 @@ INT main(int argc, char **argv)
       type = BOOLEAN;
 
   if (SEARCH_TYPE(type) == ADVANCED) {
-    query = cgidata->GetValueByName("ISEARCH_TERM");
+    // BUGFIX #1 (docs/BUG_CATALOG.md#isearch-cgiisrch_htmlcxx):
+    // GetValueByName() returns nullptr when the named CGI field wasn't
+    // submitted (e.g. an ADVANCED search request missing
+    // ISEARCH_TERM); assigning that straight into a STRING calls
+    // STRING::operator=(const CHR*), which dereferences it
+    // unconditionally via strlen(). Confirmed with the real binary:
+    // SEARCH_TYPE=ADVANCED with no ISEARCH_TERM segfaulted before this
+    // fix. Fixed by treating a missing field the same as an empty one,
+    // matching the ternary-guarded pattern already used for every
+    // other field in this function (DATABASE, START, MAXHITS, etc.).
+    p = cgidata->GetValueByName("ISEARCH_TERM");
+    query = p ? p : "";
     PrintQuery = query;
   }
   else if (SEARCH_TYPE(type) == BOOLEAN) {
     STRING TempQuery;
     terms = 0;
 
+    // BUGFIX #2 (docs/BUG_CATALOG.md#isearch-cgiisrch_htmlcxx): p was
+    // left nullptr when the OPERATOR field wasn't submitted, then
+    // reused unconditionally in every StrCaseCmp(p, ...)/Cat(p) call
+    // below for the 2nd and later terms -- StrCaseCmp() calls
+    // strcasecmp() directly, which (like STRING::operator=) doesn't
+    // tolerate a null argument. Confirmed with the real binary: a
+    // BOOLEAN search with 2 terms and no OPERATOR field segfaulted
+    // before this fix. Defaulted to "OR" (matching this same file's
+    // own documented "otherwise is an implied OR" convention for the
+    // SIMPLE search branch below) so p is never null going into the
+    // loop.
     if ((p = cgidata->GetValueByName("OPERATOR")))
       type = (StrCaseCmp(p, "AND") == 0) ? type | BOOLEAN_AND: type;
+    else
+      p = (PCHR)"OR";
 
     // Build up the infix query from the components
     // Might as well make a nice printable version, too
@@ -262,7 +289,12 @@ INT main(int argc, char **argv)
      */
     // From Monty Walls
     if (Start >1) {
-      query = cgidata->GetValueByName("ISEARCH_TERM");
+      // BUGFIX #1, continued (docs/BUG_CATALOG.md#isearch-cgiisrch_htmlcxx):
+      // same missing-field-crash shape as the ADVANCED branch above --
+      // a "next page" request (Start>1) with no ISEARCH_TERM field
+      // would crash here identically.
+      p = cgidata->GetValueByName("ISEARCH_TERM");
+      query = p ? p : "";
       // only 1 OPERATOR is possible, or get implied OR
       if ((p=cgidata->GetValueByName("OPERATOR")))
 	type = (StrCaseCmp(p,"AND") == 0) ? type|BOOLEAN_AND:type;
@@ -303,10 +335,10 @@ gettok(PCHR input)
   CHR *pos, *tok;
   CHR lc;
 
-  if (input == (PCHR)NULL && last == (PCHR)NULL)
-    return ((PCHR)NULL);
+  if (input == nullptr && last == nullptr)
+    return (nullptr);
 
-  pos = (input == (PCHR)NULL)? last: input;
+  pos = (input == nullptr)? last: input;
   
   for (lc = ' '; *pos != '\0'; ++pos) {
     if (*pos == ' ')
@@ -333,7 +365,7 @@ gettok(PCHR input)
     last = pos;
     return (tok);
   }
-  return ((PCHR)NULL);
+  return (nullptr);
 }
 
 PCHR
@@ -343,14 +375,14 @@ get_field(const CHR *f, INT n)
   PCHR field;
   bp = new CHR[MAXSTR+1];
 
-  sprintf(bp, f, n);
+  snprintf(bp, MAXSTR+1, f, n);
   if ((field = cgidata->GetValueByName(bp))) {
     delete [] bp;
     return (field);
   }
 
   delete [] bp;
-  return ((PCHR)NULL);
+  return (nullptr);
 }
 
 INT
@@ -363,14 +395,14 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
   PCHR weight;
   PCHR entry;
   INT w, terms;
-  PCHR phrase_term = (PCHR)NULL;
+  PCHR phrase_term = nullptr;
 
   buffer = new CHR[MAXSTR+1];
 
   // See if the form included a button to request phrase searching
   PCHR phrase;
   GDT_BOOLEAN do_phrase=GDT_FALSE;
-  if ((phrase = get_field("PHRASE_%i",i)) != (PCHR)NULL) {
+  if ((phrase = get_field("PHRASE_%i",i)) != nullptr) {
     if (StrCaseCmp(phrase,"YES") == 0) {
       do_phrase = GDT_TRUE;
     } else {
@@ -381,7 +413,7 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
   *buffer = '\0';
   terms = 0;
 
-  if ((argument = get_field("TERM_%i", i)) == (PCHR)NULL) {
+  if ((argument = get_field("TERM_%i", i)) == nullptr) {
     delete [] buffer;
     return (0);
   }
@@ -404,15 +436,22 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
     argument = phrase_term;
   }
 
-  if ((field = get_field("FIELD_%i", i)) != (PCHR)NULL) {
+  if ((field = get_field("FIELD_%i", i)) != nullptr) {
     if (StrCaseCmp(field, "FULLTEXT") == 0) {
       strcpy(field,"");
     }
   }
 
-  PrintField = field;
+  // BUGFIX #4 (docs/BUG_CATALOG.md#isearch-cgiisrch_htmlcxx): same
+  // missing-field-crash shape as BUGFIX #1/#2 -- field stays nullptr
+  // when FIELD_%i wasn't submitted (a completely ordinary request: no
+  // field restriction means search all fields), and this assigned it
+  // straight into a STRING unconditionally. Confirmed with the real
+  // binary: a BOOLEAN search with terms but no FIELD_1/FIELD_2
+  // segfaulted here before this fix.
+  PrintField = field ? field : "";
 
-  if ((weight = get_field("WEIGHT_%i", i)) != (PCHR)NULL) {
+  if ((weight = get_field("WEIGHT_%i", i)) != nullptr) {
     w = atoi(weight);
     PrintWeight = weight;
   }
@@ -423,37 +462,37 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
 
   PrintTerm = argument;
 
-  while ((s = gettok(argument)) != (PCHR)NULL) {
-    argument = (PCHR)NULL;
+  while ((s = gettok(argument)) != nullptr) {
+    argument = nullptr;
 
     entry = (PCHR)&buffer[0];
 
     if (do_phrase) {
-      if ((field != (PCHR)NULL) && (strlen(field) > 0)) {
+      if ((field != nullptr) && (strlen(field) > 0)) {
         if (w > 0)
-          sprintf(entry, "%.128s/\"%.256s\":%d", field, s, w);
+          snprintf(entry, MAXSTR+1, "%.128s/\"%.256s\":%d", field, s, w);
         else
-          sprintf(entry, "%.128s/\"%.256s\"", field, s);
+          snprintf(entry, MAXSTR+1, "%.128s/\"%.256s\"", field, s);
       }
       else {
         if (w > 0)
-          sprintf(entry, "\"%.256s\":%d", s, w);
+          snprintf(entry, MAXSTR+1, "\"%.256s\":%d", s, w);
         else
-          sprintf(entry, "\"%.256s\"", s);
+          snprintf(entry, MAXSTR+1, "\"%.256s\"", s);
       }
 
     } else {
-      if ((field != (PCHR)NULL) && (strlen(field) > 0)) {
+      if ((field != nullptr) && (strlen(field) > 0)) {
         if (w > 0)
-          sprintf(entry, "%.128s/%.256s:%d", field, s, w);
+          snprintf(entry, MAXSTR+1, "%.128s/%.256s:%d", field, s, w);
         else
-          sprintf(entry, "%.128s/%.256s", field, s);
+          snprintf(entry, MAXSTR+1, "%.128s/%.256s", field, s);
       }
       else {
         if (w > 0)
-          sprintf(entry, "%.256s:%d", s, w);
+          snprintf(entry, MAXSTR+1, "%.256s:%d", s, w);
         else
-          sprintf(entry, "%.256s", s);
+          snprintf(entry, MAXSTR+1, "%.256s", s);
       }
     }
 
@@ -464,7 +503,7 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
     ++terms;
   }
   delete [] buffer;
-  if (phrase_term != (PCHR)NULL) {
+  if (phrase_term != nullptr) {
     delete [] phrase_term;
   }
   return (terms);
@@ -559,7 +598,7 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
   DBPathName=DBPath;
   DBRootName=DBName;
 
-  if ((pdb = new IDB(DBPathName, DBRootName)) == NULL) {
+  if ((pdb = new IDB(DBPathName, DBRootName)) == nullptr) {
     printf("Failed to open database [%s]\n", DBName);
     return -1;
   }
@@ -578,6 +617,23 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
   else
     pirset=pdb->Search(query);
   time(&EndTime);
+
+  // BUGFIX #3 (docs/BUG_CATALOG.md#isearch-cgiisrch_htmlcxx): no null
+  // check on pirset before dereferencing it -- the same root cause
+  // already confirmed and fixed in src/Isearch.cxx's own BUGFIX #1
+  // (VIDB::Search()/AndSearch() return nullptr when there's nothing to
+  // search), traced here one level down: INDEX::Search()'s final
+  // `TempStack >> NewIrset;` (src/index.cxx) explicitly sets NewIrset
+  // to nullptr via OPSTACK::Pop()'s empty-stack branch when the SQUERY
+  // has zero operands, and that nullptr propagates unchanged through
+  // IDB::Search()/AndSearch(). A query that tokenizes to zero real
+  // search terms (SQUERY::SetTerm() on a degenerate string) reaches
+  // this exact path.
+  if (!pirset) {
+    cout << "<B>Unable to process query.</B>" << endl;
+    delete pdb;
+    return -1;
+  }
 
   pirset->SortByScore();
 
@@ -650,7 +706,7 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
       if (url)
         url=url+strlen(HttpPath);
     } else
-      url=(PCHR)NULL;
+      url=nullptr;
 
     // Get the unique database key for this record to be use
     // in subsequent retrieval when URL is clicked.
@@ -664,7 +720,7 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
 
     /* Files not within the given WWW path must be accessed with ifetch
        for their full text */
-    if (url==NULL) {
+    if (url==nullptr) {
 #if defined(_WIN32) || defined (MSDOS)
       cout << "<a href=\"ifetch.cmd?";
 #else

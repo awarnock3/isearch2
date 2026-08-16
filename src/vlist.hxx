@@ -45,10 +45,29 @@ Author:		Nassib Nassar, nrn@cnidr.org
 
 #include "gdt.h"
 #include "defs.hxx"
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
+// Doubly linked *circular* list base class: every node's Next/Prev
+// eventually loops back to itself. Carries no payload of its own --
+// subclasses (e.g. FCT, STRLIST) add their own data per node.
 class VLIST {
 public:
 	VLIST();
+	// BUGFIX #1: no copy constructor and no working operator= existed
+	// (the commented-out sketch below was pure-virtual and never
+	// compiled). A copied node becomes the sole member of its own new
+	// one-node circle -- VLIST carries no other state, so this is
+	// identical to default-construction. The source's own Next/Prev
+	// links are deliberately never read: splicing a node into someone
+	// else's circle needs AddNode()'s bookkeeping, not a blind pointer
+	// copy. Not virtual, unlike the old sketch -- nothing in this tree
+	// assigns/copy-constructs through a VLIST& or VLIST* today; each
+	// subclass that needs to duplicate a circle's *contents* already
+	// does so at its own level (see e.g. FCT::operator=, which walks
+	// the source circle and builds fresh nodes via AddNode()).
+	VLIST(const VLIST& OtherVlist);
+	VLIST& operator=(const VLIST& OtherVlist);
   //	virtual VLIST& operator=(const VLIST& OtherVlist) = 0;
 	virtual void   Clear();
   //	virtual void   EraseAfter(const SIZE_T Index);

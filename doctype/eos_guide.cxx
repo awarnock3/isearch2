@@ -5,6 +5,9 @@ Description:	Class EOS_GUIDE - HTML documents, <HEAD> only
 Author:         Nassib Nassar <nassar@etymon.com>
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #define EOS_GUIDE_MAX_TOKEN_LENGTH 4096
 
 #include <stdio.h>
@@ -21,8 +24,14 @@ EOS_GUIDE::EOS_GUIDE(PIDBOBJ DbParent) : DOCTYPE(DbParent) {
 	StrList.GetValue("SOURCE", &DocSource);
 }
 
-
-void 
+// Reads NewRecord's bytes off disk one character at a time (fgetc()),
+// tracking whether we're inside <HEAD>...</HEAD> and, within it,
+// accumulating each HTML tag into `token`. Adds a "TITLE" field
+// spanning the text between <TITLE> and </TITLE>, and one field per
+// <META NAME="..." CONTENT="...">, named after its NAME attribute
+// value and spanning its CONTENT attribute value. Stops as soon as
+// </HEAD> or EOF is seen.
+void
 EOS_GUIDE::ParseFields(PRECORD NewRecord) {
 
   // open the file
@@ -42,27 +51,54 @@ EOS_GUIDE::ParseFields(PRECORD NewRecord) {
   GDT_BOOLEAN done = GDT_FALSE;  // 1 if it is time to stop parsing
   char token[EOS_GUIDE_MAX_TOKEN_LENGTH + 1];
   int tokenLength;  // maintained while still building the string
-  char ch;
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypeeos_guidecxx): ch must stay
+  // an int. fgetc() returns either a real byte value (0-255) or the
+  // sentinel EOF (typically -1); the original `char ch;` immediately
+  // narrowed that result, and on a platform where char is signed
+  // (the common case), the real byte 0xFF narrows to -1 too -- the
+  // exact same value as EOF. Every file containing that byte anywhere
+  // in its <HEAD> section (a real possibility for Latin-1/ISO-8859-1
+  // content, which this class's own XML header elsewhere claims to
+  // support) had parsing silently stop early right there.
+  int ch;
   int foundTag = 0;  // 1 if we hit a tag and are building a token
   long position = 0;  // offset position within input file
   long tokenPosition;  // offset position of the beginning of the token
   int tokenReady;  // 1 if the token string is ready to be processed
-  long titlePosition;  // offset position of start of title (after <TITLE>)
+  // BUGFIX #2: was reset to 0 unconditionally at the top of every
+  // "process token" pass below (see the removed `titlePosition = 0;`
+  // that used to sit right after this loop begins) -- since <TITLE>
+  // and its value are read across several loop iterations (each
+  // iteration captures one tag; the title text between them is
+  // skipped character-by-character, not accumulated), that reset
+  // destroyed the position <TITLE> had just recorded before the
+  // matching </TITLE> iteration ever got a chance to read it. The
+  // `if (titlePosition == 0) break;` guard a few lines below was
+  // therefore *always* true -- and since that `break` isn't inside a
+  // switch, it exits the *entire* main parsing loop, not just the
+  // <TITLE> handling. So the bug was worse than "title never
+  // extracted": parsing stopped dead the moment any </TITLE> was
+  // seen, silently discarding every <META> (or anything else) that
+  // came after it too. Confirmed via a real before/after test run:
+  // reverting this fix made 3 of this file's 4 regression tests fail,
+  // including the META-extraction one, not just the TITLE one. One-
+  // time initialization here instead.
+  long titlePosition = 0;  // offset position of start of title (after <TITLE>)
   DFD dfd;
   DFT dft;
   FC fc;
   DF df;
-	
+
   // main parsing loop
 
   while ( ! done ) {
-    
+
     // get next token (i.e. the next HTML tag)
     tokenLength = 0;
     foundTag = 0;
     tokenReady = 0;
     do {
-      ch = (char)fgetc(fp);
+      ch = fgetc(fp);
       if (ch == EOF) {
 	token[tokenLength] = '\0';
       } else {
@@ -83,7 +119,13 @@ EOS_GUIDE::ParseFields(PRECORD NewRecord) {
 	  break;
 	default:
 	  if ( foundTag ) {
-	    token[tokenLength++] = toupper(ch);
+	    // BUGFIX #1 (continued): toupper() is undefined behavior
+	    // for a value not representable as unsigned char (or EOF);
+	    // ch is guaranteed in [0,255] here (the EOF case already
+	    // branched away above), but cast explicitly since ch is a
+	    // plain int, not implicitly unsigned-char-range like a
+	    // char would (mis)appear to be.
+	    token[tokenLength++] = (char)toupper((unsigned char)ch);
 	  }
 	  break;
 	}
@@ -97,7 +139,6 @@ EOS_GUIDE::ParseFields(PRECORD NewRecord) {
     }
     
     // process token
-    titlePosition = 0;
     if (inHead) {
       // we are in the <HEAD> section, so we do want to process this
       if (TagMatch(token, "/HEAD")) {
@@ -217,14 +258,14 @@ EOS_GUIDE::Present(const RESULT& ResultRecord, const STRING& ElementSet,
     ResultRecord.GetFileName(&File);
     ResultRecord.GetKey(&Key);
     ndb = ResultRecord.GetDbNum();
-    sprintf(ndb_string,"%d",ndb);
+    snprintf(ndb_string,sizeof(ndb_string),"%d",ndb);
 
     n = Path.Search("http/");
     if (n > 0) {
       n = Path.Search("/");
       Path.EraseBefore(n);
       //      Path.Replace("http/","http://");
-      // Now look for the next / 
+      // Now look for the next /
       n = Path.Search("/");
       STRING HoldPath;
       HoldPath = Path;
@@ -236,7 +277,15 @@ EOS_GUIDE::Present(const RESULT& ResultRecord, const STRING& ElementSet,
       Path.Cat(File);
       *StringBufferPtr = "\t\t\t<isearch:result docid=\"";
       if (ndb > 0) {
-	StringBufferPtr->Cat(ndb);
+	// BUGFIX #3 (docs/BUG_CATALOG.md#doctypeeos_guidecxx): this
+	// passed the raw INT ndb straight to Cat(), which has no
+	// INT overload -- it silently resolved to Cat(const UCHR
+	// Character) instead (an implicit INT->UCHR narrowing
+	// conversion), appending one garbled byte in place of the
+	// intended decimal docid number. The "B"/ISEARCH_XML branch
+	// below does this correctly, via the ndb_string buffer built
+	// above.
+	StringBufferPtr->Cat(ndb_string);
 	StringBufferPtr->Cat(':');
       }
       //      Key.XmlCleanup();
@@ -295,7 +344,7 @@ EOS_GUIDE::Present(const RESULT& ResultRecord, const STRING& ElementSet,
       ResultRecord.GetFileName(&File);
       ResultRecord.GetKey(&Key);
       ndb = ResultRecord.GetDbNum();
-      sprintf(ndb_string,"%d",ndb);
+      snprintf(ndb_string,sizeof(ndb_string),"%d",ndb);
 
       n = Path.Search("http/");
       if (n > 0) {

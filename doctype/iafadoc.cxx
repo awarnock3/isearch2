@@ -106,6 +106,9 @@ ________________________________________________________________________________
 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		iafadoc.cxx
 Version:	$Revision: 1.3 $
@@ -137,6 +140,9 @@ IAFADOC::IAFADOC (PIDBOBJ DbParent) : COLONDOC (DbParent)
   IAFA DOC I:	Draft 92.10.14
   IAFA DOC II:	Draft 92.10.19
 */
+// ElementSet BRIEF_MAGIC ("B") composes "Name (Author)" (or, failing
+// any name field, "Description: <truncated text>"); anything else is
+// delegated unchanged to the inherited COLONDOC::Present().
 void IAFADOC::
 Present (const RESULT & ResultRecord, const STRING & ElementSet, PSTRING StringBuffer)
 {

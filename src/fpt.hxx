@@ -52,11 +52,31 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "fprec.hxx"
 
 typedef PFILE* PPFILE;
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
+// File Pointer Table: a small LRU cache of open FILE* handles, so
+// repeatedly ffopen()-ing the same file reuses an already-open handle
+// instead of paying a real open() every time. ffclose() only marks an
+// entry as logically closed (available for reuse); the physical
+// fclose() is deferred to CloseAll(), an LRU eviction, or a genuine
+// open-mode change -- see ffopen()'s cache-hit branches.
 class FPT {
 public:
   FPT();
   FPT(const INT TableSize);
+  // BUGFIX #1: FPT owns a heap-allocated FPREC* Table array, where each
+  // entry caches a live FILE*, but declared no copy constructor and no
+  // operator= at all -- not even a hand-written one -- so the
+  // compiler-generated ones did a member-wise shallow copy. Confirmed
+  // to double-free Table under ASan (surfacing inside CloseAll() during
+  // destruction). Made explicitly non-copyable rather than deep-copied:
+  // copying a table of open file handles has no single obviously-
+  // correct meaning (duplicate the descriptor? reopen by name? leave
+  // the copy closed?), the same reasoning as MDT's non-copyable choice
+  // this batch. See docs/BUG_CATALOG.md.
+  FPT(const FPT&) = delete;
+  FPT& operator=(const FPT&) = delete;
   PFILE ffopen(const STRING& FileName, const CHR *Type);
   INT   ffclose(FILE *FilePointer);
   void  CloseAll();

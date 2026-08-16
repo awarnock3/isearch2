@@ -44,6 +44,9 @@ Description:	Class FPREC - File Pointer Record
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef FPREC_HXX
 #define FPREC_HXX
 
@@ -51,10 +54,19 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "string.hxx"
 #include "common.hxx"
 
+// One entry in FPT's (src/fpt.hxx) open-file table: a file name, the
+// FILE* it's currently open under (if any -- FPREC doesn't open/close
+// it itself, just records FPT's bookkeeping), that file's open mode,
+// and an LRU-style Priority plus a Closed flag FPT uses to decide which
+// file to close when the table is full.
 class FPREC {
 public:
   FPREC();
+  // Copies every field, including Priority and Closed; safe under
+  // self-assignment.
   FPREC& operator=(const FPREC& OtherFprec);
+  // Stores NewFileName expanded to an absolute path (see
+  // common.hxx's ExpandFileSpec).
   void        SetFileName(const STRING& NewFileName);
   void        GetFileName(STRING *StringBuffer) const;
   void        SetFilePointer(FILE* NewFilePointer);

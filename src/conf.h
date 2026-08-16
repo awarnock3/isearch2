@@ -1,0 +1,72 @@
+/* src/conf.h.  Generated from conf.h.in by configure.  */
+// $Id: conf.h.in,v 1.4 1998/05/12 16:48:56 cnidr Exp $
+/************************************************************************
+Copyright Notice
+
+Copyright (c) MCNC, Clearinghouse for Networked Information Discovery
+and Retrieval, 1994.
+
+Permission to use, copy, modify, distribute, and sell this software and
+its documentation, in whole or in part, for any purpose is hereby
+granted without fee, provided that
+
+1. The above copyright notice and this permission notice appear in all
+copies of the software and related documentation. Notices of copyright
+and/or attribution which appear at the beginning of any file included in
+this distribution must remain intact.
+
+2. Users of this software agree to make their best efforts (a) to return
+to MCNC any improvements or extensions that they make, so that these may
+be included in future releases; and (b) to inform MCNC/CNIDR of
+noteworthy uses of this software.
+
+3. The names of MCNC and Clearinghouse for Networked Information
+Discovery and Retrieval may not be used in any advertising or publicity
+relating to the software without the specific, prior written permission
+of MCNC/CNIDR.
+
+THE SOFTWARE IS PROVIDED "AS-IS" AND WITHOUT WARRANTY OF ANY KIND,
+EXPRESS, IMPLIED OR OTHERWISE, INCLUDING WITHOUT LIMITATION, ANY
+WARRANTY OF MERCHANTABILITY OR FITNESS FOR A PARTICULAR PURPOSE.
+
+IN NO EVENT SHALL MCNC/CNIDR BE LIABLE FOR ANY SPECIAL, INCIDENTAL,
+INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY KIND, OR ANY DAMAGES WHATSOEVER
+RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER OR NOT ADVISED OF
+THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT
+OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+************************************************************************/
+
+/*@@@
+File:		conf.h (generated from conf.h.in by configure)
+Version:	1.01
+$Revision: 1.4 $
+Description:	Variable sizes
+Author:		Nassib Nassar, nrn@cnidr.org
+@@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+#ifndef CONF_H
+#define CONF_H
+
+// Platform type-width constants, substituted by `configure` from
+// src/conf.h.in (the @VAR@ placeholders there are what `configure`
+// fills in) -- this checked-in conf.h is the resolved snapshot for
+// the platform this tree was last configured on. Verified against
+// this platform's actual sizeof(short)/sizeof(int)/sizeof(long)/
+// sizeof(long long) (see tests/src/test_conf.cxx).
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+#define SIZEOF_SHORT_INT 2
+#define SIZEOF_INT 4
+#define SIZEOF_LONG_INT 8
+#define SIZEOF_LONG_LONG_INT 8
+
+#ifdef __cplusplus
+}
+#endif
+
+#endif

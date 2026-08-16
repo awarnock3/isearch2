@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*
 File:        usmarc.cxx
 Version:     1
@@ -108,8 +111,12 @@ const ParseEntry ParseData[] =
 
 int ParseEntries = sizeof(ParseData) / sizeof(ParseEntry);
 
-void 
-USMARC::ParseRecords(const RECORD& FileRecord) 
+// Splits FileRecord's underlying file into one RECORD per MARC record,
+// using each record's own 5-byte leading length field (the MARC21
+// "Leader") to jump straight to the next one, and adds each to Db via
+// DocTypeAddRecord().
+void
+USMARC::ParseRecords(const RECORD& FileRecord)
 {
   // Finding the range of a MARC record is easy:  The first five bytes of any
   // record MARC record contains a zero-filled representation of the record
@@ -160,6 +167,11 @@ USMARC::ParseRecords(const RECORD& FileRecord)
     if (marcLength <= 0) {
       cout << "Something went awry trying to read MARC record Length in "
 	   << fn << " \n";
+      // BUGFIX #4 (docs/BUG_CATALOG.md#doctypeusmarccxx): fp was never
+      // closed anywhere in this function -- not on this or the other
+      // early-return error path, and not on the normal end-of-loop
+      // completion either. A real file-descriptor leak on every call.
+      fclose(fp);
       return;
     }
 
@@ -167,6 +179,7 @@ USMARC::ParseRecords(const RECORD& FileRecord)
     if (fseek(fp, marcLength - 5, SEEK_CUR) < 0) {
       cout << "Something went awry trying to read MARC record"
 	   << fn << " \n";
+      fclose(fp);
       return;
     }
 
@@ -176,21 +189,59 @@ USMARC::ParseRecords(const RECORD& FileRecord)
     Db->DocTypeAddRecord(Record);
     RS = RS+marcLength;
   }
+  fclose(fp);
 }
 
-void 
-USMARC::readFileContents(PRECORD NewRecord) 
+// Reads NewRecord's bytes off disk (or, if RecordEnd is unset, treats
+// the whole file as a single record) into the global RecBuffer, ready
+// for readMarcStructure() to parse the MARC directory out of.
+void
+USMARC::readFileContents(PRECORD NewRecord)
 {
   STRING fn;
   PCHR   file;
   PFILE  fp;
 
+  // BUGFIX #3 (docs/BUG_CATALOG.md#doctypeusmarccxx): RecBuffer is a
+  // global (see its declaration in doctype/usmarc.hxx). Freeing any
+  // previous allocation and marking it invalid up front, before any of
+  // this function's several early-return paths below can run, fixes
+  // two distinct problems at once:
+  //  - A leak across any multi-record MARC batch (the normal case for
+  //    this DOCTYPE): ParseFields() runs once per record while
+  //    ParseWords() (which frees RecBuffer) may not run again until
+  //    much later, for a different record, by which time the next
+  //    ParseFields() call used to have already overwritten the global
+  //    pointer with no free in between.
+  //  - readMarcStructure() (this function's only caller) used to
+  //    proceed unconditionally after calling this, even when it failed
+  //    and left RecBuffer pointing at stale data from an earlier call
+  //    (or nothing at all) -- confirmed via a real crash: a
+  //    before-this-fix test with a nonexistent file segfaulted in
+  //    readRecordLength() dereferencing a null RecBuffer. Setting
+  //    RecBuffer to nullptr here first, and *only* replacing it with a
+  //    real allocation on the success path further down, gives
+  //    readMarcStructure() a reliable "did this actually work" signal
+  //    to check for that crash's real fix (see there).
+  // `delete [] RecBuffer;` on an already-null global (its zero-
+  // initialized starting value, or after a previous call's own
+  // ParseWords() cleanup) is a well-defined no-op either way.
+  delete [] RecBuffer;
+  RecBuffer = nullptr;
+
   NewRecord->GetFullFileName(&fn);
-  file = fn.NewCString();
   fp = fopen(fn, "rb");
   if (!fp) {
     cout << "USMARC::ParseRecords(): Failed to open file\n\t";
+    // BUGFIX #5 (docs/BUG_CATALOG.md#doctypeusmarccxx): `file` (a
+    // NewCString() copy of the path, used only for perror()) used to be
+    // allocated unconditionally at the top of the function but never
+    // freed anywhere -- leaking on every single call. Same bug already
+    // fixed in doctype/soif.cxx's BUGFIX #3; fixed identically here:
+    // allocated lazily right where it's needed, freed immediately after.
+    file = fn.NewCString();
     perror(file);
+    delete [] file;
     return;
   }
   // Determine the start and size of the record
@@ -234,7 +285,9 @@ USMARC::readFileContents(PRECORD NewRecord)
   if(ActualLength == 0) {
     cout << "USMARC::ParseRecords(): Failed to fread\n\t";
     cout << "RecLength is: " << RecLength << endl;
+    file = fn.NewCString();
     perror(file);
+    delete [] file;
     delete [] RecBuffer;
     fclose(fp);
     return;
@@ -270,10 +323,39 @@ USMARC::readBaseAddr(void)
   return atoi(lenstr);
 }
 
-void 
+// Calls readFileContents() to load the record, then parses the MARC21
+// directory (the fixed-width field/length/offset entries between the
+// leader and the base address) into the global marcDir array, one
+// entry per field present in the record, including each field's
+// subfield-indicator letters when it has any.
+void
 USMARC::readMarcStructure(PRECORD NewRecord)
 {
+  // Same leak fixed for RecBuffer inside readFileContents() (BUGFIX
+  // #3): marcDir is also a global, reassigned below without freeing
+  // the prior allocation unless done up front here, before any early
+  // return (including the one right after readFileContents(), just
+  // below) can skip past the reallocation further down. `delete []` on
+  // a still-null global is a safe no-op.
+  delete [] marcDir;
+  marcDir = nullptr;
+
   readFileContents(NewRecord);
+  // BUGFIX #3, continued: readFileContents() has several early-return
+  // paths (file won't open, seek fails, empty file, allocation fails,
+  // short read) and used to leave no way to tell them apart from
+  // success -- this function proceeded regardless, and
+  // readRecordLength()/readBaseAddr() immediately dereferenced
+  // RecBuffer, which readFileContents() now leaves reliably nullptr on
+  // any failure. Confirmed via a real crash before this check existed:
+  // a test with a nonexistent file segfaulted right here.
+  // marcNumDirEntries = 0 makes every caller's own directory loop
+  // (ParseFields(), ParseWords()) safely do nothing for a record that
+  // couldn't be read.
+  if (RecBuffer == nullptr) {
+    marcNumDirEntries = 0;
+    return;
+  }
   marcRecordLength = readRecordLength(); // set global "marcRecordLength"
   marcBaseAddr = readBaseAddr();         // set global "marcBaseAddr"
 
@@ -332,7 +414,7 @@ USMARC::usefulMarcField(const char *fieldStr)
 
 int
 USMARC::compareReg(const char *s1 , const char *s2) {
-  if (s1 == NULL || s2 == NULL) { // FIXME: Think out behavior if this happens
+  if (s1 == nullptr || s2 == nullptr) { // FIXME: Think out behavior if this happens
   }
 
   if (*s2 == '\0')
@@ -354,7 +436,13 @@ USMARC::compareReg(const char *s1 , const char *s2) {
   return 1;         // We have a match!
 }
 
-char 
+// Scans forward from pos (updated in place) within one MARC field's
+// bytes for the next START_OF_SUBFIELD-delimited subfield tag, filling
+// tagPos/tagLength with that subfield's content span and returning its
+// one-character tag letter, or 0x00 if the field's END_OF_FIELD (or,
+// defensively, RecBuffer's own null terminator -- see BUGFIX #6) is
+// reached first.
+char
 USMARC::findNextTag(char *RecBuffer, int &pos, int &tagPos, int &tagLength)
 {
   char tag;
@@ -362,10 +450,21 @@ USMARC::findNextTag(char *RecBuffer, int &pos, int &tagPos, int &tagLength)
   if (RecBuffer[pos] == END_OF_FIELD) // End of field marker?
     return 0x00;
 
-  while (RecBuffer[pos] != END_OF_FIELD && RecBuffer[pos] != START_OF_SUBFIELD)
+  // BUGFIX #6 (docs/BUG_CATALOG.md#doctypeusmarccxx): neither scan loop
+  // here checked for the buffer's own null terminator
+  // (readFileContents() always sets RecBuffer[RecLength] = '\0'), only
+  // for END_OF_FIELD/START_OF_SUBFIELD -- for a malformed/corrupted MARC
+  // record missing one of those delimiters where expected, the scan ran
+  // straight past the end of the allocated buffer with no bound at all,
+  // a real heap-buffer-overflow read. Stopping at '\0' too keeps the
+  // scan within the buffer's real allocation; a field that runs into the
+  // terminator without a proper delimiter is treated as ending there,
+  // the same safe fallback as running into a genuine END_OF_FIELD.
+  while (RecBuffer[pos] != END_OF_FIELD && RecBuffer[pos] != START_OF_SUBFIELD &&
+	 RecBuffer[pos] != '\0')
     pos++;
 
-  if (RecBuffer[pos] == END_OF_FIELD) {
+  if (RecBuffer[pos] != START_OF_SUBFIELD) {
     pos++;
     return 0x00;
   }
@@ -376,7 +475,8 @@ USMARC::findNextTag(char *RecBuffer, int &pos, int &tagPos, int &tagLength)
     tagPos = pos;
                     // Calculate length of field
     tagLength = 0;
-    while (RecBuffer[pos] != START_OF_SUBFIELD && RecBuffer[pos] != END_OF_FIELD) {
+    while (RecBuffer[pos] != START_OF_SUBFIELD && RecBuffer[pos] != END_OF_FIELD &&
+	   RecBuffer[pos] != '\0') {
       tagLength++;
       pos++;
     }
@@ -408,8 +508,14 @@ USMARC::addSearchEntry(PDFT pdft, STRING fieldName, int fieldStart, int fieldEnd
   delete pfct;
 }
 
-void 
-USMARC::ParseFields(PRECORD NewRecord) 
+// Builds NewRecord's DFT from the MARC directory (readMarcStructure()):
+// every field is indexed once under its raw MARC tag (e.g. "245"), and
+// again under each friendlier name ParseData[] maps it to (matching on
+// field number, subfield, and optionally a specific subfield tag
+// letter), e.g. "title". RecBuffer/marcDir stay allocated for the
+// ParseWords() call expected to follow for this same record.
+void
+USMARC::ParseFields(PRECORD NewRecord)
 {
   // Right now, we're just going to call readMarcStructure()
   // and use this to debug that.  Joy joy.
@@ -426,6 +532,8 @@ USMARC::ParseFields(PRECORD NewRecord)
     cout << "USMARC::ParseRecords(): Failed to allocate DFT \n";
     delete [] RecBuffer;
     delete [] marcDir;
+    RecBuffer = nullptr;
+    marcDir = nullptr;
     return;
   }
 
@@ -448,9 +556,39 @@ USMARC::ParseFields(PRECORD NewRecord)
 
 	  if (*ParseData[j].tag == '*')
 	    addSearchEntry(pdft, ParseData[j].name, fieldPos, fieldPos + fieldLength-1);
-	  else
-	    while((tag = findNextTag(RecBuffer, fieldPos, tagPos, tagLength)) != '\0' && (tag == *ParseData[j].tag))
-	      addSearchEntry(pdft, ParseData[j].name, tagPos, tagPos + tagLength);
+	  else {
+	    // BUGFIX #9 (docs/BUG_CATALOG.md#doctypeusmarccxx): this used
+	    // to pass fieldPos itself (by reference) to findNextTag(),
+	    // which mutates it -- so once one ParseData[] entry's subfield
+	    // search advanced fieldPos, the *next* matching entry's search
+	    // (many fields match several entries at once, e.g. all six
+	    // "24*"/title entries for subfield letters a/b/h/i/j/k) resumed
+	    // from wherever the previous search left off, not from the
+	    // field's own true start. Confirmed via a real ASan heap-
+	    // buffer-overflow: with BUGFIX #6 alone (bounding each
+	    // individual findNextTag() scan), a malformed field could still
+	    // walk `pos` one byte further past the buffer on each
+	    // successive j-iteration's call, eventually exceeding even that
+	    // per-call safety net. Fixed with a fresh scan cursor, reset to
+	    // the field's real start for every ParseData[] entry, leaving
+	    // fieldPos itself (used by the wildcard-tag addSearchEntry()
+	    // call above) untouched.
+	    int scanPos = fieldPos;
+	    while((tag = findNextTag(RecBuffer, scanPos, tagPos, tagLength)) != '\0' && (tag == *ParseData[j].tag))
+	      // BUGFIX #7 (docs/BUG_CATALOG.md#doctypeusmarccxx): this used
+	      // to be `tagPos, tagPos + tagLength` -- an exclusive end,
+	      // inconsistent with the other two addSearchEntry() call
+	      // sites just above (both `fieldPos + fieldLength-1`,
+	      // inclusive) and with FC's established inclusive-end
+	      // convention elsewhere in this tree. tagLength is the
+	      // subfield's real content length (findNextTag()'s own
+	      // byte-counting loop), so the inclusive last index is
+	      // tagPos + tagLength - 1; without the "-1", every subfield-
+	      // tag-specific field (the common case -- most ParseData[]
+	      // entries name a specific subfield letter) included one byte
+	      // too many: the delimiter immediately following the content.
+	      addSearchEntry(pdft, ParseData[j].name, tagPos, tagPos + tagLength - 1);
+	  }
 	}
       }
     }    // end of if usefulMarcField
@@ -462,9 +600,15 @@ USMARC::ParseFields(PRECORD NewRecord)
 }          // end of function
 
 
-GPTYPE 
+// Walks the same field ranges ParseFields() indexed (via marcDir, still
+// populated from that call) for indexable words, skipping stop words
+// and each field's leading two-character subfield indicator, filling
+// GpBuffer with each word's start position. Frees the globals
+// ParseFields() allocated (RecBuffer/marcDir) once done, since this is
+// expected to be the last call for this record -- see BUGFIX #3.
+GPTYPE
 USMARC::ParseWords(CHR* DataBuffer, INT DataLength, INT DataOffset,
-			  GPTYPE* GpBuffer, INT GpLength) 
+			  GPTYPE* GpBuffer, INT GpLength)
 {
   INT GpListSize = 0;
   INT Position = 0;
@@ -492,8 +636,38 @@ USMARC::ParseWords(CHR* DataBuffer, INT DataLength, INT DataOffset,
 	Position++;
       }
 
+      // BUGFIX #2 (docs/BUG_CATALOG.md#doctypeusmarccxx): this passed
+      // DataLength (the full buffer length), not DataLength - Position
+      // (the remaining length from here) -- every sibling ParseWords()
+      // (doctype.cxx, taglist.cxx) correctly subtracts Position.
+      // INDEX::IsStopWord() (src/index.cxx) uses this as a hard read
+      // bound for its own alphanumeric scan, *and* temporarily writes a
+      // '\0' at WordStart[WordLength] partway through -- so passing too
+      // large a bound here meant both an out-of-bounds read and a
+      // potential out-of-bounds write, confirmed by reading that
+      // function's actual implementation rather than assuming.
       if ( (Position < endingPosition) &&
-	   (!(Db->IsStopWord(DataBuffer + Position, DataLength))) ) {
+	   (!(Db->IsStopWord(DataBuffer + Position, DataLength - Position))) ) {
+	// BUGFIX #1 (docs/BUG_CATALOG.md#doctypeusmarccxx): GpLength (the
+	// caller-provided capacity of GpBuffer) was never checked before
+	// this write -- confirmed unused anywhere in this function via
+	// -Wunused-parameter. Every sibling ParseWords() (doctype.cxx,
+	// taglist.cxx) guards the equivalent write with `GpListSize >=
+	// GpLength`; this one had no guard at all, an unconditional
+	// heap-buffer-overflow write on any record with more indexable
+	// words than the caller's buffer could hold. Fixed with the same
+	// guard and (GPTYPE)-1 sentinel return already established in
+	// doctype.cxx's BUGFIX #1 and taglist.cxx's BUGFIX #4 -- the
+	// caller, INDEX::BuildGpList() (src/index.cxx), already knows how
+	// to recover from it.
+	if (GpListSize >= GpLength) {
+	  cout << "GpListSize >= GpLength" << endl;
+	  delete [] RecBuffer;
+	  delete [] marcDir;
+	  RecBuffer = nullptr;
+	  marcDir = nullptr;
+	  return (GPTYPE)-1;
+	}
 	GpBuffer[GpListSize++] = DataOffset + Position;
       }
 
@@ -525,7 +699,13 @@ USMARC::ParseWords(CHR* DataBuffer, INT DataLength, INT DataOffset,
   // before we leave, we should free some leaks (er, I mean, "blocks of memory")
   delete [] RecBuffer;
   delete [] marcDir;
-   
+  // BUGFIX #3 (docs/BUG_CATALOG.md#doctypeusmarccxx): nulling these
+  // globals after freeing them (here and at the overflow return above)
+  // is what makes readFileContents()'s/readMarcStructure()'s own
+  // BUGFIX #3 fix safe -- see there for the full explanation.
+  RecBuffer = nullptr;
+  marcDir = nullptr;
+
   return GpListSize;
 }	// Return # of GP's added to GpBuffer
 

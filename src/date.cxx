@@ -40,6 +40,8 @@ Version:	$Revision: 1.6 $
 Description:	Class SRCH_DATE - Isearch Date data structure class
 Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <stdlib.h>
 #include <time.h>
@@ -49,8 +51,17 @@ Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 #include "date.hxx"
 
 // Constructors
-SRCH_DATE::SRCH_DATE() 
+SRCH_DATE::SRCH_DATE()
 {
+  // BUGFIX #1: d_date/d_prec had no in-class initializer and were
+  // never set here, so a default-constructed SRCH_DATE (e.g.
+  // DATERANGE's own default constructor, also empty, default-
+  // constructs two of these) started with indeterminate values.
+  // DATE_ERROR/BAD_DATE mirror the sentinel this same file already
+  // uses elsewhere for "no date" (see DATERANGE's parsing
+  // constructors' not-a-range fallback below).
+  d_date = DATE_ERROR;
+  d_prec = BAD_DATE;
 }
 
 SRCH_DATE::SRCH_DATE(const SRCH_DATE& OtherDate)
@@ -366,13 +377,20 @@ SRCH_DATE::GetTodaysDate()
   struct tm *t;
   CHR        Hold[MAX_DATESTR_LEN+1];
 
-  today = time((time_t *)NULL);
+  today = time(nullptr);
   t = localtime(&today);
 
   converted = strftime(Hold,ConvertLen,"%Y%m%d",t);
   if ((converted == (size_t)0) || (converted == MAX_DATESTR_LEN)) {
+    // BUGFIX #2: this branch used to fall straight through to the
+    // unconditional `d_date = atof(Hold);` below, silently overwriting
+    // the just-set error state -- and, since a failed strftime() (the
+    // `converted == 0` case) leaves Hold's contents untouched, atof()
+    // would then read Hold's uninitialized stack bytes as if they were
+    // a C string. Returning here makes the error state actually stick.
     d_date = -1.0;
     d_prec = BAD_DATE;
+    return;
   }
 
   d_date = atof(Hold);
@@ -581,8 +599,25 @@ DATERANGE::DATERANGE(const CHR* DateString)
 GDT_BOOLEAN
 DATERANGE::Contains(const SRCH_DATE& TestDate) const
 {
-  if ((d_start.DateCompare(TestDate) == BEFORE)
-      || (d_end.DateCompare(TestDate) == AFTER))
+  // BUGFIX #3: BEFORE/AFTER were swapped between the two clauses.
+  // DateCompare(TestDate) compares *this* to TestDate, so
+  // `d_start.DateCompare(TestDate) == BEFORE` means d_start is before
+  // TestDate -- exactly the condition for TestDate being validly PAST
+  // the range's start, not a reason to reject it. The old condition
+  // (`d_start ... BEFORE || d_end ... AFTER`) was true for TestDate >
+  // d_start OR TestDate < d_end, which -- for any normal range where
+  // d_start <= d_end -- covers nearly every possible TestDate, so this
+  // returned GDT_FALSE almost unconditionally. Confirmed by tracing a
+  // concrete example: range [2020,2025], TestDate 2022 (squarely
+  // inside) -- old code returned GDT_FALSE. The correct rejection
+  // condition is TestDate before the range starts (d_start is AFTER
+  // TestDate) or TestDate after the range ends (d_end is BEFORE
+  // TestDate). Not reachable from any live call site today (no caller
+  // of DATERANGE::Contains() was found in this tree), so this wasn't
+  // an active-search regression, but a real defect in the class as
+  // declared.
+  if ((d_start.DateCompare(TestDate) == AFTER)
+      || (d_end.DateCompare(TestDate) == BEFORE))
     return GDT_FALSE;
   return GDT_TRUE;
 }

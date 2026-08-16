@@ -44,6 +44,9 @@ Description:	Hash class
 Author:		Jim Fullton (Jim.Fullton@cnidr.org)
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdlib.h>
 #include <string.h>
 #include "gdt.h"
@@ -80,14 +83,20 @@ void HASH::Setup(INT Size)
 {
   INT i;
 
+  // BUGFIX #2: Size<=0 (e.g. HASH(0), or a negative caller-supplied
+  // size) left TableSize<=0; HashFunction's `s % TableSize` then
+  // divides by zero (SIGFPE). See docs/BUG_CATALOG.md#srchashhxx.
+  if (Size <= 0)
+    Size = 997;
+
   TableSize=Size;
   H=new Item_type[TableSize];
   for(i=0; i<TableSize; i++){
     H[i].Key=-1;
     H[i].State=0;		// empty
-    H[i].Block=(Data_type)NULL;
+    H[i].Block=(Data_type)nullptr;
   }
-  
+
 }
 
 void HASH::GetValue(const STRING& a, STRING *b) const
@@ -101,7 +110,7 @@ void HASH::GetValue(const STRING& a, STRING *b) const
 
   v=IndexStr2Num(name);
   r=Find(v);
-  if(r==NULL){
+  if(r==nullptr){
     *b="";
   }else{
     *b=(CHR *)r->Block;
@@ -110,27 +119,55 @@ void HASH::GetValue(const STRING& a, STRING *b) const
 
 }
 
+/**
+ * @brief Parses a "name=value" entry and inserts it into the table
+ * (name upper-bounded to 255 chars, value likewise), unless the key
+ * already exists.
+ * @param a The "name=value" string to parse; silently ignored if it
+ * contains no '=' or if the key is already present.
+ */
 void HASH::AddEntry(const STRING& a) const
 {
   // a is of type name=value
-  
+
   CHR name[256],Value[256],d[513];
   CHR *p;
-  Key_type v;
   Item_type r;
-   
+
   a.GetCString(d,512);
   p=strchr(d,'=');
+  if (p==nullptr) {
+    // BUGFIX #3: no '=' in the entry -- previously fell through and
+    // dereferenced this null pointer (*p='\0'), crashing. See
+    // docs/BUG_CATALOG.md#srchashhxx.
+    return;
+  }
   *p='\0';
-  strcpy(name,d);
+  // BUGFIX #4: name/Value are fixed 256-byte buffers but d (and thus
+  // either side of '=') can be up to 512 chars; the unbounded strcpy
+  // here smashed the stack for any longer name/value. See
+  // docs/BUG_CATALOG.md#srchashhxx.
+  strncpy(name,d,sizeof(name)-1);
+  name[sizeof(name)-1]='\0';
   ++p;
- 
-  strcpy(Value,p);
+
+  strncpy(Value,p,sizeof(Value)-1);
+  Value[sizeof(Value)-1]='\0';
   r.Key=IndexStr2Num(name);
-  r.Block=strdup(Value);
+  // BUGFIX #5 (docs/BUG_CATALOG.md#srchashcxx): r.Block used to be
+  // strdup()'d unconditionally, before checking whether the key
+  // already exists, and Insert()'s return value was discarded --
+  // leaking the strdup'd copy both on every duplicate key (Insert()
+  // never called at all) and on every table-overflow insertion failure
+  // (Insert() returns non-zero without storing r). Only allocating
+  // after confirming the key is new, and freeing on a failed Insert(),
+  // closes both leaks.
   if (!Check(r.Key)) {
     // printf("Add %s/%s\n",name,Value);
-    Insert(r);
+    r.Block=strdup(Value);
+    if (Insert(r) != 0) {
+      free(r.Block);
+    }
   } else {
    // printf("%s/%s already exists\n",name,Value);
   }
@@ -200,7 +237,7 @@ Item_type* HASH::Find(Key_type r) const
     result->Block=H[p].Block;
     return(result);
   } else
-    return NULL;
+    return nullptr;
 
 }
 

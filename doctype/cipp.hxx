@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		cip-product.hxx
 Version:	1.00
@@ -10,6 +13,10 @@ Copyright:	A/WWW Enterprises, MCNC/CNIDR and NASA
 
 #ifndef CIPP_HXX
 #define CIPP_HXX
+
+#ifndef SGMLNORM_HXX
+# include "sgmlnorm.hxx"
+#endif
 
 #ifndef BSN_EXTENSIONS
 # define BSN_EXTENSIONS	0 /* 0==> CNIDR's Isearch 1==> BSn's */
@@ -25,6 +32,16 @@ Copyright:	A/WWW Enterprises, MCNC/CNIDR and NASA
 
 #define CIPP_SGML_EXTENSION "cip"
 
+// A NASA/CIP (Collection Information Product) SGML-tagged product
+// metadata DOCTYPE -- CIPC's sibling (product-level metadata instead
+// of collection-level), built the same way on SGMLNORM's tag-based
+// parsing and sharing its ParseFields() shape almost verbatim,
+// including the nested-tag nesting stack (Nested, of CIP_Element).
+// See doctype/cipc.cxx's class-level comment and doctype/cipp.cxx for
+// the exact grammar. Note: store_attributes() below is declared but
+// never defined here -- ParseFields() always calls
+// SGMLNORM::store_attributes() explicitly instead, so this
+// declaration is inert (never ODR-used).
 class CIPP
   : public SGMLNORM
 {

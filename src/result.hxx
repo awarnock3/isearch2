@@ -40,6 +40,9 @@ Description:	Class RESULT - Search Result
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef RESULT_HXX
 #define RESULT_HXX
 
@@ -61,11 +64,21 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "fct.hxx"
 #endif
 
+// One search hit: the source document's key/doctype/path/file name,
+// its [RecordStart,RecordEnd] byte span within that file, a relevance
+// Score, and (for virtual databases) which DbNum/MDT it came from. Not
+// self-sufficient for reading the record back -- GetRecordData() reads
+// PathName+FileName directly off disk using RecordStart/RecordEnd, not
+// through MyMdt.
 class RESULT {
 public:
   RESULT();
+  // Deep-copies every field, including MyMdt; safe under
+  // self-assignment.
   RESULT& operator=(const RESULT& OtherResult);
   void SetKey(const STRING& NewKey);
+  // Key prefixed with "DbNum:" when DbNum > 0 (virtual-database
+  // results), or just Key otherwise.
   void GetVKey(STRING* StringBuffer) const;
   void GetKey(STRING* StringBuffer) const;
   void SetDocumentType(const STRING& NewDocumentType);
@@ -74,6 +87,7 @@ public:
   void GetPathName(STRING* StringBuffer) const;
   void SetFileName(const STRING& NewFileName);
   void GetFileName(STRING* StringBuffer) const;
+  // PathName immediately followed by FileName, concatenated.
   void GetFullFileName(STRING* StringBuffer) const;
   void SetRecordStart(const GPTYPE NewRecordStart);
   GPTYPE GetRecordStart() const;
@@ -85,13 +99,18 @@ public:
   void SetHitTable(const FCT& NewHitTable);
   void GetHitTable(PFCT HitTableBuffer) const;
 #endif
+  // RecordEnd - RecordStart + 1.
   LONG GetRecordSize() const;
+  // Reads [RecordStart,RecordEnd] out of GetFullFileName() from disk.
   void GetRecordData(STRING* StringBuffer) const;
+  // Only implemented when DO_HIGHLIGHTING is defined (it isn't
+  // anywhere in this build); a no-op otherwise.
   void GetHighlightedRecord(const STRING& BeforeTerm,
-			    const STRING& AfterTerm, 
+			    const STRING& AfterTerm,
 			    STRING* Buffer) const;
   void SetDbNum(const INT NewDbNum); // Added for virtual databases
   INT  GetDbNum() const; // Added for virtual databases
+  // Saves a reference to NewMdt (not a copy or an owned pointer).
   void SetMdt(MDT& NewMdt);
   MDT* GetMdt() const;
   ~RESULT();

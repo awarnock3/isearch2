@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-10
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef API_CONFIG_HXX
 #define API_CONFIG_HXX
 

@@ -34,6 +34,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:		gilsxml.hxx
 Version:	$Revision: 1.2 $
@@ -52,6 +55,14 @@ Originally by:  Kevin Gamiel, Kevin.Gamiel@cnidr.org
 #include "doctype.hxx"
 #include "sgmltag.hxx"
 
+// A GILS (Government Information Locator Service) DOCTYPE for
+// XML-tagged records. Record splitting and field parsing are entirely
+// inherited from SGMLTAG; GILSXML only customizes Present(), which
+// dispatches by ElementSet ("B"/"G"/"S"/"F") and then by RecordSyntax
+// (HTML/SGML/SUTRS) to one of the Present_<SYNTAX>_<SET>() helpers
+// below -- "G" is the brief primitive element set, "S" is the full
+// record with its <CENTROID> section stripped, and "F" is the full
+// record unabridged.
 class GILSXML
   : public SGMLTAG {
 public:

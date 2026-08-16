@@ -35,6 +35,9 @@ THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:		uspat.hxx
 Version:	1.00
@@ -88,6 +91,15 @@ typedef struct tagPATO_OUTPUT {
 } PATO_OUTPUT;
 
 
+/// Greenbook-style US Patent text doctype. ParseRecords() forwards to
+/// DOCTYPE::ParseRecords() unchanged, so (like doctype/soif.cxx) each
+/// input file is treated as a single whole-file record; ParseFields()
+/// then reads that one record's bytes and renders them via the pato_*
+/// family of presentation helpers (Text/HTML/TextHtml element and
+/// element-set formatters), driven by Present(). Most of the pato_*
+/// surface is legacy formatting logic carried over largely as-is; only
+/// the core parse/present entry points received a full bug-fix pass
+/// (see docs/BUG_CATALOG.md).
 class USPAT : public DOCTYPE {
 public:
 	char pato_HostName[256];
@@ -97,8 +109,19 @@ public:
 	USPAT(IDBOBJ* DbParent);
 	void AddFieldDefs();
 	void ParseRecords(const RECORD& FileRecord);
+
+	/// Reads NewRecord's [RecordStart, RecordEnd) byte range from its
+	/// source file and builds its DFT. RecordEnd == 0 is the whole-file
+	/// sentinel (same convention as doctype/usmarc.cxx): the end is
+	/// computed via ftell() at EOF instead, so an empty file must not
+	/// fall back to `ftell() - 1` (see BUGFIX #1 in docs/BUG_CATALOG.md).
 	void ParseFields(RECORD* NewRecord)  ;
-	void Present(const RESULT& ResultRecord, const STRING& ElementSet, 
+
+	/// Renders a single result record into StringBuffer for the given
+	/// ElementSet/record-syntax (Rs), via pato_ReadPatent() +
+	/// pato_ElementSet(). Owns and frees PreferredRecordSyntax,
+	/// pcPRS, and RecBuffer on every exit path (see BUGFIX #2).
+	void Present(const RESULT& ResultRecord, const STRING& ElementSet,
 		const STRING &Rs, STRING* StringBuffer);
 	
 	~USPAT();
@@ -108,6 +131,11 @@ private:
 	PCHR pato_item(PCHR S, INT X, PCHR Item, CHR Delim)const ;
 	INT pato_itemCount(PCHR S, CHR Delim) const;
 	PCHR RmTrailBlanks(PCHR S)const ;
+	/// Parses PatentSize bytes of raw Buffer into a linked PATO_PATENT
+	/// group/field structure. Copies up to 200 bytes per line into a
+	/// fixed-size scratch buffer, bounded by remaining input (see
+	/// BUGFIX #4 — memccpy() must never be asked to read past
+	/// Buffer + PatentSize).
 	PATO_PATENT* pato_ReadPatent(PCHR Buffer, INT PatentSize)const ;
 	PCHR pato_Get_TI(PATO_PATENT* Patent, PCHR S, INT SSize)const ;
 	void CleanTextString(PSTRING StringBuffer)const ;
@@ -170,11 +198,24 @@ typedef USPAT* PUSPAT;
 #include "idbobj.hxx"
 #include "gdt.h"
 
+/// Greenbook column-tagged field parser: walks a fixed-format record
+/// (c_record, c_length bytes) where each field is introduced by a
+/// 4-character column tag, extracting (name, [start,end)) pairs via
+/// GetFieldName() and indexing them via InsertField(). Distinct from
+/// USPAT's blank-line-delimited record format above; used by
+/// BuildDft() to construct a DFT for a single Greenbook-style record.
 class GB {
 	STRLIST c_field_name_list;
 	INT4 	c_field_name_count,
 		c_length;
 	CHR 	*c_record;
+
+	/// Reads the 4-character column tag at c_record[Start], then scans
+	/// past it to the next non-blank column start. Both the initial tag
+	/// read and the scan must stay within [0, c_length) — Start can
+	/// legally land at or past the last tag on the final field of a
+	/// record ending without a trailing delimiter (see BUGFIX #3).
+	/// Returns nonzero (Done) once no further field remains.
 	INT GetFieldName(const INT4 Start, STRING *Name, INT4 *NextFieldStart);
 	void InsertField(PIDBOBJ Db, PDFT pdft, const STRING& Field, INT Start, 
 		INT End) const;

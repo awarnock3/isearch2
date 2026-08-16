@@ -1,5 +1,15 @@
 // -*- C++ -*-
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+// NOTE: same situation as src/Debug.h (see that file's note) -- neither
+// this header nor its implementation (src/Firewall.cc) is included
+// anywhere else in src/, doctype/, or Isearch-cgi/, and FIREWALLS is
+// never defined by the top-level Makefile, so the stub class below (not
+// the real one further down) is what any includer would actually get.
+// Processed anyway since it carries a PROCESSING_STATUS.md row; see
+// docs/BUG_CATALOG.md for the real bugs found and fixed in Firewall.cc.
+
 #ifndef Firewall_h
 #define Firewall_h
 
@@ -22,6 +32,9 @@
 #endif
 
 #ifndef FIREWALLS
+/// No-op stand-in used whenever FIREWALLS isn't defined (the case
+/// everywhere in this tree's current build) -- every call compiles away
+/// to nothing.
 class Firewall
 {
 //
@@ -34,6 +47,9 @@ public:
 };
 
 #else
+/// Runtime assertion/trap facility, gated by the FIREWALLS environment
+/// variable at first use ("off" disables it, "fatal" makes a hit
+/// exit(1) via trap() -- see Firewall::_init() in Firewall.cc).
 class Firewall
 {
 //

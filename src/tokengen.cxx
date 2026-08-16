@@ -30,8 +30,11 @@ IN NO EVENT SHALL MCNC/CNIDR BE LIABLE FOR ANY SPECIAL, INCIDENTAL,
 INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY KIND, OR ANY DAMAGES WHATSOEVER
 RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER OR NOT ADVISED OF THE
 POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
-IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
+
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <ctype.h>
 
@@ -58,7 +61,10 @@ TOKENGEN::SetQuoteStripping(GDT_BOOLEAN DoItOrNot) {
 }
 
 
-TOKENGEN::TOKENGEN(const STRING &InString) 
+/// Constructs a tokenizer over a copy of InString; nothing is parsed
+/// until the first GetTotalEntries()/GetEntry()/SetQuoteStripping()
+/// call (see DoParse()).
+TOKENGEN::TOKENGEN(const STRING &InString)
   : DoStripQuotes (GDT_FALSE), HaveParsed(GDT_FALSE)
 {
   InCharP = InString.NewCString();
@@ -70,7 +76,9 @@ TOKENGEN::~TOKENGEN() {
 }
 
 
-void 
+/// Runs nexttoken() to completion, filling TokenList; a no-op after the
+/// first call (see HaveParsed).
+void
 TOKENGEN::DoParse(void) {
 
   if (HaveParsed)
@@ -96,8 +104,13 @@ TOKENGEN::GetEntry(const SIZE_T Index, STRING* StringEntry) {
 }
 
 
+/// Extracts the next token starting at input into *token, returning a
+/// pointer just past it (for the next call), or nullptr once no token
+/// remains. Recognizes plain words, `( ) !` and `&&`/`||`-style
+/// operators, `"..."` quoted literals (optionally quote-stripped, see
+/// SetQuoteStripping()), and `{...}` groups.
 char*
-TOKENGEN::nexttoken(char *input, STRING *token) 
+TOKENGEN::nexttoken(char *input, STRING *token)
 {
 
   int istoken=0;
@@ -132,39 +145,70 @@ TOKENGEN::nexttoken(char *input, STRING *token)
     if ( *input == '"') {
       //quoted strings are literals and should be returned as one token
       CHR *BeginQuote;
+      // BUGFIX #2 (docs/BUG_CATALOG.md#srctokengenhxx): remember the
+      // token's length before this quote-scan attempt, so an unmatched
+      // quote can cleanly restore exactly what was accumulated *before*
+      // it -- see the fallback branch below for why searching for a
+      // literal '"' in `token` doesn't work in the DoStripQuotes case.
+      STRINGINDEX TokenLenBeforeQuote = token->GetLength();
       if (!DoStripQuotes)
 	BeginQuote = input;
       else
 	BeginQuote = ++input;
-	
+
       do {
 	*token += *input;
 	input++;
       } while (*input != '"' && *input);
-	
+
       if (*input == '"') {
 	if (!DoStripQuotes)
-	  *token += *input; 
+	  *token += *input;
 	input++;
 	istoken = 1;
 	//special case for weighted terms
 	if ( *input == ':' && isdigit(*(input+1)) ) {
 	  do {
-	    *token += *input; 
+	    *token += *input;
 	    input++;
-	  } while (isdigit(*input)); 
+	  } while (isdigit(*input));
 	}
       }	else {
 	//if quotes aren't matched, parse it
 	//as part of a single term.
-	input = ++BeginQuote;
-	token->EraseAfter(token->SearchReverse('"'));
+	// BUGFIX #2, continued: this used to be `input = ++BeginQuote;`
+	// unconditionally, plus `token->EraseAfter(token->SearchReverse('"'))`.
+	// Two distinct bugs, both confirmed via standalone repros:
+	// (a) when DoStripQuotes is set, BeginQuote was already advanced
+	//     past the opening quote (`BeginQuote = ++input` above) --
+	//     incrementing it *again* here skipped the first real
+	//     character after the quote (e.g. "unmatched" came back as
+	//     "nmatched"); only the non-stripping branch actually needs
+	//     the extra increment, to move past the opening quote it kept.
+	// (b) when DoStripQuotes is set, the opening quote was never
+	//     appended to `token` at all (it was skipped, not stripped
+	//     *from* the token), so SearchReverse('"') always returned 0
+	//     (not found) and EraseAfter(0) wiped the *entire* token --
+	//     not just this failed scan's contents, but any valid text
+	//     accumulated before the quote was even reached (e.g.
+	//     "prefix" was lost entirely, not just the unmatched part).
+	input = DoStripQuotes ? BeginQuote : (BeginQuote + 1);
+	token->EraseAfter(TokenLenBeforeQuote);
       }
       continue;
     }
 
     if ( *input == '{') {
       CHR *BeginQuote;
+      // BUGFIX #2, brace case: same fix as the quote case above, plus a
+      // second, distinct bug -- the fallback searched for the *closing*
+      // '}', which by definition was never found in this branch (that's
+      // why we're here), instead of the opening '{', which *was*
+      // appended (unlike quotes, braces have no stripping option, so
+      // the opening brace is always kept). SearchReverse('}') therefore
+      // always returned 0, always wiping the entire token, not just the
+      // failed group's contents.
+      STRINGINDEX TokenLenBeforeBrace = token->GetLength();
       BeginQuote = input;
       // We've found a grouping (special case - RECT{...})
       do {
@@ -179,10 +223,10 @@ TOKENGEN::nexttoken(char *input, STRING *token)
 	//if braces aren't matched, parse it
 	//as part of a single term.
 	input = ++BeginQuote;
-	token->EraseAfter(token->SearchReverse('}'));
+	token->EraseAfter(TokenLenBeforeBrace);
       }
       continue;
-	
+
     }
 
     if ( *input == '&' || *input == '|' ) {
@@ -218,7 +262,7 @@ TOKENGEN::nexttoken(char *input, STRING *token)
     
   if (istoken)
     return input;
-  else 
-    return NULL;
+  else
+    return nullptr;
 }
   

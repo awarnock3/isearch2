@@ -36,6 +36,10 @@
  */
 #ifndef _MEMCNTL_HXX
 #define _MEMCNTL_HXX
+// ISEARCH2-CLEANUP: processed 2026-08-06
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+#include "gdt.h" // BUGFIX #1: was missing entirely; INT4 below needs it.
 
 #ifdef __cplusplus
 extern "C" {

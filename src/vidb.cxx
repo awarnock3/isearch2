@@ -43,6 +43,9 @@ Author:         Kevin Gamiel, kgamiel@cnidr.org
                 Archie Warnock, warnock@awcubed.com
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <sys/stat.h>
 #ifdef UNIX
 #include <unistd.h>
@@ -83,7 +86,7 @@ VIDB::VIDB(const STRING& NewPathName, const STRING& NewFileName)
 // database listed in the ".vdb" file and subsequent search and
 // present operations are performed on the entire list of databases.
 //
-void 
+void
 VIDB::Initialize(const STRING& NewPathName, const STRING& NewFileName,
 		 const STRLIST& NewDocTypeOptions)
 {
@@ -243,7 +246,7 @@ VIDB::Search(const SQUERY& SearchQuery)
   INT n_hits;
   MDT *pMDT;
 
-  RsetPtr = (IRSET*)NULL;
+  RsetPtr = nullptr;
 
   // Bail out if no databases
   if (c_dbcount <= 0)
@@ -268,6 +271,20 @@ VIDB::Search(const SQUERY& SearchQuery)
 
     // Do the search
     RsetPtrs[i] = c_dblist[i]->MainIndex->Search(Query);
+
+    // BUGFIX #3 (docs/BUG_CATALOG.md#srcvidbcxx): MainIndex->Search()
+    // (INDEX::Search(), src/index.cxx) returns nullptr when Query's
+    // OPSTACK has zero operands (an empty/degenerate search term) --
+    // its final `TempStack >> NewIrset;` explicitly sets it to nullptr
+    // via OPSTACK::Pop()'s empty-stack branch. RsetPtrs[i] was
+    // dereferenced immediately below with no null check. Confirmed
+    // with a real crash via Isearch-cgi/isrch_srch.cxx (SIGSEGV inside
+    // IRSET::StoreDbNum() called through a null this). Fixed the same
+    // way INDEX::Search() itself already handles an analogous case
+    // (`if (!NewIrset) NewIrset = new IRSET(Parent);`): substitute an
+    // empty result set instead of a null one.
+    if (!RsetPtrs[i])
+      RsetPtrs[i] = new IRSET(c_dblist[i]);
 
     // Stash the database number in each record
     RsetPtrs[i]->StoreDbNum(i);
@@ -304,7 +321,7 @@ VIDB::AndSearch(const SQUERY& SearchQuery)
   SQUERY Query;
   INT n_hits;
 
-  RsetPtr = (IRSET*)NULL;
+  RsetPtr = nullptr;
 
   // Bail out if no databases
   if (c_dbcount <= 0)
@@ -328,6 +345,13 @@ VIDB::AndSearch(const SQUERY& SearchQuery)
 
     // Do the search
     RsetPtrs[i] = c_dblist[i]->MainIndex->AndSearch(Query);
+
+    // BUGFIX #3, continued (docs/BUG_CATALOG.md#srcvidbcxx): same
+    // missing null check as VIDB::Search() above --
+    // INDEX::AndSearch() itself just delegates to INDEX::Search()
+    // (src/index.cxx), so it can return nullptr the same way.
+    if (!RsetPtrs[i])
+      RsetPtrs[i] = new IRSET(c_dblist[i]);
 
     // And stash the database number in each record
     RsetPtrs[i]->StoreDbNum(i);
@@ -362,12 +386,20 @@ VIDB::BeginRsetPresent(const STRING& RecordSyntax)
 }
 
 
-void 
-VIDB::Present(const RESULT& ResultRecord, const STRING& ElementSet, 
+void
+VIDB::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 	      const STRING& RecordSyntax, STRING *StringBuffer)
 {
+  // BUGFIX #2 (continued, see GetDbNameByNumber() above): same
+  // missing-bounds-check shape -- ResultRecord.GetDbNum() defaults to
+  // 0 (safe whenever c_dbcount > 0) and is otherwise only ever set
+  // internally by VIDB's own Search()/AndSearch()/KeyLookup(), so this
+  // wasn't confirmed externally reachable either, but it's the same
+  // free fix. Leaves *StringBuffer untouched when out of range.
   INT i;
   i = ResultRecord.GetDbNum();
+  if (i < 0 || i >= c_dbcount)
+    return;
   c_dblist[i]->Present(ResultRecord, ElementSet, RecordSyntax,
 			   StringBuffer);
 }
@@ -398,7 +430,7 @@ VIDB::GetGlobalDocType(STRING *StringBuffer) const {
 }
 
 
-void 
+void
 VIDB::KeyLookup(const STRING& Key, RESULT *ResultBuffer) const {
   //  c_dblist[0]->KeyLookup(Key,ResultBuffer);
   //  ResultBuffer->SetDbNum(0);
@@ -416,10 +448,30 @@ VIDB::KeyLookup(const STRING& Key, RESULT *ResultBuffer) const {
     ThisKey = Key;
     ThisKey.EraseBefore(n+1);
 
+    // BUGFIX #1: this indexed c_dblist[i] with i parsed directly out
+    // of Key -- caller-supplied, external input at every real call
+    // site found in the tree (src/Iget.cxx, src/zpresent.cxx both pass
+    // a raw record key straight from their command-line/protocol
+    // arguments through to VIDB::KeyLookup()) -- with no bounds check.
+    // A key like "999:somekey" against a VIDB with fewer than 1000
+    // sub-databases read c_dblist[999] out of bounds and called
+    // KeyLookup() through whatever garbage pointer was there. See
+    // docs/BUG_CATALOG.md#srcvidbhxx.
+    if (i < 0 || i >= c_dbcount)
+      return;
+
     c_dblist[i]->KeyLookup(ThisKey,ResultBuffer);
     ResultBuffer->SetDbNum(i);
-    
+
   } else {
+    // BUGFIX #1 (continued): c_dblist[0] is only ever actually
+    // populated if at least one non-comment line was found in the
+    // .vdb file (see Initialize()) -- a .vdb file that's non-empty but
+    // entirely comments leaves c_dbcount at 0 with c_dblist[0] never
+    // written to, so this used to dereference an uninitialized pointer
+    // for every plain (no "DBnum:" prefix) key in that case.
+    if (c_dbcount <= 0)
+      return;
     c_dblist[0]->KeyLookup(Key,ResultBuffer);
     ResultBuffer->SetDbNum(0);
   }
@@ -430,19 +482,37 @@ void
 VIDB::GetDbNameByNumber(INT DbNumber, STRING *DbName) {
   // From Rami Heinisuo <rami@eduix.com>
   // possible because IDB and VIDB are friends
-  *DbName = c_dblist[DbNumber]->DbFileName; 
+  // BUGFIX #2: same missing-bounds-check shape as KeyLookup() above --
+  // DbNumber is caller-supplied with nothing stopping an out-of-range
+  // value from indexing c_dblist out of bounds. Current callers
+  // (Isearch-cgi/isrch_srch.cxx) only ever pass back a DbNum a search
+  // result was already stamped with internally, so this wasn't
+  // confirmed externally reachable the way KeyLookup()'s was, but the
+  // method is public API and the fix is free. Leaves *DbName untouched
+  // (its caller-supplied default) when out of range. See
+  // docs/BUG_CATALOG.md#srcvidbhxx.
+  if (DbNumber < 0 || DbNumber >= c_dbcount)
+    return;
+  *DbName = c_dblist[DbNumber]->DbFileName;
 }
 
 
 void
-VIDB::GetDfdt(DFDT *DfdtBuffer) const 
-{ 
-  c_dblist[0]->GetDfdt(DfdtBuffer); 
+VIDB::GetDfdt(DFDT *DfdtBuffer) const
+{
+  // BUGFIX #1 (continued, see KeyLookup() above): c_dblist[0] is only
+  // populated when c_dbcount > 0.
+  if (c_dbcount <= 0)
+    return;
+  c_dblist[0]->GetDfdt(DfdtBuffer);
 }
 
 void
 VIDB::GetRecordDfdt(const STRING& Key, DFDT *DfdtBuffer) const
-{ 
-  c_dblist[0]->GetRecordDfdt(Key,DfdtBuffer); 
+{
+  // BUGFIX #1 (continued): same as GetDfdt() just above.
+  if (c_dbcount <= 0)
+    return;
+  c_dblist[0]->GetRecordDfdt(Key,DfdtBuffer);
 }
 

@@ -43,6 +43,9 @@ Author:		Kevin Gamiel, kgamiel@cnidr.org
                 Archie Warnock, warnock@awcubed.com
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef VIDB_HXX
 #define VIDB_HXX
 
@@ -54,7 +57,17 @@ Author:		Kevin Gamiel, kgamiel@cnidr.org
 #include "operator.hxx"
 #include "dtreg.hxx"
 
-class VIDB 
+// A "virtual database": a read-mostly view over a list of real IDB
+// databases (c_dblist), loaded from a "<dbname>.vdb" file listing one
+// sub-database path per line (blank/'#'-comment lines skipped) --
+// falls back to treating NewFileName as a single ordinary IDB if no
+// .vdb file exists. Search()/AndSearch() fan out to every
+// sub-database and concatenate results, tagging each with its source
+// database's index (RESULT::SetDbNum()) so Present()/KeyLookup() can
+// route back to the right one later. Not related to IDB by
+// inheritance (this is composition, not polymorphism) despite the
+// mutual `friend` declarations.
+class VIDB
 {
   friend class IDB;
 

@@ -42,6 +42,8 @@ $Revision: 1.4 $
 Description:	Class DF - Data Field
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 /*
 #include "defs.hxx"
@@ -57,8 +59,20 @@ DF::DF() {
 }
 
 
-DF& 
+DF&
 DF::operator=(const DF& OtherDf) {
+  // BUGFIX #1: without this guard, `df = df;` would reach
+  // `Fct = OtherDf.Fct;` with OtherDf.Fct being the very same FCT as
+  // Fct -- FCT::operator=() (src/fct.cxx) Clear()s its target before
+  // reading the source's entry count, so a self-assigning FCT (like a
+  // self-assigning STRLIST; see docs/BUG_CATALOG.md#srcstrlistcxx,
+  // BUGFIX #1) silently empties itself. FCT::operator=() itself isn't
+  // touched here -- it's in src/fct.cxx, already marked done (Order
+  // 2); see the note below. This guard fixes it for DF's own contract
+  // without reopening that file.
+  if (this == &OtherDf) {
+    return *this;
+  }
   FieldName = OtherDf.FieldName;
   Fct = OtherDf.Fct;
   return *this;

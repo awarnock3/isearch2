@@ -51,6 +51,9 @@ Changes:	1.02
 			- Misc Error checking
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -93,7 +96,6 @@ SGMLTAG::ParseFields(PRECORD NewRecord)
          RecLength, 
          ActualLength;
   CHR* 	 RecBuffer;
-  CHR*   OrigRecBuffer;
   CHR* 	 file;
 
   // Open the file
@@ -103,6 +105,9 @@ SGMLTAG::ParseFields(PRECORD NewRecord)
   if (!fp) {
     cout << "SGMLTAG::ParseRecords(): Failed to open file\n\t";
     perror(file);
+    // BUGFIX #1: file (from fn.NewCString()) used to leak on every
+    // return path in this function -- see docs/BUG_CATALOG.md#doctypesgmltagcxx.
+    delete [] file;
     return;
   }
 
@@ -114,7 +119,8 @@ SGMLTAG::ParseFields(PRECORD NewRecord)
       cout << "SGMLTAG::ParseRecords(): Seek failed - ";
       cout << fn << "\n";
       fclose(fp);
-      return;	
+      delete [] file;
+      return;
     }
     RecStart = 0;
     RecEnd = ftell(fp);
@@ -122,32 +128,27 @@ SGMLTAG::ParseFields(PRECORD NewRecord)
       cout << "SGMLTAG::ParseRecords(): Skipping ";
       cout << " zero-length record -" << fn << "...\n";
       fclose(fp);
+      delete [] file;
       return;
     }
     //RecEnd -= 1;
   }
 
-  // Make two copies of the record in memory
+  // Make a copy of the record in memory
   if(fseek(fp, (long)RecStart, SEEK_SET) == -1) {
     cout << "SGMLTAG::ParseRecords(): Seek failed - " << fn << "\n";
     fclose(fp);
-    return;	
+    delete [] file;
+    return;
   }
   RecLength = RecEnd - RecStart;
-	
+
   RecBuffer = new CHR[RecLength + 1];
   if(!RecBuffer) {
     cout << "SGMLTAG::ParseRecords(): Failed to allocate ";
     cout << RecLength + 1 << " bytes - " << fn << "\n";
     fclose(fp);
-    return;
-  }
-  OrigRecBuffer = new CHR[RecLength + 1];
-  if(!OrigRecBuffer) {
-    cout << "SGMLTAG::ParseRecords(): Failed to allocate ";
-    cout << RecLength + 1 << " bytes - " << fn << "\n";
-    delete [] RecBuffer;
-    fclose(fp);
+    delete [] file;
     return;
   }
 
@@ -156,8 +157,8 @@ SGMLTAG::ParseFields(PRECORD NewRecord)
     cout << "SGMLTAG::ParseRecords(): Failed to fread\n\t";
     perror(file);
     delete [] RecBuffer;
-    delete [] OrigRecBuffer;
     fclose(fp);
+    delete [] file;
     return;
   }
   fclose(fp);
@@ -166,11 +167,9 @@ SGMLTAG::ParseFields(PRECORD NewRecord)
     cout << RecLength << " bytes.  Actually read " << ActualLength;
     cout << " bytes - " << fn << "\n";
     delete [] RecBuffer;
-    delete [] OrigRecBuffer;
+    delete [] file;
     return;
   }
-  memcpy(OrigRecBuffer, RecBuffer, RecLength);
-  OrigRecBuffer[RecLength] = '\0';
 
   // Parse the record and add fields to record structure
   STRING FieldName;
@@ -183,7 +182,6 @@ SGMLTAG::ParseFields(PRECORD NewRecord)
   CHR* p;
   INT val_start;
   INT val_len;
-  INT val_len2;
   DFD dfd;
   int numtags;
 
@@ -192,16 +190,16 @@ SGMLTAG::ParseFields(PRECORD NewRecord)
     cout << "SGMLTAG::ParseRecords(): Failed to allocate DFT - ";
     cout << fn << "\n";
     delete [] RecBuffer;
-    delete [] OrigRecBuffer;
+    delete [] file;
     return;
   }
   //  tags = sgml_parse_tags(RecBuffer, RecLength);
   tags = sgml_parse_tags(RecBuffer, RecLength, &numtags);
-  if(tags == NULL) {
+  if(tags == nullptr) {
     cout << "Unable to parse SGML file " << fn << "\n";
     delete pdft;
     delete [] RecBuffer;
-    delete [] OrigRecBuffer;
+    delete [] file;
     return;
   }
   tags_ptr = tags;	
@@ -230,8 +228,8 @@ SGMLTAG::ParseFields(PRECORD NewRecord)
   NewRecord->SetDft(*pdft);
   delete pdft;
   delete [] RecBuffer;
-  delete [] OrigRecBuffer;
   delete [] tags;
+  delete [] file;
 }
 
 SGMLTAG::~SGMLTAG() {
@@ -273,7 +271,7 @@ SGMLTAG::sgml_parse_tags(char *b, int len, int *numtags)
   t = new CHR*[128];
   if(!t) {
     cout << "SGMLTAG::sgml_parse_tags(): Out of memory\n";
-    return NULL;
+    return nullptr;
   }
   max_num_tags = TAG_GROW_SIZE;
   *numtags = 0;
@@ -301,9 +299,9 @@ SGMLTAG::sgml_parse_tags(char *b, int len, int *numtags)
       // allocate more space
       max_num_tags += TAG_GROW_SIZE;
       u = new CHR*[max_num_tags];
-      if(u == NULL) {
+      if(u == nullptr) {
 	delete [] t;
-	return NULL;
+	return nullptr;
       }
       for (j=0; j<=tc; j++)
 	u[j] = t[j];
@@ -311,7 +309,7 @@ SGMLTAG::sgml_parse_tags(char *b, int len, int *numtags)
       t = u;
     }
   }
-  t[tc] = (CHR*)NULL;
+  t[tc] = nullptr;
   return t;
 }
 
@@ -330,11 +328,11 @@ SGMLTAG::find_end_tag(char **t, char *tag)
   char *tt;
   int i;
 
-  if(*t == NULL)
-    return NULL;
+  if(*t == nullptr)
+    return nullptr;
 
   if(*t[0] == '/')
-    return NULL;
+    return nullptr;
 
   for(i=0, tt = *t; tt ; tt = t[++i]) {
     if(tt[0] == '/') {
@@ -343,5 +341,5 @@ SGMLTAG::find_end_tag(char **t, char *tag)
 	return tt;
     }
   }
-  return NULL;
+  return nullptr;
 }

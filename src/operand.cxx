@@ -40,6 +40,9 @@ Description:	Class OPERAND - Query Operand
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "defs.hxx"
 #include "string.hxx"
 #include "vlist.hxx"

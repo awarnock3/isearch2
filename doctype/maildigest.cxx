@@ -106,6 +106,9 @@ ________________________________________________________________________________
 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		maildigest.cxx
 Version:	$Revision: 1.3 $
@@ -128,6 +131,10 @@ MAILDIGEST::MAILDIGEST (PIDBOBJ DbParent): MAILFOLDER (DbParent)
 {
 }
 
+// Splits FileRecord's underlying digest file into one RECORD per
+// message at each "----...----" magic separator line, and adds each to
+// Db via DocTypeAddRecord() (each later gets its own ParseFields()
+// call, via the inherited MAILFOLDER::ParseFields()).
 void MAILDIGEST::ParseRecords (const RECORD& FileRecord)
 {
   // Break up the document into Mail message records
@@ -165,7 +172,7 @@ void MAILDIGEST::ParseRecords (const RECORD& FileRecord)
   const size_t magic_len = sizeof(magic)/sizeof(char)-1;
 
   // Read lines from file and search for record seperation
-  while (fgets(buf, sizeof(buf)/sizeof(char)-1, Fp) != NULL)
+  while (fgets(buf, sizeof(buf)/sizeof(char)-1, Fp) != nullptr)
     {
       // Search for "magic" line type
       size_t line_len = strlen(buf);
@@ -188,7 +195,16 @@ void MAILDIGEST::ParseRecords (const RECORD& FileRecord)
   fclose (Fp);
 
   Record.SetRecordStart (Start);
-  RecordEnd = Position - 1;
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypemaildigestcxx): GPTYPE is
+  // UINT4 (src/defs.hxx); for a genuinely empty file (fgets() never
+  // succeeds even once), Position stays 0 here, and `Position - 1`
+  // underflowed to UINT_MAX, adding a record ending ~4 billion bytes
+  // past the real (zero-byte) file. This file is a byte-for-byte
+  // structural duplicate of doctype/listdigest.cxx (same bug, same
+  // fix, same cross-referenced reasoning -- see that file's BUGFIX #1
+  // for the full write-up, including why the mid-loop `RecordEnd =
+  // SavePosition - 1;` above does *not* need the same guard here).
+  RecordEnd = (Position == 0) ? 0 : Position - 1;
 
   if (RecordEnd > Start)
     {

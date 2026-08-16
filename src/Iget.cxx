@@ -47,6 +47,16 @@ Author:		A. Warnock (warnock@awcubed.com), adapted from Isearch.cxx
                 by Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+// NOTE: this file is a `main()`-only CLI entry point, so it cannot be
+// added to TEST_ENGINE_SRCS or linked into the shared Catch2 test
+// binary (its `main()` would collide with catch_amalgamated.cpp's own
+// `main()`), and there is no other function surface to unit test.
+// Verified via compile-clean confirmation and a full manual
+// trace-through of both bugs below instead; see docs/BUG_CATALOG.md for
+// the full note.
+
 #include <stdio.h>
 #include <string.h>
 #include <locale.h>
@@ -65,7 +75,9 @@ Author:		A. Warnock (warnock@awcubed.com), adapted from Isearch.cxx
 #include "vidb.hxx"
 //#include "thesaurus.hxx"
 
-int 
+/// Parses `-d`/`-id`/`-p`/`-f` flags, looks up each requested record by
+/// key in the named database, and prints its presented form to stdout.
+int
 main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr,"Iget v%s\n", IsearchVersion);
@@ -108,37 +120,51 @@ main(int argc, char** argv) {
   while (x < argc) {
     if (argv[x][0] == '-') {
       Flag = argv[x];
+      // BUGFIX #1 (docs/BUG_CATALOG.md#srcigetcxx): all four flag branches
+      // below used to read `argv[x]` unconditionally even after the
+      // `++x >= argc` check just determined the flag's required argument
+      // is missing -- at that point `x == argc`, and `argv[argc]` is
+      // guaranteed nullptr by the standard, which STRING::operator=(const
+      // CHR*) (src/string.cxx) dereferences unconditionally via strlen(),
+      // crashing. Reachable by simply running e.g. `Iget -d` with no
+      // further arguments. Fixed by only reading argv[x] in the `else`
+      // branch, matching the Error path's intent to skip straight to the
+      // EXIT_ERROR check below instead.
       if (Flag.Equals("-d")) {
 	if (++x >= argc) {
 	  Error=GDT_TRUE;
 	  error_message.Cat("ERROR: No database name specified after -d.\n");
+	} else {
+	  DBName = argv[x];
+	  LastUsed = x;
 	}
-	DBName = argv[x];
-	LastUsed = x;
       }
       if (Flag.Equals("-id")) {
 	if (++x >= argc) {
 	  Error=GDT_TRUE;
 	  error_message.Cat("ERROR: No document ID specified after -id.\n");
+	} else {
+	  RecordKey = argv[x];
+	  LastUsed = x;
 	}
-	RecordKey = argv[x];
-	LastUsed = x;
       }
       if (Flag.Equals("-p")) {
 	if (++x >= argc) {
 	  Error=GDT_TRUE;
 	  error_message.Cat("ERROR: No element set specified after -p.\n");
+	} else {
+	  ESet = argv[x];
+	  LastUsed = x;
 	}
-	ESet = argv[x];
-	LastUsed = x;
       }
       if (Flag.Equals("-f")) {
 	if (++x >= argc) {
 	  Error=GDT_TRUE;
 	  error_message.Cat("ERROR: No format specified after -f.\n");
+	} else {
+	  RecordSyntax = argv[x];
+	  LastUsed = x;
 	}
-	RecordSyntax = argv[x];
-	LastUsed = x;
       }
     }
     x++;
@@ -160,7 +186,14 @@ main(int argc, char** argv) {
   }
 
   x = LastUsed + 1;
-  if (x > argc) {
+  // BUGFIX #2 (docs/BUG_CATALOG.md#srcigetcxx): `LastUsed` is always set
+  // to a valid argv index (< argc), so `x = LastUsed + 1` can never
+  // exceed `argc` -- `x > argc` can never be true, making this check
+  // permanently dead code. The evident intent, matching the "Unrecognized
+  // arguments" message, is to catch leftover trailing arguments after the
+  // last recognized flag/value pair (e.g. `Iget -d db extra_garbage`),
+  // which requires `x < argc` instead.
+  if (x < argc) {
     Error=GDT_TRUE;
     error_message.Cat("Unrecognized arguments\n");
   }

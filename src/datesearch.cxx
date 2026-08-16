@@ -42,6 +42,20 @@ Description:	Class INDEX - date searching methods
 Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+// This file implements INDEX's date-search methods (DATE/DATE-RANGE
+// field types). DoDateSearch() dispatches by query structure to either
+// SingleDateSearch() (a lone YYYY/YYYYMM/YYYYMMDD value) or
+// DateRangeSearch() (an interval). Both funnel down through
+// SingleDateSearchBefore()/SingleDateSearchAfter() (each of which tries
+// all three precisions and ORs the hits together) and
+// DateRangeSearchContains(), which all bottom out at DateSearch() --
+// the one function that actually touches the on-disk date index
+// (src/nlist.hxx/intlist.hxx's INTERVALLIST::Find(), via
+// Parent->DfdtGetFileName()) and returns real IRSET hits.
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -450,24 +464,33 @@ INDEX::SingleDateSearch(const STRING& QueryTerm, const STRING& FieldName,
   return pirset;
 }
 
-// Searches for stored dates which come before the date specified in the 
-// query.  The interval starting dates are searched if FindBlock is
-// true, otherwise, the interval end dates are searched.  Dates which equal
-// the query date match if fIncludesEndpoint is true, otherwise the
-// inequality is strict.
-PIRSET 
-INDEX::SingleDateSearchBefore(const SRCH_DATE& QueryDate, 
+/**
+ * @brief Finds records whose indexed date (of any precision) is
+ * before @p QueryDate, by trying all three precisions
+ * (YYYY/YYYYMM/YYYYMMDD) and ORing the hits together.
+ * @param QueryDate The date to compare against.
+ * @param FieldName Name of the DATE/DATE-RANGE field to search.
+ * @param FindBlock Whether to search interval start dates
+ * (START_BLOCK) or end dates (END_BLOCK).
+ * @param fIncludeEndpoint Whether a stored date equal to @p QueryDate
+ * counts as a match.
+ * @return An IRSET of matching records (possibly empty, never
+ * nullptr) -- empty if @p QueryDate failed to parse (BUGFIX #1) or if
+ * FindBlock's field type isn't DATE/DATE-RANGE.
+ */
+PIRSET
+INDEX::SingleDateSearchBefore(const SRCH_DATE& QueryDate,
 			      const STRING& FieldName, 
 			      IntBlock FindBlock,
 			      GDT_BOOLEAN fIncludeEndpoint)
 {
-  PIRSET      YYYY=(PIRSET)NULL;
-  PIRSET      YYYYMM=(PIRSET)NULL;
-  PIRSET      YYYYMMDD=(PIRSET)NULL;
+  PIRSET      YYYY=nullptr;
+  PIRSET      YYYYMM=nullptr;
+  PIRSET      YYYYMMDD=nullptr;
   SRCH_DATE   Y, YM, YMD;
   INT         Precision;
   SRCH_DATE   Today;
-  PIRSET      p_today=(PIRSET)NULL;
+  PIRSET      p_today=nullptr;
   GDT_BOOLEAN AddPresentResults=GDT_FALSE;
   DOUBLE      fPresent=DATE_PRESENT;
 
@@ -504,7 +527,21 @@ INDEX::SingleDateSearchBefore(const SRCH_DATE& QueryDate,
     break;
 
   default:
-    return YYYY;
+    // BUGFIX #1 (docs/BUG_CATALOG.md#srcdatesearchcxx): returned YYYY
+    // here, still (PIRSET)NULL from its declaration above -- reachable
+    // whenever QueryDate.GetPrecision() == BAD_DATE (a query date that
+    // failed to parse), which several callers in this file
+    // (DateRangeSearchContains, DateRangeSearch's ZRelDuring/
+    // ZRelDuring_Strict/ZRelOverlaps, SingleDateSearch's ZRelDuring/
+    // ZRelEQ/ZRelDuring_Strict) immediately dereference with no null
+    // check -- a null-pointer dereference on an ordinary malformed
+    // date query, not a contrived edge case. Returning a valid, empty
+    // IRSET instead matches this function's own contract everywhere
+    // else (DateSearch() itself never returns null; "no hits" is
+    // always an empty, non-null result set) and fixes every affected
+    // call site at the source instead of patching each one
+    // individually.
+    return new IRSET(Parent);
   }
 
   // Search the YYYY dates
@@ -692,20 +729,28 @@ INDEX::YMDSearchBefore(const SRCH_DATE& DateYMD, const STRING& FieldName,
 }
 
 
-// Searches for stored dates which come after the date specified in the 
-// query.  The interval starting dates are searched if FindBlock is
-// START_BLOCK, otherwise, the interval end dates are searched.  Dates 
-// which equal the query date match if fIncludesEndpoint is true, otherwise
-// the inequality is strict.
-PIRSET 
-INDEX::SingleDateSearchAfter(const SRCH_DATE& QueryDate, 
+/**
+ * @brief Finds records whose indexed date (of any precision) is after
+ * @p QueryDate, by trying all three precisions (YYYY/YYYYMM/YYYYMMDD)
+ * and ORing the hits together.
+ * @param QueryDate The date to compare against.
+ * @param FieldName Name of the DATE/DATE-RANGE field to search.
+ * @param FindBlock Whether to search interval start dates
+ * (START_BLOCK) or end dates (END_BLOCK).
+ * @param fIncludeEndpoint Whether a stored date equal to @p QueryDate
+ * counts as a match.
+ * @return An IRSET of matching records (possibly empty, never
+ * nullptr) -- empty if @p QueryDate failed to parse (BUGFIX #2).
+ */
+PIRSET
+INDEX::SingleDateSearchAfter(const SRCH_DATE& QueryDate,
 			     const STRING& FieldName, 
 			     IntBlock FindBlock,
 			     GDT_BOOLEAN fIncludeEndpoint)
 {
-  PIRSET      YYYY=(PIRSET)NULL;
-  PIRSET      YYYYMM=(PIRSET)NULL;
-  PIRSET      YYYYMMDD=(PIRSET)NULL;
+  PIRSET      YYYY=nullptr;
+  PIRSET      YYYYMM=nullptr;
+  PIRSET      YYYYMMDD=nullptr;
   SRCH_DATE   Y, YM, YMD;
   INT         Precision;
   //  PIRSET      p_today=(PIRSET)NULL;
@@ -746,7 +791,10 @@ INDEX::SingleDateSearchAfter(const SRCH_DATE& QueryDate,
     break;
 
   default:
-    return YYYY;
+    // BUGFIX #2 (docs/BUG_CATALOG.md#srcdatesearchcxx): same shape as
+    // BUGFIX #1 in SingleDateSearchBefore() above -- see its comment
+    // for the full explanation.
+    return new IRSET(Parent);
   }
 
   // Search the YYYY dates

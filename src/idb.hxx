@@ -42,6 +42,9 @@ Description:	Class IDB
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef IDB_HXX
 #define IDB_HXX
 
@@ -64,7 +67,17 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "dictionary.hxx"
 #endif
 
-class IDB 
+// The concrete, on-disk-filesystem database: owns MainIndex (the
+// inverted index), MainMdt (per-document metadata), MainDfdt (field
+// definitions), MainRegistry (the persisted DbInfo key/value store),
+// and DocTypeReg (the registry of DOCTYPE parsers), and coordinates
+// them for indexing (Index()/AddRecord()) and search
+// (Search()/GetFieldData()/Present()). Only ever heap-allocated and
+// held by pointer or as a base class (see Isearch-cgi/*.cxx, VIDB) --
+// never copied or assigned -- so its several raw owning pointer
+// members don't have copy/move control; see
+// docs/BUG_CATALOG.md#srcidbhxx for why that wasn't added this turn.
+class IDB
   : public IDBOBJ {
     friend class INDEX;
     friend class IRSET;

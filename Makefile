@@ -250,3 +250,145 @@ bindist:
 		$(DIST)/html  \
 		$(DIST)/COPYRIGHT; \
 		gzip $(DIST)-$(VER)_$(OS)$(LDFLAGS).tar
+
+#
+# Isearch2 cleanup: Catch2 unit tests (see CLAUDE.md TESTING)
+#
+CATCH2_DIR := tests/vendor/catch2
+TEST_SRCS  := $(shell find tests -name '*.cxx')
+TEST_CXXFLAGS      := -std=c++17 -Wall -Wextra -DUNIX -DVERS=\"$(VER)\" -Isrc -Idoctype -IIsearch-cgi -I$(CATCH2_DIR)
+TEST_CXXFLAGS_ASAN := $(TEST_CXXFLAGS) -fsanitize=address,undefined -g
+
+# Real engine sources that processed files' tests link against directly,
+# so tests exercise actual behavior instead of reimplementing it. Grows
+# as each file's turn adds tests that need more of the engine; compiled
+# separately from the production build (tests/obj/, TEST_CXXFLAGS) so the
+# two builds never fight over the same .o.
+TEST_ENGINE_SRCS := src/fc.cxx src/fct.cxx src/vlist.cxx src/df.cxx src/dft.cxx src/string.cxx src/common.cxx src/record.cxx src/rcache.cxx src/irset.cxx src/operand.cxx src/opobj.cxx src/rset.cxx src/result.cxx src/iresult.cxx src/attr.cxx src/attrlist.cxx src/mdtrec.cxx src/mdt.cxx src/dfd.cxx src/dfdt.cxx src/strlist.cxx src/defs.cxx src/opstack.cxx src/filemap.cxx src/hash.cxx src/termobj.cxx src/memcntl.cxx src/operator.cxx src/sterm.cxx src/marclib.cxx src/md5.cxx src/md5sum.cxx src/merge.cxx src/registry.cxx src/fprec.cxx src/reclist.cxx src/fpt.cxx src/nfield.cxx src/date.cxx src/intfield.cxx src/soundex.cxx src/squery.cxx src/mergeunit.cxx src/index.cxx src/numsearch.cxx src/datesearch.cxx src/geosearch.cxx src/multiterm.cxx src/tokengen.cxx src/thesaurus.cxx src/nlist.cxx src/intlist.cxx src/strstack.cxx src/infix2rpn.cxx src/glist.cxx src/marc.cxx src/gstack.cxx src/nfldmgr.cxx src/nlatlon.cxx src/stopword.cxx src/vidb.cxx src/idb.cxx src/dtreg.cxx
+TEST_ENGINE_OBJS      := $(patsubst src/%.cxx,tests/obj/%.o,$(TEST_ENGINE_SRCS))
+TEST_ENGINE_OBJS_ASAN := $(patsubst src/%.cxx,tests/obj-asan/%.o,$(TEST_ENGINE_SRCS))
+
+# Same idea as TEST_ENGINE_SRCS above, for engine sources living outside
+# src/ (e.g. Isearch-cgi/). Kept as a separate list/pattern rule because
+# TEST_ENGINE_OBJS's patsubst assumes a src/ prefix.
+TEST_ENGINE_CGI_SRCS := Isearch-cgi/config.cxx Isearch-cgi/cgi-util.cxx Isearch-cgi/api_config.cxx Isearch-cgi/api_response.cxx Isearch-cgi/api_request.cxx Isearch-cgi/api_endpoints.cxx Isearch-cgi/api_search.cxx Isearch-cgi/api_fetch.cxx
+TEST_ENGINE_CGI_OBJS      := $(patsubst Isearch-cgi/%.cxx,tests/obj/cgi-%.o,$(TEST_ENGINE_CGI_SRCS))
+TEST_ENGINE_CGI_OBJS_ASAN := $(patsubst Isearch-cgi/%.cxx,tests/obj-asan/cgi-%.o,$(TEST_ENGINE_CGI_SRCS))
+
+# Same idea again, for doctype/ (doctype/doctype.hxx's own turn, Order
+# 53, is the first file in that directory to reach TEST_ENGINE_SRCS --
+# every later doctype/*.cxx turn should add itself to
+# TEST_ENGINE_DOCTYPE_SRCS below rather than inventing a new list).
+TEST_ENGINE_DOCTYPE_SRCS := doctype/doctype.cxx doctype/sgmlnorm.cxx doctype/sgmltag.cxx doctype/colondoc.cxx doctype/mailfolder.cxx doctype/medline.cxx doctype/anzlic.cxx doctype/anzmeta.cxx doctype/bibtex.cxx doctype/cipc.cxx doctype/cipp.cxx doctype/fgdc.cxx doctype/fgdcsite.cxx doctype/dif.cxx doctype/emacsinfo.cxx doctype/eos_guide.cxx doctype/filename.cxx doctype/filmline.cxx doctype/firstline.cxx doctype/ftp.cxx doctype/gils.cxx doctype/gilsxml.cxx doctype/gopher.cxx doctype/html.cxx doctype/htmltag.cxx doctype/iafadoc.cxx doctype/iknowdoc.cxx doctype/incoming/sgmlgils.cxx doctype/irlist.cxx doctype/listdigest.cxx doctype/litmed.cxx doctype/maildigest.cxx doctype/marcdump.cxx doctype/markdown.cxx doctype/memodoc.cxx doctype/oneline.cxx doctype/para.cxx doctype/referbib.cxx doctype/simple.cxx doctype/soif.cxx doctype/taglist.cxx doctype/usmarc.cxx doctype/uspat.cxx
+TEST_ENGINE_DOCTYPE_OBJS      := $(patsubst doctype/%.cxx,tests/obj/doctype-%.o,$(TEST_ENGINE_DOCTYPE_SRCS))
+TEST_ENGINE_DOCTYPE_OBJS_ASAN := $(patsubst doctype/%.cxx,tests/obj-asan/doctype-%.o,$(TEST_ENGINE_DOCTYPE_SRCS))
+
+# BUGFIX (Isearch2 cleanup automation turn, see docs/BUG_CATALOG.md): the
+# plain and ASan builds used to compile into the SAME object paths, with
+# `tests-asan: TEST_CXXFLAGS += -fsanitize...` relying on a
+# target-specific variable to change flags at recipe time. That can't
+# change WHICH paths are prerequisites (TEST_OBJS is `:=`, expanded once
+# at parse time), and Make's staleness check only looks at file
+# timestamps, not flags -- so a plain object left over from `make tests`
+# looked up-to-date to `make tests-asan` and got silently relinked
+# uninstrumented (confirmed via `nm` showing no asan symbols). Hence the
+# old clean-test-objs force-clean before every single build. Giving the
+# ASan build entirely separate, textually-disjoint object paths fixes
+# the root cause instead: `tests/obj-asan/` for engine objects (mirrors
+# `tests/obj/`, same `cgi-` disambiguation trick already used below) and
+# `.o.asan` -- deliberately NOT ending in `.o`, so it can never be
+# mistaken for a plain-build target -- for in-place test-file objects.
+# The two builds can now never collide, so Make's ordinary incremental
+# rebuild just works, and neither one needs to force-clean anything.
+TEST_OBJS      := $(TEST_SRCS:.cxx=.o) $(TEST_ENGINE_OBJS) $(TEST_ENGINE_CGI_OBJS) $(TEST_ENGINE_DOCTYPE_OBJS) $(CATCH2_DIR)/catch_amalgamated.o
+TEST_OBJS_ASAN := $(TEST_SRCS:.cxx=.o.asan) $(TEST_ENGINE_OBJS_ASAN) $(TEST_ENGINE_CGI_OBJS_ASAN) $(TEST_ENGINE_DOCTYPE_OBJS_ASAN) $(CATCH2_DIR)/catch_amalgamated-asan.o
+
+$(CATCH2_DIR)/catch_amalgamated.o: $(CATCH2_DIR)/catch_amalgamated.cpp
+	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
+
+$(CATCH2_DIR)/catch_amalgamated-asan.o: $(CATCH2_DIR)/catch_amalgamated.cpp
+	$(CXX) $(TEST_CXXFLAGS_ASAN) -c $< -o $@
+
+tests/obj/%.o: src/%.cxx
+	@mkdir -p tests/obj
+	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
+
+tests/obj-asan/%.o: src/%.cxx
+	@mkdir -p tests/obj-asan
+	$(CXX) $(TEST_CXXFLAGS_ASAN) -c $< -o $@
+
+tests/obj/cgi-%.o: Isearch-cgi/%.cxx
+	@mkdir -p tests/obj
+	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
+
+tests/obj-asan/cgi-%.o: Isearch-cgi/%.cxx
+	@mkdir -p tests/obj-asan
+	$(CXX) $(TEST_CXXFLAGS_ASAN) -c $< -o $@
+
+tests/obj/doctype-%.o: doctype/%.cxx
+	@mkdir -p $(dir $@)
+	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
+
+tests/obj-asan/doctype-%.o: doctype/%.cxx
+	@mkdir -p $(dir $@)
+	$(CXX) $(TEST_CXXFLAGS_ASAN) -c $< -o $@
+
+tests/%.o: tests/%.cxx
+	$(CXX) $(TEST_CXXFLAGS) -c $< -o $@
+
+tests/%.o.asan: tests/%.cxx
+	$(CXX) $(TEST_CXXFLAGS_ASAN) -c $< -o $@
+
+tests: $(TEST_OBJS)
+	@mkdir -p tests/reports
+	$(CXX) $(TEST_CXXFLAGS) $(TEST_OBJS) -o tests/run_tests
+	@REPORT=tests/reports/report-$$(date +%Y%m%d-%H%M%S).txt; \
+	tests/run_tests | tee $$REPORT; \
+	echo "Report saved to $$REPORT"
+
+tests-asan: $(TEST_OBJS_ASAN)
+	@mkdir -p tests/reports
+	$(CXX) $(TEST_CXXFLAGS_ASAN) $(TEST_OBJS_ASAN) -o tests/run_tests-asan
+	@REPORT=tests/reports/report-asan-$$(date +%Y%m%d-%H%M%S).txt; \
+	tests/run_tests-asan | tee $$REPORT; \
+	echo "Report saved to $$REPORT"
+
+.PHONY: tests tests-asan
+
+#
+# Isearch2 cleanup: integration smoke test (see CLAUDE.md)
+#
+# Unlike `tests`/`tests-asan` above (which only link a growing subset of
+# engine sources, TEST_ENGINE_SRCS), this builds the REAL production
+# binaries -- the full tree, processed and not-yet-processed files
+# together -- and exercises them the way an actual user would: index a
+# real corpus, then confirm each document is actually findable by
+# search. Complements the unit tests; doesn't replace them. Manual/
+# on-demand only -- not run automatically by /process-next or
+# /process-5.
+#
+# NB: `grep` in this environment is `ugrep`, which silently treats some
+# of the sample FGDC-metadata .txt files as binary and skips them
+# unless given `-a`/`--text` -- hence the `-a` below. Don't drop it.
+SMOKE_DB := /tmp/ISEARCH_SMOKE
+
+smoke-test: isearch isearch-cgi
+	$(RM) -f $(SMOKE_DB).*
+	./bin/Iindex -d $(SMOKE_DB) data/TEXT/*.txt
+	@echo "--- verifying indexed documents are findable ---"
+	@FAIL=0; \
+	for pair in Watersheds:cgia-wswtemp Oceanography:dds10 Dust:dust \
+	            glaciers:glaciers Naval:goes_9_conus; do \
+	  term=$${pair%%:*}; expect=$${pair##*:}; \
+	  out=$$(./bin/Isearch -d $(SMOKE_DB) -t "$$term"); \
+	  if echo "$$out" | grep -aqi "$$expect"; then \
+	    echo "  OK    $$term -> $$expect"; \
+	  else \
+	    echo "  FAIL  $$term -> expected '$$expect' in results, got:"; \
+	    echo "$$out" | sed 's/^/        /'; \
+	    FAIL=1; \
+	  fi; \
+	done; \
+	exit $$FAIL
+
+.PHONY: smoke-test

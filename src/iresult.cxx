@@ -39,6 +39,8 @@ Version:	1.00
 Description:	Class IRESULT - Internal Search Result
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include "defs.hxx"
 #include "string.hxx"
@@ -60,7 +62,7 @@ IRESULT::IRESULT() {
 #ifdef DO_HIGHLIGHTING  
   HitTable = new FCT();
 #endif
-  Mdt = (MDT*)NULL;
+  Mdt = nullptr;
 }
 
 

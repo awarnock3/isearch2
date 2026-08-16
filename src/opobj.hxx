@@ -40,6 +40,9 @@ Description:	Class OPOBJ - Operand/operator Base Class
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef OPOBJ_HXX
 #define OPOBJ_HXX
 /*
@@ -69,6 +72,15 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "result.hxx"
 #include "iresult.hxx"
 
+// Base class for every node OPSTACK (src/opstack.hxx) can hold: leaf
+// operands (e.g. STERM, IRSET) and operators alike, so a query's
+// infix-to-RPN evaluation can push/pop them polymorphically through
+// one stack. Nearly every method here defaults to a no-op/zero return
+// (deliberately, not an oversight -- overridden only by the subset of
+// derived classes it actually applies to) except the four pure
+// virtuals, which every derived class must implement. Next/SetNext/
+// GetNext are OPSTACK's own private linked-list bookkeeping for the
+// nodes it holds, not part of this class's public interface.
 class OPOBJ {
 friend class OPSTACK;
 public:

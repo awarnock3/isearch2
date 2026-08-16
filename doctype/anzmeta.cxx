@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 // $Id: anzmeta.cxx,v 1.2 2000/10/11 14:02:15 cnidr Exp $
 /************************************************************************
 Copyright (c) 1994,1995 Basis Systeme netzwerk, Munich
@@ -196,7 +199,7 @@ ANZMETA::LoadFieldTable() {
 	}
 #endif
     Db->FieldTypes.AddEntry(Field_and_Type);
-  } while ( (pBuf = strtok((CHR*)NULL,"\n")) );
+  } while ( (pBuf = strtok((CHR*)nullptr,"\n")) );
 
   delete [] b;
 }
@@ -343,8 +346,8 @@ ANZMETA::ParseDate(const CHR *Buffer, DOUBLE* fStart,
 
     Hold.GetCString(Date,256);   // get a copy of the string
     Year  = strtok(Date,Delimiters);
-    Month = strtok(NULL,Delimiters);
-    Day   = strtok(NULL,Delimiters);
+    Month = strtok(nullptr,Delimiters);
+    Day   = strtok(nullptr,Delimiters);
 
 //    #ifdef ANZDEBUG
 //      cout << "Year=" << Year << "###" << endl;
@@ -360,11 +363,11 @@ ANZMETA::ParseDate(const CHR *Buffer, DOUBLE* fStart,
         cerr << "1998-01-29 or 1998-01 or 1998" << endl;
       }
     }
-    if ((Month != NULL) && (strlen(Month) != 2)) {
+    if ((Month != nullptr) && (strlen(Month) != 2)) {
       cerr << "[ANZMETA::ParseDate] Invalid Date: Month (" << Month;
       cerr << ") must be 2 digits" << endl;
     }
-    if ((Day != NULL) && (strlen(Day) != 2)) {
+    if ((Day != nullptr) && (strlen(Day) != 2)) {
       cerr << "[ANZMETA::ParseDate] Invalid Date: Day (" << Day;
       cerr << ") must be 2 digits" << endl;
     }
@@ -372,9 +375,9 @@ ANZMETA::ParseDate(const CHR *Buffer, DOUBLE* fStart,
     // rebuild the date
     CHR NewDate[9];
     strcpy(NewDate,Year);
-    if (Month != NULL) 
+    if (Month != nullptr) 
       strcat(NewDate,Month);
-    if (Day != NULL) 
+    if (Day != nullptr) 
       strcat(NewDate,Day);
 
     Hold = (STRING) NewDate;
@@ -496,8 +499,8 @@ ANZMETA::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
 
     Hold.GetCString(Date,256);   // get a copy of the string
     Year  = strtok(Date,Delimiters);
-    Month = strtok(NULL,Delimiters);
-    Day   = strtok(NULL,Delimiters);
+    Month = strtok(nullptr,Delimiters);
+    Day   = strtok(nullptr,Delimiters);
 
 //    #ifdef ANZDEBUG
 //      cout << "Year=" << Year << "###" << endl;
@@ -508,9 +511,9 @@ ANZMETA::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
     // rebuild the date
     CHR NewDate[9];
     strcpy(NewDate,Year);
-    if (Month != NULL) 
+    if (Month != nullptr) 
       strcat(NewDate,Month);
-    if (Day != NULL) 
+    if (Day != nullptr) 
       strcat(NewDate,Day);
 
     Hold = (STRING) NewDate;
@@ -605,8 +608,8 @@ ANZMETA::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
 
     Hold.GetCString(Date,256);   // get a copy of the string
     Year  = strtok(Date,Delimiters);
-    Month = strtok(NULL,Delimiters);
-    Day   = strtok(NULL,Delimiters);
+    Month = strtok(nullptr,Delimiters);
+    Day   = strtok(nullptr,Delimiters);
 
 //    #ifdef ANZDEBUG
 //      cout << "Year=" << Year << "###" << endl;
@@ -617,9 +620,9 @@ ANZMETA::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
     // rebuild the date
     CHR NewDate[9];
     strcpy(NewDate,Year);
-    if (Month != NULL) 
+    if (Month != nullptr) 
       strcat(NewDate,Month);
-    if (Day != NULL) 
+    if (Day != nullptr) 
       strcat(NewDate,Day);
 
     Hold = (STRING) NewDate;
@@ -716,7 +719,6 @@ ANZMETA::ParseGPoly(const CHR *Buffer, DOUBLE Vertices[])
 {
 
   DOUBLE North,South,East,West;
-  DOUBLE Left;
   CHR Tag[12];
   CHR eTag[12];
 
@@ -821,7 +823,7 @@ ANZMETA::ParseFields (RECORD *NewRecord)
   PFILE fp;
   STRING fn;
 
-  if (NewRecord == (RECORD*)NULL) 
+  if (NewRecord == (RECORD*)nullptr) 
     return;                      // ERROR
 
   // Open the file
@@ -861,7 +863,7 @@ ANZMETA::ParseFields (RECORD *NewRecord)
   NewRecord->GetDocumentType(&doctype);
 
   CHR **tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL) {
+  if (tags == nullptr) {
     cout << "Unable to parse `" << doctype << "' tags in file " << fn << "\n";
     // Clean up
     delete [] RecBuffer;
@@ -869,7 +871,6 @@ ANZMETA::ParseFields (RECORD *NewRecord)
   }
 
   GSTACK Nested;
-  size_t LastEnd=(size_t)0;
 //  PZMD_Element pCurrentTag;
   PDFT pdft = new DFT ();
   GDT_BOOLEAN InCustom;
@@ -881,7 +882,8 @@ ANZMETA::ParseFields (RECORD *NewRecord)
   for (CHR **tags_ptr = tags; *tags_ptr; tags_ptr++) {
     if ((*tags_ptr)[0] == '/') {
       PZMD_Element pTmp;
-      if (strcmp(*tags_ptr,"/custom")) {
+      // BUGFIX #1: was `strcmp(*tags_ptr,"/custom")` without negation - always true (non-zero result)
+      if (!strcmp(*tags_ptr,"/custom")) {
 
 	STRING Tag;
 	STRINGINDEX x;
@@ -894,17 +896,29 @@ ANZMETA::ParseFields (RECORD *NewRecord)
     // We keep a stack of the fields we have currently open.  This
     // handles nested fields by making a long field name out of the
     // nested values.
-	pTmp = (PZMD_Element)Nested.Top();
-	if (Tag == pTmp->get_tag()) {
-	  pTmp = (PZMD_Element)Nested.Pop();
-//	  cout << "Popped " << pTmp->get_tag() << " off the stack.  ";
-	  delete pTmp;
-	  if (Nested.GetSize() != 0) {
-	    pTmp = (PZMD_Element)Nested.Top();
-//	    cout << "Still inside " << pTmp->get_tag() << ".\n";
-	    x = FullFieldname.SearchReverse('_');
-	    FullFieldname.EraseAfter(x-1);
-//	    cout << "Full fieldname is now " << FullFieldname << ".\n";
+	// BUGFIX #2: Nested.Top() was called with no GetSize()!=0 guard,
+	// then immediately dereferenced via pTmp->get_tag() -- a "/custom"
+	// closing tag with nothing on the stack (e.g. a malformed record
+	// whose first tag is an unmatched </custom>) made this a null-
+	// pointer dereference. The second Nested.Top() call a few lines
+	// below (after a successful Pop()) already guards with
+	// GetSize()!=0; this first one didn't. Confirmed with a standalone
+	// repro (a record containing just "</custom>") before fixing --
+	// AddressSanitizer: SEGV in ANZMETA::ParseFields,
+	// doctype/anzmeta.cxx:902 (via STRING::Equals on a null this).
+	if (Nested.GetSize() != 0) {
+	  pTmp = (PZMD_Element)Nested.Top();
+	  if (Tag == pTmp->get_tag()) {
+	    pTmp = (PZMD_Element)Nested.Pop();
+//	    cout << "Popped " << pTmp->get_tag() << " off the stack.  ";
+	    delete pTmp;
+	    if (Nested.GetSize() != 0) {
+	      pTmp = (PZMD_Element)Nested.Top();
+//	      cout << "Still inside " << pTmp->get_tag() << ".\n";
+	      x = FullFieldname.SearchReverse('_');
+	      FullFieldname.EraseAfter(x-1);
+//	      cout << "Full fieldname is now " << FullFieldname << ".\n";
+	    }
 	  }
 	}
       } else
@@ -915,9 +929,9 @@ ANZMETA::ParseFields (RECORD *NewRecord)
 
     const CHR *p = find_end_tag (tags_ptr, *tags_ptr);
     size_t tag_len = strlen (*tags_ptr);
-    int have_attribute_val = (NULL != strchr (*tags_ptr, '='));
+    int have_attribute_val = (nullptr != strchr (*tags_ptr, '='));
 
-    if (p != NULL) {
+    if (p != nullptr) {
       // We have a tag pair
       val_start = (*tags_ptr + tag_len + 1) - RecBuffer;
       val_len = (p - *tags_ptr) - tag_len - 2;
@@ -933,7 +947,6 @@ ANZMETA::ParseFields (RECORD *NewRecord)
       if (val_len > 0) {
 	// Cut the complex values from field name
 	CHR orig_char = 0;
-	PZMD_Element pTag = new ZMD_Element();
 	char* tcp;
 
 	for (tcp = *tags_ptr; *tcp; tcp++) {
@@ -946,7 +959,7 @@ ANZMETA::ParseFields (RECORD *NewRecord)
 
 	const CHR *unified_name = UnifiedName(*tags_ptr);
 	// Ignore "unclassified" fields
-	if (unified_name == NULL) 
+	if (unified_name == nullptr)
 	  continue; // ignore these
 	FieldName = unified_name;
 	if (!(FieldName.IsPrint())) {
@@ -958,22 +971,29 @@ ANZMETA::ParseFields (RECORD *NewRecord)
 	  InCustom=GDT_TRUE;
 
 	if (!InCustom) {
+	  // BUGFIX #3: pTag used to be `new ZMD_Element()`'d unconditionally
+	  // above, before both the "unclassified tag" `continue` and this
+	  // `!InCustom` check -- either path skipped the Nested.Push(pTag)
+	  // below that's pTag's only owner, leaking one ZMD_Element (plus
+	  // its two STRING members) per skipped/custom-nested tag. Moved
+	  // the allocation here, right before its first use, so a skipped
+	  // tag never allocates one at all. Confirmed via a before/after
+	  // AddressSanitizer leak-detector comparison on the regression
+	  // tests below (a <custom> field is exactly the InCustom=true
+	  // case): "AddressSanitizer: 156 byte(s) leaked in 6 allocation(s)"
+	  // before the fix, clean after.
+	  PZMD_Element pTag = new ZMD_Element();
+
 	  // Fieldname.UpperCase();
 	  if (orig_char)
 	    *tcp = orig_char;
-	  
+
 	  val_end = val_start + val_len - 1;
-	  
+
 	  pTag->set_tag(FieldName);
 	  pTag->set_start(val_start);
 	  pTag->set_end(val_end);
-	  
-	  if (Nested.GetSize() != 0) {
-	    PZMD_Element pTmp;
-	    if (val_start < LastEnd) {
-	      pTmp = (PZMD_Element)Nested.Top();
-	    }
-	  }
+
 	  if (FullFieldname.GetLength() > 0)
 	    FullFieldname.Cat("_");
 	  FullFieldname.Cat(FieldName);
@@ -1053,13 +1073,12 @@ ANZMETA::ParseFields (RECORD *NewRecord)
 	    }
 	  }
 	  Nested.Push(pTag);
-	  LastEnd = val_end;
 	}
       }
     }
     if (have_attribute_val) {
       SGMLNORM::store_attributes (pdft, RecBuffer, *tags_ptr);
-    } else if (p == NULL) {
+    } else if (p == nullptr) {
 #if 1
       // Give some information
       cout << doctype << " Warning: \""
@@ -1507,7 +1526,7 @@ ANZMETA::~ANZMETA ()
    
    Post: tags is filled with char pointers to first character of every sgml 
    tag (first character after the '<').  The tags array is 
-   terminated by a NULL.
+   terminated by a nullptr.
    Returns the total number of tags found or -1 if out of memory
    */
 CHR**
@@ -1561,10 +1580,10 @@ ANZMETA::parse_tags (CHR *b, GPTYPE len) const
 		  // allocate more space
 		  max_num_tags += grow_size;
 		  PCHR *New = new PCHR[max_num_tags];
-		  if (New == NULL)
+		  if (New == nullptr)
 		    {
 		      delete[]t;
-		      return NULL;		// NO MORE CORE!
+		      return nullptr;		// NO MORE CORE!
 		    }
 		  memcpy (New, t, tc * sizeof (CHR*));
 		  delete[]t;
@@ -1623,10 +1642,10 @@ ANZMETA::parse_tags (CHR *b, GPTYPE len) const
   if (State != OK)
     {
       delete[]t;
-      return NULL;		// Parse ERROR
+      return nullptr;		// Parse ERROR
     }
   
-  t[tc] = (CHR*) NULL;	// Mark end of list
+  t[tc] = (CHR*) nullptr;	// Mark end of list
   return t;
 }
 
@@ -1635,10 +1654,10 @@ ANZMETA::parse_tags (CHR *b, GPTYPE len) const
    Searches through string list t look for "/" followed by tag, e.g. if
    tag = "TITLE REL=XXX", looks for "/TITLE" or a empty end tag (</>).
    
-   Pre: t is is list of string pointers each NULL-terminated.  The list
-   should be terminated with a NULL character pointer.
+   Pre: t is is list of string pointers each nullptr-terminated.  The list
+   should be terminated with a nullptr character pointer.
    
-   Post: Returns a pointer to found string or NULL.
+   Post: Returns a pointer to found string or nullptr.
    */
 
 
@@ -1647,11 +1666,11 @@ const CHR*
 ANZMETA::find_end_tag (char **t, const char *tag) const
 {
   size_t len;
-  if (t == NULL || *t == NULL)
-    return NULL;		// Error
+  if (t == nullptr || *t == nullptr)
+    return nullptr;		// Error
   
   if (*t[0] == '/')
-    return NULL;		// I'am confused!
+    return nullptr;		// I'am confused!
   
   // Look for "real" tag name
   for (len = 0; tag[len]; len++)
@@ -1679,7 +1698,7 @@ ANZMETA::find_end_tag (char **t, const char *tag) const
 	  
 	}
     }
-  while ((tt = t[++i]) != NULL);
+  while ((tt = t[++i]) != nullptr);
   
 #if 0
   // No end tag, assume that the document was valid
@@ -1687,7 +1706,7 @@ ANZMETA::find_end_tag (char **t, const char *tag) const
   // next tag
   return t[1];
 #else
-  return NULL;		// No end tag found
+  return nullptr;		// No end tag found
 #endif
 }
 

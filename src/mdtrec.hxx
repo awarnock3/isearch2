@@ -40,6 +40,9 @@ Description:	Class MDTREC - Multiple Document Table Record
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef MDTREC_HXX
 #define MDTREC_HXX
 
@@ -59,9 +62,21 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "dft.hxx"
 #include "record.hxx"
 
+// A Multiple Document Table record: one indexed document's key,
+// doctype, path/file name, and its [GlobalFileStart,GlobalFileEnd) /
+// [LocalRecordStart,LocalRecordEnd) byte-offset spans within the
+// corpus. All string fields are fixed-size CHR buffers (not STRING),
+// matching this record's on-disk, fixed-length layout (see
+// MDT::GetEntry/AddEntry, src/mdt.cxx, which fread()/fwrite() it as a
+// raw block) -- Set* accessors always null-terminate within bounds
+// (via STRING::GetCString); Get* accessors never assume the buffer
+// already is, since a corrupt or truncated on-disk record can leave
+// one that isn't (see BUGFIX #1/#2 in source).
 class MDTREC {
 public:
   MDTREC();
+  // Deep-copies every field; safe under self-assignment. Bounded even
+  // if OtherMdtRec's buffers aren't null-terminated.
   MDTREC& operator=(const MDTREC& OtherMdtRec);
   void SetKey(const STRING& NewKey);
   void GetKey(STRING* StringBuffer) const;
@@ -71,6 +86,7 @@ public:
   void GetPathName(STRING* StringBuffer) const;
   void SetFileName(const STRING& NewFileName);
   void GetFileName(STRING* StringBuffer) const;
+  // PathName immediately followed by FileName, concatenated.
   void GetFullFileName(STRING* StringBuffer) const;
   void SetGlobalFileStart(const GPTYPE NewGlobalFileStart);
   GPTYPE GetGlobalFileStart() const;
@@ -82,6 +98,8 @@ public:
   GPTYPE GetLocalRecordEnd() const;
   void SetDeleted(const GDT_BOOLEAN Flag);
   GDT_BOOLEAN GetDeleted() const;
+  // Byte-swaps the four GPTYPE offset fields in place, for cross-endian
+  // file I/O.
   void FlipBytes();
   ~MDTREC();
 

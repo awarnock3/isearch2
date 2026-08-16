@@ -45,6 +45,14 @@ Author:		Archie Warnock (warnock@awcubed.com), A/WWW Enterprises
 #ifndef NLATLON_HXX
 #define NLATLON_HXX
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+// ParseLatToNum/ParseLonToNum convert a "12.5N"/"98.2W"-style string
+// term to a signed latitude (-90..90) or a 0..360 longitude
+// (>=180 for west), returning the matching *ERROR sentinel below on a
+// malformed term. See the doc comments above each definition in
+// nlatlon.cxx for the exact grammar.
 double ParseLatToNum(char * Term);
 double ParseLonToNum(char * Term);
 #define LatERROR -99.0

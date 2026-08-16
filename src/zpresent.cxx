@@ -47,6 +47,9 @@ Author:		A. Warnock (warnock@awcubed.com), adapted from Isearch.cxx
                 by Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdio.h>
 #include <string.h>
 #include <locale.h>
@@ -215,8 +218,15 @@ main(int argc, char** argv) {
   }
   */
 
+  // BUGFIX #2 (docs/BUG_CATALOG.md#srczpresentcxx): LastUsed is only
+  // ever assigned a valid argv index (always < argc), so `x = LastUsed
+  // + 1` can never exceed argc -- `x > argc` was permanently false, and
+  // this check had never actually fired. The same defect, confirmed and
+  // fixed the same way, as src/Iget.cxx's BUGFIX #2: `x < argc` (there
+  // are still unconsumed arguments after the last recognized flag's
+  // value) is what "Unrecognized arguments" actually needs to detect.
   x = LastUsed + 1;
-  if (x > argc) {
+  if (x < argc) {
     error_message.Cat("\t\t\t<isearch:error_text>Unrecognized arguments</isearch:error_text>\n");
     XmlBail(DBName,error_message);
   }
@@ -293,7 +303,17 @@ main(int argc, char** argv) {
 
     RecordKeyList.GetEntry(i,&RecordKey);
     pdb->KeyLookup(RecordKey, &RsRecord);
-    pdb->Present(RsRecord, ESet, XmlRecordSyntax, &Record);
+    // BUGFIX #1 (docs/BUG_CATALOG.md#srczpresentcxx): this hardcoded
+    // XmlRecordSyntax instead of the RecordSyntax computed above from
+    // -f, silently discarding the flag -- Present() (via IDB::Present())
+    // passes it straight through to the doctype's own Present(), and at
+    // least doctype/fgdc.cxx and doctype/gils.cxx genuinely branch on it
+    // (e.g. picking a .html/.xml/.text companion file, or wrapping a
+    // title in XML tags vs. leaving it plain). Isearch.cxx's own,
+    // functionally identical -f-parsing code always passes its computed
+    // RecordSyntax to every Present() call; this was the one place in
+    // this file that didn't.
+    pdb->Present(RsRecord, ESet, RecordSyntax, &Record);
     if (Record.GetLength() > 0) {
       Record.Print();
 

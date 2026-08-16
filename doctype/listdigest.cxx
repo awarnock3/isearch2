@@ -106,6 +106,9 @@ ________________________________________________________________________________
 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		listdigest.cxx
 Version:	$Revision: 1.3 $
@@ -129,6 +132,10 @@ LISTDIGEST::LISTDIGEST (PIDBOBJ DbParent): MAILFOLDER (DbParent)
 {
 }
 
+// Splits FileRecord's underlying digest file into one RECORD per
+// message at each long "====...====" magic separator line, and adds
+// each to Db via DocTypeAddRecord() (each later gets its own
+// ParseFields() call, via the inherited MAILFOLDER::ParseFields()).
 void LISTDIGEST::ParseRecords (const RECORD& FileRecord)
 {
   // Break up the document into Mail message records
@@ -166,7 +173,7 @@ void LISTDIGEST::ParseRecords (const RECORD& FileRecord)
   const size_t magic_len = sizeof(magic)/sizeof(char)-1;
 
   // Read lines from file and search for record seperation
-  while (fgets(buf, sizeof(buf)/sizeof(char)-1, Fp) != NULL)
+  while (fgets(buf, sizeof(buf)/sizeof(char)-1, Fp) != nullptr)
     {
       // Search for "magic" line type
       size_t line_len = strlen(buf);
@@ -189,7 +196,19 @@ void LISTDIGEST::ParseRecords (const RECORD& FileRecord)
   fclose (Fp);
 
   Record.SetRecordStart (Start);
-  RecordEnd = Position - 1;
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypelistdigestcxx): GPTYPE is
+  // UINT4 (src/defs.hxx); for a genuinely empty file (fgets() never
+  // succeeds even once), Position stays 0 here, and `Position - 1`
+  // underflowed to UINT_MAX -- `RecordEnd > Start` (0) then passed,
+  // adding a record ending ~4 billion bytes past the real file. Same
+  // underflow shape as doctype/irlist.cxx's BUGFIX #2 and
+  // doctype/mailfolder.cxx's own already-fixed ParseRecords(); this
+  // is the only reachable instance of it in this file -- the mid-loop
+  // `RecordEnd = SavePosition - 1;` above can't underflow the same
+  // way, since Position (and so SavePosition) is always incremented
+  // by the *current* line's length, at least magic_len+1 bytes,
+  // before that assignment ever runs.
+  RecordEnd = (Position == 0) ? 0 : Position - 1;
 
   if (RecordEnd > Start)
     {

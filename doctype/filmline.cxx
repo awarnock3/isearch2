@@ -106,6 +106,9 @@ ________________________________________________________________________________
 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		filmline.cxx
 Version:	1.00
@@ -135,7 +138,12 @@ FILMLINE::FILMLINE (PIDBOBJ DbParent): MEDLINE (DbParent)
 }
 
 
-// Hooks into the Field parser from Medline
+// Hooks into the Field parser from Medline. Maps a two-letter Filmline
+// field code to its unified (Medline-parser-facing) field name, or
+// nullptr if the code isn't recognized. Looked up via a linear scan,
+// so despite the "Sorted List!" comment below (the table is not
+// actually in alphabetical order -- e.g. "LA" appears before "KW"),
+// lookup correctness doesn't depend on ordering.
 const CHR *FILMLINE::UnifiedName (const CHR *tag) const
 {
 #if USE_UNIFIED_NAMES
@@ -204,14 +212,16 @@ const CHR *FILMLINE::UnifiedName (const CHR *tag) const
       if ((n = strcmp(tag, Table[i].key)) == 0)
 	return Table[i].name; // Return "our" unified name
     }
-  return NULL; // Not in list
+  return nullptr; // Not in list
 #else
   return tag; // Identity
 #endif
 }
 
 
-// FILMLINE Handler
+// ElementSet BRIEF_MAGIC ("B") composes a one-line "Title (Director,
+// Country/year)" headline out of several underlying Medline-parsed
+// fields; anything else falls through to DOCTYPE::Present() unchanged.
 void FILMLINE::
 Present (const RESULT& ResultRecord,
 	const STRING& ElementSet, PSTRING StringBuffer)
@@ -225,8 +235,23 @@ Present (const RESULT& ResultRecord,
       if (Title.GetLength() == 0)
 	{
 	  // Should not really happen, heck use Original title
-	  Tag = UnifiedName("TO");
-	  DOCTYPE::Present (ResultRecord, Tag, &Title);
+	  //
+	  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypefilmlinecxx): "TO" is
+	  // not one of UnifiedName()'s recognized field codes (its table
+	  // has no such entry -- only "TI"/"TE"/"TU"/"SH" among the
+	  // title-ish codes), so UnifiedName("TO") always returned
+	  // nullptr here, and `Tag = nullptr` (STRING::operator=(const
+	  // CHR*)) called strlen(nullptr) unconditionally -- a real,
+	  // always-reachable null-pointer-dereference crash whenever the
+	  // primary "TI" lookup came back empty. Fixed by guarding the
+	  // fallback on a non-null UnifiedName() result, same as any
+	  // other "not in list" lookup should be handled.
+	  const CHR *FallbackTag = UnifiedName("TO");
+	  if (FallbackTag != nullptr)
+	    {
+	      Tag = FallbackTag;
+	      DOCTYPE::Present (ResultRecord, Tag, &Title);
+	    }
 	}
 #if BSN_EXTENSIONS
      Title.CompressSpaces();

@@ -47,6 +47,9 @@ Author:		Archie Warnock (warnock@awcubed.com), based on
                 Isearch by Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdio.h>
 #include <string.h>
 #include <locale.h>
@@ -139,55 +142,76 @@ int main(int argc, char** argv) {
   while (x < argc) {
     if (argv[x][0] == '-') {
       Flag = argv[x];
+      // BUGFIX #1 (docs/BUG_CATALOG.md#srczsearchcxx): all six flag
+      // branches below used to follow `-o` here's shape: `if (++x >=
+      // argc) { Error=GDT_TRUE; error_message.Cat(...); }` followed
+      // *unconditionally* by an `argv[x]` read, with no `else`. When the
+      // check fired (the flag was the last argument, e.g. `zsearch -d
+      // mydb -o` with nothing after `-o`), `x == argc` at that point,
+      // and `argv[argc]` is guaranteed nullptr by the C++ standard --
+      // dereferenced unconditionally by STRING::operator=(const CHR*)'s
+      // strlen() call, a real null-pointer dereference. Confirmed with
+      // the actual production binary: `./bin/zsearch -d <db> -o`
+      // segfaulted (SIGSEGV) before this fix, for all six flags. Same
+      // defect, same fix, as src/Iget.cxx's BUGFIX #1: move the value
+      // read into an `else` branch so the Error flag set above is left
+      // to reach the existing `if (Error) { ...; exit(0); }` check
+      // further down instead of crashing first.
       if (Flag.Equals("-o")) {
 	if (++x >= argc) {
 	  Error=GDT_TRUE;
 	  error_message.Cat("\t\t\t<isearch:error_text>No option specified after -o.</isearch:error_text>\n");
+	} else {
+	  STRING S;
+	  S = argv[x];
+	  DocTypeOptions.AddEntry(S);
+	  LastUsed = x;
 	}
-	STRING S;
-	S = argv[x];
-	DocTypeOptions.AddEntry(S);
-	LastUsed = x;
       }
       if (Flag.Equals("-d")) {
 	if (++x >= argc) {
 	  Error=GDT_TRUE;
 	  error_message.Cat("\t\t\t<isearch:error_text>No database name specified after -d.</isearch:error_text>\n");
+	} else {
+	  DBName = argv[x];
+	  LastUsed = x;
 	}
-	DBName = argv[x];
-	LastUsed = x;
       }
       if (Flag.Equals("-p")) {
 	if (++x >= argc) {
 	  Error=GDT_TRUE;
 	  error_message.Cat("\t\t\t<isearch:error_text>No element set specified after -p.</isearch:error_text\n");
+	} else {
+	  ElementSet = argv[x];
+	  LastUsed = x;
 	}
-	ElementSet = argv[x];
-	LastUsed = x;
       }
       if (Flag.Equals("-f")) {
 	if (++x >= argc) {
 	  Error=GDT_TRUE;
 	  error_message.Cat("\t\t\t<isearch:error_text>No format specified after -f.</isearch:error_text>\n");
+	} else {
+	  RecordSyntax = argv[x];
+	  LastUsed = x;
 	}
-	RecordSyntax = argv[x];
-	LastUsed = x;
       }
       if (Flag.Equals("-prefix")) {
 	if (++x >= argc) {
 	  Error=GDT_TRUE;
 	  error_message.Cat("\t\t\t<isearch:error_text>No prefix specified after -prefix.</isearch:error_text>\n");
+	} else {
+	  TermPrefix = argv[x];
+	  LastUsed = x;
 	}
-	TermPrefix = argv[x];
-	LastUsed = x;
       }
       if (Flag.Equals("-suffix")) {
 	if (++x >= argc) {
 	  Error=GDT_TRUE;
 	  error_message.Cat("\t\t\t<isearch:error_text>No suffix specified after -suffix.</isearch:error_text>\n");
+	} else {
+	  TermSuffix = argv[x];
+	  LastUsed = x;
 	}
-	TermSuffix = argv[x];
-	LastUsed = x;
       }
       if (Flag.Equals("-syn")) {
 	Synonyms = GDT_TRUE;
@@ -269,8 +293,8 @@ int main(int argc, char** argv) {
   STRING XmlBuffer;
   STRING PathName, FileName;
   SQUERY squery;
-  PRSET  prset=(PRSET)NULL;
-  PIRSET pirset=(PIRSET)NULL;
+  PRSET  prset=nullptr;
+  PIRSET pirset=nullptr;
   RESULT result;
   INT t, n;
 	
@@ -323,8 +347,33 @@ int main(int argc, char** argv) {
     error_message.Cat("\t\t\t<isearch:error_text>The specified database is not compatible with this version of zsearch.</isearch:error_text>\n");
     delete [] WordList;
     delete pdb;
+    // BUGFIX #2 (docs/BUG_CATALOG.md#srczsearchcxx): this used to fall
+    // through after freeing WordList/pdb instead of exiting -- the code
+    // just below unconditionally reads WordList[z] (building
+    // QueryString), and further down calls methods through pdb again
+    // (Search()/AndSearch()), both a real heap-use-after-free /
+    // dangling-pointer use. Confirmed with AddressSanitizer against a
+    // database whose on-disk MagicNumber was hand-edited to force
+    // IsDbCompatible() to fail: a real heap-use-after-free READ at the
+    // WordList[z] access below. Fixed by printing the same
+    // error/exit block the other two Error paths in this file already
+    // use and exiting immediately, instead of continuing past the
+    // just-freed pointers.
+    XmlBuffer = DBName;
+    XmlBuffer.XmlCleanup();
+    cout << "\t<isearch:search status=\"Error\" dbname=\"" << XmlBuffer
+	 << "\">" << endl;
+    XmlBuffer = error_message;
+    cout << "\t\t<isearch:error_block>" << endl;
+    cout << XmlBuffer;
+    cout << "\t\t</isearch:error_block>" << endl;
+    cout << "\t</isearch:search>" << endl;
+    cout << "</zsearch>" << endl;
+    fflush(stdout);
+    fflush(stderr);
+    exit(0);
   }
-  
+
   if (Synonyms) {
     squery.OpenThesaurus(DBPathName, DBFileName);
   }
