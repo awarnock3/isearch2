@@ -127,6 +127,30 @@ TEST_CASE("WriteSearchHit escapes a real url when present", "[api_response]") {
 	REQUIRE(cap.str().find("\"url\":\"http://example.com/doc\"") != std::string::npos);
 }
 
+TEST_CASE("WriteSearchHit omits record_start/record_end when has_byte_range is false", "[api_response]") {
+	CoutCapture cap;
+	ApiHit hit;
+	hit.filename = "doc.txt";
+	hit.record_start = 10;
+	hit.record_end = 20;
+	WriteSearchHit(1, hit, true);
+	REQUIRE(cap.str().find("record_start") == std::string::npos);
+	REQUIRE(cap.str().find("record_end") == std::string::npos);
+}
+
+TEST_CASE("WriteSearchHit includes record_start/record_end when has_byte_range is true", "[api_response]") {
+	CoutCapture cap;
+	ApiHit hit;
+	hit.filename = "doc.txt";
+	hit.has_byte_range = true;
+	hit.record_start = 10;
+	hit.record_end = 20;
+	WriteSearchHit(1, hit, true);
+	std::string out = cap.str();
+	REQUIRE(out.find("\"record_start\":10") != std::string::npos);
+	REQUIRE(out.find("\"record_end\":20") != std::string::npos);
+}
+
 TEST_CASE("EndSearchResponse emits null links when empty, real ones when set", "[api_response]") {
 	{
 		CoutCapture cap;
@@ -175,6 +199,9 @@ TEST_CASE("ApiSearchMeta/ApiHit/ApiLinks default-construct to sane, empty values
 	ApiHit hit;
 	REQUIRE(hit.score == 0);
 	REQUIRE(hit.filename.GetLength() == 0);
+	REQUIRE(hit.has_byte_range == false);
+	REQUIRE(hit.record_start == 0);
+	REQUIRE(hit.record_end == 0);
 
 	ApiLinks links;
 	REQUIRE(links.next.GetLength() == 0);

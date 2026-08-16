@@ -9778,6 +9778,23 @@ tests-asan` pass clean (768 test cases, 2903 assertions — up from
 coverage). `make isearch-cgi` also confirmed to still build clean
 (`api_response.cxx` links into `isrch_api`).
 
+**Reopened 2026-08-16 by `/sync-upstream`**: upstream added optional
+byte-range fields to the hit shape -- `ApiHit::has_byte_range`/
+`record_start`/`record_end`, correctly zero/false-initialized in the
+constructor, and `WriteSearchHit()` conditionally emits
+`"record_start"`/`"record_end"` only when `has_byte_range` is true
+(confirmed a deliberate, consistent design choice -- unlike `url`/
+`next`/`prev`, which always emit the key with a `null` fallback, a
+truly optional field pair is omitted entirely rather than nulled).
+Confirmed fully wired up end to end: `Isearch-cgi/api_search.cxx`
+(already `done`) sets all three fields when `req.byte_range` is
+requested. **Zero bugs found.** Added 2 new test cases to
+`tests/Isearch-cgi/test_api_response.cxx` (omitted when
+`has_byte_range` is false, included with the correct values when
+true) plus extended the existing default-construction test to check
+the three new fields' defaults. `make tests`/`make tests-asan`: 808
+test cases, 3006 assertions, clean (up from 806/2999).
+
 ## Isearch-cgi/api_request.hxx, Isearch-cgi/api_request.cxx
 
 **Processed together**, same pairing convention as the other JSON-API
