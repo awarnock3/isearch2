@@ -1,4 +1,4 @@
-// ISEARCH2-CLEANUP: processed 2026-08-10
+// ISEARCH2-CLEANUP: processed 2026-08-16
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include "api_search.hxx"
@@ -106,7 +106,26 @@ static bool BuildSquery(const ApiRequest& req, SQUERY *search_query,
 
   *interpreted_query = query_text;
 
-  const bool force_rpn = req.rpn || req.infix || req.search_type == SEARCH_BOOLEAN;
+  // BUGFIX #1 (docs/BUG_CATALOG.md#isearch-cgiapi_searchhxx-isearch-cgiapi_searchcxx):
+  // req.rpn means query_text is *already* in RPN (postfix) form -- exactly
+  // what SQUERY::SetRpnTerm() expects directly (src/squery.cxx: it just
+  // pushes tokens onto an operand/operator stack in the order given, no
+  // precedence handling). INFIX2RPN::Parse() below does the opposite
+  // conversion (infix -> rpn) and was being applied here too, before this
+  // fix, confirmed via a live repro: a valid RPN query ("Watersheds
+  // Oceanography AND") submitted with rpn=true was rejected outright with
+  // a 422 "query was unparseable" -- InputParsedOK()'s already-RPN-shaped
+  // token stream doesn't satisfy the infix parser's own well-formedness
+  // check. req.rpn/req.infix/req.and_mode are mutually exclusive
+  // (enforced by api_request.cxx's ValidateRequest() before this
+  // function is ever reached), so handling req.rpn here first and
+  // returning is safe.
+  if (req.rpn) {
+    search_query->SetRpnTerm(query_text);
+    return true;
+  }
+
+  const bool force_rpn = req.infix || req.search_type == SEARCH_BOOLEAN;
 
   if (!force_rpn && req.search_type == SEARCH_SIMPLE) {
     search_query->SetTerm(query_text);

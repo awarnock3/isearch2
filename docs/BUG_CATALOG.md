@@ -10111,6 +10111,61 @@ there). `make isearch-cgi` also confirmed to still build clean
 (`api_search.cxx` links into `isrch_api`); `make smoke-test` also
 re-confirmed clean given the `TEST_ENGINE_SRCS` change above.
 
+**Reopened 2026-08-16 by `/sync-upstream`**: upstream added RPN/infix
+query-syntax support, `and_mode`, a `record_syntax` pass-through (was
+hardcoded to `HtmlRecordSyntax` before), and `start_doc`/`end_doc`
+range-based pagination alongside the existing `start`/`max_hits`.
+
+1. **`req.rpn` (query already in RPN/postfix form) was run through
+   `INFIX2RPN::Parse()` (infix → RPN conversion) instead of going
+   directly to `SQUERY::SetRpnTerm()` — confirmed a real, severe
+   functional bug: the `rpn=true` feature was completely non-working.**
+   `SQUERY::SetRpnTerm()` (`src/squery.cxx`) expects its input to
+   *already* be in postfix form — it just pushes tokens onto an
+   operand/operator stack in the order given, with no precedence
+   logic. `INFIX2RPN::Parse()` does the opposite conversion and expects
+   *infix* input; feeding it genuine RPN triggers its "two terms in a
+   row" auto-operator-insertion logic, corrupting the token stream.
+   Confirmed live against the real `isrch_api` binary and a real
+   `Iindex`-built database: `rpn=true&q=Watersheds Oceanography AND` (a
+   perfectly valid RPN query meaning "both terms required") was
+   rejected outright with `422 "The query was unparseable"` —
+   `InputParsedOK()`'s well-formedness check for infix input doesn't
+   accept an already-RPN-shaped token stream. After the fix: the same
+   query returns `200` with the correct `0` matches (no single sample
+   document contains both terms), and the OR-form
+   (`Watersheds Oceanography OR`) correctly returns both matching
+   documents. `req.infix`'s own live behavior confirmed unaffected
+   (still correctly parses genuine infix syntax via the same
+   `INFIX2RPN::Parse()` path). Fixed by handling `req.rpn` in its own
+   early branch, calling `SetRpnTerm()` directly on the raw query text
+   — safe to short-circuit since `req.rpn`/`req.infix`/`req.and_mode`
+   are mutually exclusive, enforced by `api_request.cxx`'s
+   `ValidateRequest()` before `BuildSquery()` is ever reached. See
+   `BUGFIX #1` in source. Regression-tested via a full revert-and-repro:
+   reverted just this fix, reran the new test, watched it correctly
+   fail with the exact `422` the live repro showed, then restored it.
+
+Also verified live, found correct, no fix needed: `start_doc`/`end_doc`
+range pagination (a 5-hit OR query with `start_doc=2&end_doc=3`
+correctly returned exactly hits 2 and 3); `record_syntax` pass-through
+(no longer hardcoded to HTML, confirmed live that a request-supplied
+`record_syntax=SUTRS` reaches `pdb->Present()` without error — visual
+output happens to be identical to HTML for this element set/doctype
+combination, which is downstream `DOCTYPE::Present()` behavior already
+reviewed in earlier turns, not this file's concern); and the
+`req.byte_range` → `hit.has_byte_range`/`record_start`/`record_end`
+wiring (already confirmed end-to-end from
+[`Isearch-cgi/api_response.hxx`](#isearch-cgiapi_responsehxx-isearch-cgiapi_responsecxx)'s
+own reopened turn).
+
+Added 1 new Catch2 test case (`ExecuteSearch accepts a query already
+in RPN form when rpn is set`, isolating `BuildSquery()`'s own success/
+failure from the database-open step via a nonexistent database — `404`
+instead of `422` proves the RPN query was accepted). `make tests`/
+`make tests-asan`: 823 test cases, 3053 assertions, clean (up from
+822/3051). `make isearch-cgi`/`make smoke-test`: clean.
+
 ## Isearch-cgi/isrch_api.cxx
 
 **Scope note, read first:** same `main()`-only structural limitation as

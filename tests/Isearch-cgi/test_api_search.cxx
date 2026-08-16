@@ -119,6 +119,31 @@ TEST_CASE("ExecuteSearch builds an interpreted query from terms when q is empty"
 	REQUIRE(meta.interpreted_query == "TITLE/whale");
 }
 
+TEST_CASE("ExecuteSearch accepts a query already in RPN form when rpn is set", "[api_search]") {
+	// BUGFIX #1 (docs/BUG_CATALOG.md#isearch-cgiapi_searchhxx-isearch-cgiapi_searchcxx):
+	// confirmed via a live repro before this fix that a query already in
+	// valid RPN (postfix) form -- exactly what req.rpn=true declares it
+	// to be -- was run through INFIX2RPN::Parse() (which expects INFIX
+	// notation) anyway, and got rejected outright with a 422 "query was
+	// unparseable" even though it was perfectly valid RPN. A nonexistent
+	// database isolates BuildSquery()'s own success from the database-
+	// open step: 404 (not 422) proves the RPN query was accepted.
+	ApiConfig cfg;
+	cfg.db_path = "/tmp";
+	ApiRequest req;
+	req.database = "isearch2_test_api_search_definitely_does_not_exist";
+	req.q = "whale dolphin AND";
+	req.rpn = true;
+
+	ApiSearchMeta meta;
+	std::vector<ApiHit> hits;
+	STRING error_detail;
+	int status = ExecuteSearch(req, cfg, meta, hits, error_detail);
+
+	REQUIRE(status == 404);
+	REQUIRE(meta.interpreted_query == "whale dolphin AND");
+}
+
 TEST_CASE("ExecuteSearch populates ApiSearchMeta's request-independent fields before validation can fail", "[api_search]") {
 	ApiConfig cfg;
 	cfg.db_path = "/tmp";
