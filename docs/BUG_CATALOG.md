@@ -4102,6 +4102,21 @@ Modernization: all code-level `NULL` uses converted to `nullptr`. No
 Added class-level and field-level doc comments, including the
 `escape_url()`/`GetName()`/`GetValue()` caveats above.
 
+**Reopened 2026-08-16 by `/sync-upstream`**: upstream added
+`ExtractPathParam(const CHR *pathInfo, INT paramIndex)`, a new free
+function extracting the Nth `/`-separated segment from `PATH_INFO`
+(used by the JSON API's new path-based `/v1/api/{database}/search`
+routing). Read carefully and traced through by hand for the usual
+crash classes: null `pathInfo`, empty string, bare `"/"`, no leading
+slash, an out-of-range index, and a negative index -- every case
+returns an empty `STRING` cleanly rather than reading out of bounds or
+crashing. **Zero bugs found.** Added 5 new test cases to
+`tests/Isearch-cgi/test_cgi-util.cxx` covering exactly those paths
+(no test existed for this function before, since it didn't exist
+before this merge). `make tests`/`make tests-asan`: 803 test cases,
+2996 assertions, clean (up from 798/2986 before this file's own new
+tests).
+
 ## src/marc.hxx
 
 `class MARC` parses one MARC bibliographic record (via

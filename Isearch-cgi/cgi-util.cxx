@@ -45,7 +45,7 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 
 // change record:
 // reset z and initialized entry_point to fix "GET" method    9/25/96 dtw
-// ISEARCH2-CLEANUP: processed 2026-08-08
+// ISEARCH2-CLEANUP: processed 2026-08-16
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <string.h>

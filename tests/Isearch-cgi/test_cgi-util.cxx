@@ -143,3 +143,28 @@ TEST_CASE("x2c converts a two-hex-digit escape to its byte value", "[cgi-util]")
 	char hex2[] = "2f";  // '/' (lowercase hex digits)
 	REQUIRE(x2c(hex2) == '/');
 }
+
+TEST_CASE("ExtractPathParam extracts segments by index", "[cgi-util]") {
+	REQUIRE(ExtractPathParam("/mydb/search", 0) == "mydb");
+	REQUIRE(ExtractPathParam("/mydb/search", 1) == "search");
+	REQUIRE(ExtractPathParam("/mydb/search/extra", 2) == "extra");
+}
+
+TEST_CASE("ExtractPathParam returns empty for an out-of-range index", "[cgi-util]") {
+	REQUIRE(ExtractPathParam("/mydb/search", 5).GetLength() == 0);
+}
+
+TEST_CASE("ExtractPathParam returns empty for a null or empty pathInfo", "[cgi-util]") {
+	REQUIRE(ExtractPathParam(nullptr, 0).GetLength() == 0);
+	REQUIRE(ExtractPathParam("", 0).GetLength() == 0);
+	REQUIRE(ExtractPathParam("/", 0).GetLength() == 0);
+}
+
+TEST_CASE("ExtractPathParam works without a leading slash", "[cgi-util]") {
+	REQUIRE(ExtractPathParam("mydb/search", 0) == "mydb");
+	REQUIRE(ExtractPathParam("mydb/search", 1) == "search");
+}
+
+TEST_CASE("ExtractPathParam returns empty for a negative index", "[cgi-util]") {
+	REQUIRE(ExtractPathParam("/mydb/search", -1).GetLength() == 0);
+}
