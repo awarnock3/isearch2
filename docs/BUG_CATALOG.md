@@ -9562,6 +9562,48 @@ all pass clean; `make tests`/`make tests-asan` (which *do* link
 test cases, 2850 assertions, unchanged — the `vidb.cxx` fix doesn't
 touch any code path the existing suite exercises).
 
+**Reopened 2026-08-16 by `/sync-upstream`**: substantial upstream
+addition to the JSON output path -- `PATH_INFO`-based database
+extraction (see `Isearch-cgi/cgi-util.hxx`'s own reopened note for
+`ExtractPathParam()` itself), `START`/`MAXHITS`/`SCORE_SCALE`
+validation (erroring instead of the old silent-clamp behavior),
+`request_id`/`next`/`prev` fields matching the rest of the JSON API
+family, and a real `ScoreScale` param replacing the previous hardcoded
+`100`.
+
+1. **`IncludeUrl`/`IncludeHeadline`/`IncludeRecordKey` computed from
+   `INCLUDE_URL`/`INCLUDE_HEADLINE`/`INCLUDE_RECORD_KEY` (matching
+   `api_request.hxx`'s identically-named, correctly-wired fields) but
+   never actually referenced anywhere afterward — confirmed by
+   grepping the whole file for each name. Every JSON hit always
+   included the real `headline`/`record_key`/`url`, silently ignoring
+   a client's request to exclude them. Not a crash — a real,
+   confirmed functional defect: a value the client explicitly asked to
+   have withheld was returned anyway. `Search()`'s forward declaration
+   and definition are both private to this `.cxx` (no header, no
+   external caller), so extending its signature carries no header-
+   freeze concern, unlike a class-method change would. Fixed by
+   threading all three flags through to `Search()` and guarding the
+   JSON print block, matching `Isearch-cgi/api_response.cxx`'s
+   `WriteSearchHit()` convention exactly: the key stays present either
+   way, the value becomes `""` (`headline`/`record_key`) or `null`
+   (`url`) when excluded. Confirmed live against the real production
+   binary (a real `Iindex`-built database): `INCLUDE_URL=false&
+   INCLUDE_HEADLINE=false&INCLUDE_RECORD_KEY=false` now correctly
+   returns `"headline":"","record_key":"","url":null`, while the same
+   query without those params returns the real values. See `BUGFIX #5`
+   in source.
+
+Also modernized: the 5 new `sprintf` calls upstream added (the
+`request_id` generator, plus 4 building the `next`/`prev` pagination
+URLs) converted to `snprintf`, and the one new `time(NULL)` to
+`time(nullptr)`, matching this file's own existing convention.
+
+`make isearch`/`make isearch-cgi`: clean. Still no test file, for the
+same `main()`-only reason as before — `BUGFIX #5` verified via the
+live repro above instead. `make tests`/`make tests-asan` unaffected
+(806 test cases, 2999 assertions, unchanged).
+
 ## Isearch-cgi/search_form.cxx
 
 **Scope note, read first:** same `main()`-only structural limitation as

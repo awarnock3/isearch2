@@ -46,7 +46,7 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 		Archie Warnock, warnock@clark.net
 @@@*/
 
-// ISEARCH2-CLEANUP: processed 2026-08-09
+// ISEARCH2-CLEANUP: processed 2026-08-16
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <iostream>
@@ -98,7 +98,9 @@ PCHR get_field(const CHR *fmt, INT n);
 
 INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
 	INT Start, INT MaxHits, INT TYPE, INT ScoreScale,
-	const STRING& RequestId, GDT_BOOLEAN JsonOutput);
+	const STRING& RequestId, GDT_BOOLEAN IncludeUrl,
+	GDT_BOOLEAN IncludeHeadline, GDT_BOOLEAN IncludeRecordKey,
+	GDT_BOOLEAN JsonOutput);
 void  PutHTTPHeader(GDT_BOOLEAN JsonOutput);
 void  PutHTMLHead(void);
 void  PutHTMLBodyStart(void);
@@ -227,7 +229,7 @@ INT main(int argc, char **argv)
   RequestId = (p = cgidata->GetValueByName("REQUEST_ID")) ? p : "";
   if (RequestId.Equals("")) {
     CHR reqbuf[32];
-    sprintf(reqbuf, "req-%ld", (long)time(NULL));
+    snprintf(reqbuf, sizeof(reqbuf), "req-%ld", (long)time(nullptr));
     RequestId = reqbuf;
   }
 
@@ -383,7 +385,8 @@ INT main(int argc, char **argv)
 
   INT nhits;
   nhits = Search(argv[1], db, query, ESName, Start, MaxHits, type,
-                 ScoreScale, RequestId, JsonOutput);
+                 ScoreScale, RequestId, IncludeUrl, IncludeHeadline,
+                 IncludeRecordKey, JsonOutput);
   if ((nhits > 0) && (!JsonOutput)) {
     cout << "<HR>" << endl;
   }
@@ -597,7 +600,9 @@ get_term(INT i, STRING &PrintTerm, STRING &PrintField, STRING &PrintWeight)
 
 INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
 	INT Start, INT MaxHits, INT type, INT ScoreScale,
-	const STRING& RequestId, GDT_BOOLEAN JsonOutput)
+	const STRING& RequestId, GDT_BOOLEAN IncludeUrl,
+	GDT_BOOLEAN IncludeHeadline, GDT_BOOLEAN IncludeRecordKey,
+	GDT_BOOLEAN JsonOutput)
 {
   PRSET prset;
   PIRSET pirset;
@@ -754,10 +759,10 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
       NextUrl.Cat(DBName);
       NextUrl.Cat("/search?start=");
       CHR num[32];
-      sprintf(num, "%d", Start + MaxHits);
+      snprintf(num, sizeof(num), "%d", Start + MaxHits);
       NextUrl.Cat(num);
       NextUrl.Cat("&max_hits=");
-      sprintf(num, "%d", MaxHits);
+      snprintf(num, sizeof(num), "%d", MaxHits);
       NextUrl.Cat(num);
       cout << "\"";
       cout << NextUrl;
@@ -773,10 +778,10 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
       PrevUrl.Cat(DBName);
       PrevUrl.Cat("/search?start=");
       CHR num[32];
-      sprintf(num, "%d", PrevStart);
+      snprintf(num, sizeof(num), "%d", PrevStart);
       PrevUrl.Cat(num);
       PrevUrl.Cat("&max_hits=");
-      sprintf(num, "%d", MaxHits);
+      snprintf(num, sizeof(num), "%d", MaxHits);
       PrevUrl.Cat(num);
       cout << "\"";
       cout << PrevUrl;
@@ -846,6 +851,17 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
     Score = prset->GetScaledScore(RsRecord.GetScore(),ScoreScale);
 
     if (JsonOutput) {
+      // BUGFIX #5 (docs/BUG_CATALOG.md#isearch-cgiisrch_srchcxx):
+      // IncludeUrl/IncludeHeadline/IncludeRecordKey were computed from
+      // the INCLUDE_URL/INCLUDE_HEADLINE/INCLUDE_RECORD_KEY CGI
+      // parameters (matching api_request.hxx's identically-named,
+      // correctly-wired fields) but never actually used anywhere --
+      // every hit always included the real headline/record_key/url
+      // regardless of what the client asked to exclude. Fixed to match
+      // the rest of the JSON API family's own convention exactly (see
+      // Isearch-cgi/api_response.cxx's WriteSearchHit()): the key stays
+      // present either way, the value becomes "" (headline/record_key)
+      // or null (url) when excluded.
       if (i > Start) cout << ",";
       cout << "{";
       cout << "\"match_number\":" << i << ",";
@@ -853,11 +869,19 @@ INT Search(PCHR DBPath, PCHR DBName, STRING& query_str, STRING& ESName,
       cout << "\"filename\":";
       PrintJsonEscaped(File);
       cout << ",\"headline\":";
-      PrintJsonEscaped(Headline);
+      if (IncludeHeadline) {
+        PrintJsonEscaped(Headline);
+      } else {
+        PrintJsonEscaped("");
+      }
       cout << ",\"record_key\":";
-      PrintJsonEscaped(RecordKey);
+      if (IncludeRecordKey) {
+        PrintJsonEscaped(RecordKey);
+      } else {
+        PrintJsonEscaped("");
+      }
       cout << ",\"url\":";
-      if (url) {
+      if (IncludeUrl && url) {
 	STRING UrlString = url;
 	PrintJsonEscaped(UrlString);
       } else {
