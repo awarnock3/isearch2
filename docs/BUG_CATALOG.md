@@ -7807,6 +7807,49 @@ No test file was written for the reasons in the scope note above;
 `BUGFIX #1` is documented in detail here and at its comment site in
 source instead, matching `src/Iget.cxx`/`src/Iindex.cxx`'s precedent.
 
+**Reopened 2026-08-31 — user-reported bug** (via the project owner's
+friend): `bin/Isearch -V` produced no output and exited `1`, unlike
+`bin/Iindex -V`, which correctly prints its version and exits `0`.
+
+2. **`-V` printed nothing and exited via `RETURN_ERROR` — confirmed a
+   real, reproducible defect, not a doc/behavior mismatch.** The usage
+   text (printed for `argc < 2`) explicitly documents `-V` as `# Print
+   the version number.`, but the flag's own handler was a bare
+   `RETURN_ERROR` (flush and `return(1)`, no output at all) with a
+   commented-out `fflush(stdout); fflush(stderr); exit (0);` sitting
+   directly above it — a real regression, not a stub that was never
+   finished. Compared against `src/Iindex.cxx`'s own `-V` case, which
+   is *also* just a bare `RETURN_ZERO` with no print statement, yet
+   visibly works (`Iindex -V` does print `Iindex v2.00`) — traced this
+   to `Iindex.cxx`'s `main()` printing its version banner
+   *unconditionally as its first statement*, before any argument
+   parsing begins at all, so by the time `-V` is recognized the banner
+   has already printed as a side effect of program startup, not of the
+   `-V` handling itself. `Isearch.cxx` has no such unconditional
+   banner — its own version print exists but sits later in `main()`,
+   gated behind `!TerseFlag`, on a code path this early-return case
+   never reaches. Confirmed live with the real production binary
+   before the fix: `bin/Isearch -V` produced zero output and exited
+   `1`. Fixed by printing the version directly in the `-V` case itself
+   (not relying on the later, unreachable-from-here print statement)
+   and returning `0` via `RETURN_ZERO` instead of `RETURN_ERROR` — this
+   is a successful informational request, not an error. Re-verified
+   live post-fix: `Isearch v2.00`, exit `0`, matching `Iindex -V`'s
+   behavior. Also checked the other 3 occurrences of this file's same
+   commented-out-`exit`-then-`RETURN_*` pattern (the `argc < 2` usage
+   dump, the `-o`-with-no-value error, and the normal end-of-program
+   exit) — all three are genuine error/success paths that already
+   print their own message (or, for the final exit, correctly use
+   `RETURN_ZERO` with nothing left to print), confirming `-V` was an
+   isolated regression, not a wider pattern. See `BUGFIX #2` in source.
+
+Re-verified after this fix: `make isearch`/`make smoke-test` both pass
+clean, a real search (`Isearch -d <db> -t <term>`) still returns
+correct results, and the `argc < 2` usage-dump path still correctly
+exits `1` with its full help text (unaffected by this change). `make
+tests`/`make tests-asan` unaffected (main()-only, never linked into the
+test tree; 837 test cases, 3080 assertions, unchanged).
+
 ## src/nlist.hxx
 
 Reprocessed via `/reprocess-blocked` (originally blocked at GENERAL
