@@ -116,7 +116,7 @@
 | 112 | src/Firewall.h | done | 2026-08-09 | [BUG_CATALOG.md#srcfirewallh](BUG_CATALOG.md#srcfirewallh) |
 | 113 | src/Iget.cxx | done | 2026-08-09 | [BUG_CATALOG.md#srcigetcxx](BUG_CATALOG.md#srcigetcxx) |
 | 114 | src/Iindex.cxx | done | 2026-08-09 | [BUG_CATALOG.md#srciindexcxx](BUG_CATALOG.md#srciindexcxx) |
-| 115 | src/Isearch.cxx | done | 2026-08-09 | [BUG_CATALOG.md#srcisearchcxx](BUG_CATALOG.md#srcisearchcxx) |
+| 115 | src/Isearch.cxx | done | 2026-08-31 | [BUG_CATALOG.md#srcisearchcxx](BUG_CATALOG.md#srcisearchcxx) |
 | 116 | src/Iutil.cxx | done | 2026-08-09 | [src/Iutil.cxx](BUG_CATALOG.md#srciutilcxx) |
 | 117 | src/attr.cxx | done | 2026-08-07 | [src/attr.cxx](BUG_CATALOG.md#srcattrcxx) |
 | 118 | src/attrlist.cxx | done | 2026-08-07 | [src/attrlist.hxx](BUG_CATALOG.md#srcattrlisthxx) |
