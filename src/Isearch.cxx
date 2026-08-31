@@ -42,7 +42,7 @@ Description:	Command-line search utility
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
-// ISEARCH2-CLEANUP: processed 2026-08-09
+// ISEARCH2-CLEANUP: processed 2026-08-09, reprocessed 2026-08-31
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 // NOTE: this is a `main()`-only CLI entry point (like src/Iget.cxx and
 // src/Iindex.cxx), so it cannot be linked into the shared Catch2 test
@@ -55,7 +55,9 @@ Author:		Nassib Nassar, nrn@cnidr.org
 // own implementation in src/vidb.cxx to confirm a real (not
 // hypothetical) nullptr-return path; see docs/BUG_CATALOG.md for the
 // full note, including a documented-but-unimplemented `-RECT{...}`
-// flag left as-is rather than guessed-at.
+// flag left as-is rather than guessed-at. Reopened 2026-08-31 for a
+// user-reported bug in the very argument-parsing loop this turn's own
+// audit covered but missed -- see `BUGFIX #2`.
 
 #include <stdio.h>
 #include <string.h>
@@ -307,8 +309,22 @@ int main(int argc, char** argv) {
 	LastUsed = x;
       }
       if (Flag.Equals("-V")) {
-	//	fflush(stdout); fflush(stderr); exit (0);
-	RETURN_ERROR;
+	// BUGFIX #2 (docs/BUG_CATALOG.md#srcisearchcxx): this printed
+	// nothing and exited 1 (a real-error code) instead of printing
+	// the version and exiting 0, as the file's own usage text (`-V
+	// # Print the version number.`) promises. Unlike src/Iindex.cxx
+	// -- whose main() prints its version banner unconditionally as
+	// the very first statement, before argument parsing even starts,
+	// so its own near-identical `RETURN_ZERO`-only `-V` case works
+	// only as a side effect -- this file's version print happens
+	// later, gated behind `!TerseFlag`, well after this early-return
+	// case. Confirmed live: `bin/Isearch -V` produced no output and
+	// exited 1 before this fix. Fixed by printing directly here
+	// instead of relying on a later code path this case never
+	// reaches, and returning 0 to match the actual outcome (this is
+	// a successful informational request, not an error).
+	fprintf(stderr,"Isearch v%s\n", IsearchVersion);
+	RETURN_ZERO;
       }
       if (Flag.Equals("-debug")) {
 	DebugFlag = 1;
