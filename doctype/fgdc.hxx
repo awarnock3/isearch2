@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		fgdc.hxx
 Version:	1.00
@@ -43,6 +46,19 @@ Copyright:	A/WWW Enterprises, MCNC/CNIDR and USGS/FGDC
 #define SHORT_FGDC_TEXT_EXTENSION_UC "TXT"
 #define SHORT_FGDC_XML_EXTENSION_UC  "XML"
 
+// A USGS/FGDC (Federal Geographic Data Committee) SGML-tagged metadata
+// DOCTYPE, built on SGMLNORM's tag-based parsing -- the third sibling
+// in a family with doctype/cipc.cxx and doctype/cipp.cxx (same
+// ParseFields()/LoadFieldTable()/ParseDate()/ParseDateRange()/
+// parse_tags()/find_end_tag() structure and bugs; see doctype/cipc.hxx
+// for the shared architecture description and doctype/fgdc.cxx's
+// BUGFIX comments for the cross-references). ParseFields() walks
+// SGML-style <tag>value</tag> pairs (nesting handled via the Nested
+// stack of MD_Element), indexing both a short field name and a full,
+// underscore-joined nested field-path name for each recognized tag.
+// Also home to the live, canonical GetNumericValue() that
+// doctype/cipc.cxx and doctype/cipp.cxx both rely on via their own
+// commented-out copies + extern declarations.
 class FGDC
   : public SGMLNORM
 {

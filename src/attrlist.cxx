@@ -42,6 +42,9 @@ Description:	Class ATTRLIST - Attribute List
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "attrlist.hxx"
 
 
@@ -50,16 +53,42 @@ ATTRLIST::ATTRLIST() {
 }
 
 
-void
-ATTRLIST::Init() {
-  Table        = new ATTR[7];
-  TotalEntries = 0;
-  MaxEntries   = 8;
+// BUGFIX #1: see docs/BUG_CATALOG.md. Deep-copies Table instead of
+// sharing the source's pointer.
+ATTRLIST::ATTRLIST(const ATTRLIST& OtherAttrlist) {
+  INT x;
+  Table = new ATTR[OtherAttrlist.MaxEntries];
+  for (x=0; x<OtherAttrlist.TotalEntries; x++) {
+    Table[x] = OtherAttrlist.Table[x];
+  }
+  TotalEntries = OtherAttrlist.TotalEntries;
+  MaxEntries = OtherAttrlist.MaxEntries;
 }
 
 
-ATTRLIST& 
+// BUGFIX #3: Table was allocated as `new ATTR[7]` while MaxEntries was
+// set to 8, so AddEntry's `TotalEntries == MaxEntries` bounds check
+// let the 8th entry write to Table[7] -- one past the end of a 7-slot
+// array, a real heap buffer overflow on every ATTRLIST that ever grows
+// past 7 entries. Computing the allocation size from MaxEntries itself
+// makes the two impossible to drift apart again. See docs/BUG_CATALOG.md.
+void
+ATTRLIST::Init() {
+  MaxEntries   = 8;
+  Table        = new ATTR[MaxEntries];
+  TotalEntries = 0;
+}
+
+
+ATTRLIST&
 ATTRLIST::operator=(const ATTRLIST& OtherAttrlist) {
+  // BUGFIX #2: no self-assignment guard -- `delete [] Table; Init();`
+  // ran before OtherAttrlist.GetTotalEntries() was read, so `x = x;`
+  // saw an already-emptied list and copied nothing back, silently
+  // wiping it. See docs/BUG_CATALOG.md.
+  if (this == &OtherAttrlist) {
+    return *this;
+  }
   if (Table) {
     delete [] Table;
   }

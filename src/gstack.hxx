@@ -33,6 +33,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef _GSTACK_HXX_
 #define _GSTACK_HXX_
 
@@ -43,12 +46,22 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
    Define some useful derived stack stuff
 */
 
+// A LIFO stack of untyped GATOM* pointers, backed by its own GLIST
+// (Stack) and a CurrentIndex cursor onto its current top cell. The
+// "public GLIST" base class below is unused dead weight -- every
+// GSTACK method operates on the Stack member, never on the inherited
+// GLIST's own Head/Tail/Length -- but removing it is a signature
+// change (GENERAL step 4 header freeze); see
+// docs/BUG_CATALOG.md#srcgstackhxx for why this turn documented it
+// instead of fixing it.
 class GSTACK : public GLIST {
 public:
   GSTACK();
   INT GetSize();
+  // Returns nullptr if the stack is empty, without pushing/popping.
   GATOM* Top();
   void Push(GATOM* a);
+  // Returns nullptr if the stack is empty.
   GATOM* Pop();
 private:
   GLIST Stack;

@@ -35,6 +35,8 @@ THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 /*@@@
 File:		intlist.hxx
@@ -64,8 +66,13 @@ Author:		Archie Warnock (warnock@clark.net), derived from J. Fullton's
 enum IntBlock { START_BLOCK, END_BLOCK, PTR_BLOCK };
 
 
-class INTERVALLIST 
-  : public NUMERICLIST 
+/// Owns a heap-allocated, growable table of INTERVALFLD entries used
+/// for numeric-interval range search. Non-copyable, matching
+/// NUMERICLIST above: no live call site ever copies one (see
+/// BUGFIX #1), so the copy constructor and operator= are both deleted
+/// rather than given deep-copy semantics.
+class INTERVALLIST
+  : public NUMERICLIST
 {
 private:
     
@@ -103,6 +110,16 @@ private:
 public:
   INTERVALLIST();
   INTERVALLIST(INT n);
+  // BUGFIX #1 (docs/BUG_CATALOG.md#srcintlisthxx): INTERVALLIST owned
+  // its own `table` (heap-allocated, freed in ~INTERVALLIST()) with no
+  // user-declared copy constructor or operator= -- the compiler-
+  // generated ones shallow-copied `table` (and, via NUMERICLIST's own
+  // now-fixed copy semantics, would have hit the identical bug one
+  // level up too), confirmed to cause a heap-use-after-free (ASan) on
+  // copy. No live call site ever copies an INTERVALLIST, so it's made
+  // explicitly non-copyable rather than given deep-copy semantics.
+  INTERVALLIST(const INTERVALLIST&) = delete;
+  INTERVALLIST& operator=(const INTERVALLIST&) = delete;
   void   SortByStart();              // sort numeric field items
   void   SortByEnd();                // sort numeric field items
   void   SortByGP();                 // sort numeric field items

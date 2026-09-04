@@ -8,6 +8,9 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #ifndef STOPWORD_HXX
 #define STOPWORD_HXX
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "defs.hxx"
 #include "string.hxx"
 #include "strlist.hxx"
@@ -15,6 +18,11 @@ Author:		Nassib Nassar, nrn@cnidr.org
 const INT MaxStopWordLength = 16;	// Should be moved to defs.hxx, ultimately should be configurable.
 					// Note that actual maximum word length is MaxStopWordLength - 1.
 
+// A stop word list backed by a flat fixed-record (MaxStopWordLength
+// bytes each) memory block, loaded from and flushed back to a single
+// file. Unrelated to IDBOBJ::IsStopWord() (a different, pure-virtual
+// per-doctype mechanism) despite the similar name -- this class has no
+// callers anywhere in the current tree. See stopword.cxx for details.
 //@ManMemo: Stop word list class.
 class STOPWORD {
 public:
@@ -44,9 +52,6 @@ private:
 	//@ManMemo: File name of the file to be mapped to this object, changes are flushed to this file.
 	STRING SwFileName;
 };
-
-//@ManMemo: Comparison function used by STOPWORD class for qsort() and bsearch().
-static int StopwordCompareWords(const void* Word1, const void* Word2);
 
 #endif
 

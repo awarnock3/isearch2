@@ -33,6 +33,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:		gils.cxx
 Version:	1.00
@@ -53,7 +56,10 @@ Author:		Archie Warnock, warnock@clark.net
 GILS::GILS(PIDBOBJ DbParent) : SGMLNORM(DbParent) {
 }
 
-void GILS::Present(const RESULT& ResultRecord, const STRING& ElementSet, 
+// ElementSet "B" returns just the "title" field; anything else reads
+// a pre-rendered static output file straight off disk, choosing its
+// extension from RecordSyntax.
+void GILS::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 		     const STRING& RecordSyntax, PSTRING StringBuffer)
 {
 
@@ -84,14 +90,20 @@ void GILS::Present(const RESULT& ResultRecord, const STRING& ElementSet,
     n = FullFilename.SearchReverse('.');
     FullFilename.EraseAfter(n);
 
+    // Removed here: two dead `else if` branches that duplicated the
+    // HtmlRecordSyntax and SgmlRecordSyntax conditions immediately
+    // above them verbatim -- unlike doctype/fgdcsite.cxx's identically-
+    // shaped duplication (see docs/BUG_CATALOG.md#doctypefgdcsitecxx),
+    // both real syntaxes here are already correctly handled by their
+    // first (non-duplicate) branch, so these were 100% unreachable
+    // dead code, not a functional bug: every RecordSyntax value
+    // already produced the correct extension without them (XML in
+    // particular via the final catch-all `else`, since no distinct
+    // XmlRecordSyntax branch exists here either).
     if (RecordSyntax.Equals(HtmlRecordSyntax))
-      FullFilename.Cat(GILS_HTML_EXTENSION);
-    else if (RecordSyntax.Equals(HtmlRecordSyntax))
       FullFilename.Cat(GILS_HTML_EXTENSION);
     else if (RecordSyntax.Equals(SutrsRecordSyntax))
       FullFilename.Cat(GILS_TEXT_EXTENSION);
-    else if (RecordSyntax.Equals(SgmlRecordSyntax))
-      FullFilename.Cat(GILS_SGML_EXTENSION);
     else if (RecordSyntax.Equals(SgmlRecordSyntax))
       FullFilename.Cat(GILS_SGML_EXTENSION);
     else
@@ -105,13 +117,19 @@ void GILS::Present(const RESULT& ResultRecord, const STRING& ElementSet,
       return;
     }
 
+    // BUGFIX #1 (docs/BUG_CATALOG.md#doctypegilscxx): both of these
+    // early returns used to leave fp open -- fclose() was only ever
+    // reached on the success path further down. Same leaked-resource-
+    // on-early-return shape as doctype/bibtex.cxx's BUGFIX #3.
     if ((n=fseek(fp, 0L, SEEK_END)) != 0) {
+      fclose(fp);
       return;
     }
 
     lRecEnd = ftell(fp);
 
     if ((n=fseek(fp, lRecStart, SEEK_SET)) != 0) {
+      fclose(fp);
       return;
     }
 

@@ -1,5 +1,16 @@
 // -*- C++ -*-
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+// NOTE: neither this file nor its implementation (src/Debug.cc) is
+// included anywhere else in src/, doctype/, or Isearch-cgi/, and
+// DEBUGCLASS is never defined by the top-level Makefile -- both files
+// are effectively orphaned/dead in the current build (the stub Debug
+// class below is what every translation unit would actually get if it
+// ever did include this header). Processed anyway since it carries a
+// PROCESSING_STATUS.md row and its bugs are real, reachable the moment
+// DEBUGCLASS is defined; see docs/BUG_CATALOG.md for the full note.
+
 #ifndef DebugInfo_h
 #define DebugInfo_h
 
@@ -16,6 +27,9 @@
 #endif
 
 #ifndef DEBUGCLASS
+/// No-op stand-in used whenever DEBUGCLASS isn't defined (the case
+/// everywhere in this tree's current build) -- every call compiles away
+/// to nothing.
 class Debug
 {
 public:
@@ -24,6 +38,10 @@ public:
     static void out(const char *, ...) { return; }
 };
 #else
+/// Category-gated debug logger: active() is true only when this
+/// instance's category string was listed in the ';'-separated
+/// DEBUG_OPT environment variable at first use (see Debug::_init() in
+/// Debug.cc); out() logs to cerr only when active().
 class Debug
 {
 public:

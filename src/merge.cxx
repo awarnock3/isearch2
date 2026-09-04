@@ -40,10 +40,18 @@ Description:	Class MERGE
 Author:		Jon Magid, jem@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <memory.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include "defs.hxx"
+// BUGFIX #2 (docs/BUG_CATALOG.md#srcmergecxx): this file never
+// included its own header at all, which is why the buildHeap()
+// signature mismatch (BUGFIX #3) went uncaught. Including it here
+// makes the compiler enforce future consistency.
+#include "merge.hxx"
 
 void printint(int *data, int nel) {
   for (int i = 0; i < nel; i++)
@@ -51,19 +59,37 @@ void printint(int *data, int nel) {
   puts("");
 }
 
-void buildGpHeap(GPTYPE *data, size_t heapsize, 
+void buildGpHeap(GPTYPE *data, size_t heapsize,
 	int (*compar)(const void *, const void *), int position, int reverse) {
+  // BUGFIX #4 (modernization, docs/BUG_CATALOG.md#srcmergecxx):
+  // unlike buildHeap() below, this function has no reverse-aware
+  // branch at all -- every real call in this tree passes reverse=0
+  // (confirmed via grep, no other caller exists), so this parameter
+  // is kept only for signature symmetry with buildHeap() and is
+  // genuinely unused, not a missing feature with an observable gap.
+  (void)reverse;
 
   int childpos;
   GPTYPE value;
 
   value = data[position];
 
-  while (position < heapsize) {
+  while ((size_t)position < heapsize) {
     childpos = position * 2 + 1;
-    if (childpos < heapsize) {
-      if ((childpos < heapsize) && 
-	  ( ((*compar)( ((void *)(data + childpos + 1)), 
+    if ((size_t)childpos < heapsize) {
+      // BUGFIX #1 (docs/BUG_CATALOG.md#srcmergecxx): guarded the
+      // data[childpos+1] read with `childpos < heapsize` -- already
+      // true from the enclosing `if` -- instead of `childpos + 1 <
+      // heapsize`, the check its sibling buildHeap() (below) already
+      // gets right for the identical "does this node have a second
+      // child" question. Whenever childpos was exactly heapsize-1 (its
+      // own last valid index), this read one element past heapsize --
+      // and on GpHsort()'s very first pass, heapsize equals the full
+      // array size, so that was one past the actual allocation.
+      // Confirmed with a standalone repro under ASan: an 8-element
+      // array produced a heap-buffer-overflow read at this line.
+      if (((size_t)childpos + 1 < heapsize) &&
+	  ( ((*compar)( ((void *)(data + childpos + 1)),
 		       ((void *)(data + childpos)))) == 1 ))
 	childpos++;
       if ( ((*compar)((void *)&value, (void *)(data + childpos))) > 0) {
@@ -93,14 +119,14 @@ void buildHeap(void *data, size_t heapsize, size_t width,
 
   memcpy(value, ((char *)data + (width * position) ), width);
 
-  while (position < heapsize) {
+  while ((size_t)position < heapsize) {
     childpos = position * 2 + 1;
-    
+
     //if there is a child...
-    if (childpos < heapsize) {
+    if ((size_t)childpos < heapsize) {
 
       //if there is another child
-      if (childpos + 1 < heapsize) {
+      if ((size_t)childpos + 1 < heapsize) {
 				
 	//make childpos equal to the greatest child
 	//(unless we're reversed)

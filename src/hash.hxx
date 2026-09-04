@@ -6,9 +6,16 @@
 	5/2/96
 
 */
+// ISEARCH2-CLEANUP: processed 2026-08-06
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef HASH_HXX
 #define HASH_HXX
+
+// BUGFIX #1: header used INT/CHR and STRING without including their
+// definitions; see docs/BUG_CATALOG.md#srchashhxx.
+#include "gdt.h"
+#include "string.hxx"
 
 // typedef your hash table parameters
 // these should be changed for your application
@@ -51,6 +58,10 @@ State} variable contains the following information:
 \end{tabular}
 \end{center}
 
+Note: no public method currently sets State to 2 (there is no
+Delete/Remove) -- the tombstone case above is real probing logic
+{\em Insert}/{\em Find}/{\em Check} all handle, but it's presently
+unreachable in this codebase.
 
 */
 

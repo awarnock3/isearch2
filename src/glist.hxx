@@ -33,6 +33,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef _GLIST_HXX_
 #define _GLIST_HXX_
 
@@ -73,6 +76,16 @@ struct _gcell {
 
 typedef GPOSITION *PGPOSITION;
 
+// A generic intrusive-cell doubly-linked list of untyped GATOM*
+// pointers (each cell also tags its atom with a LIST_* type code, or a
+// caller-defined one). GLIST owns and heap-allocates the GPOSITION
+// cells themselves (InsertAfter()/InsertBefore() `new` them, Delete()
+// `delete`s them) but never owns the GATOM data they point to -- see
+// Delete()'s precondition. Note: GLIST has no destructor, so any cells
+// still in the list when a GLIST is destroyed are leaked; callers are
+// expected to Delete() every remaining cell first (see
+// docs/BUG_CATALOG.md#srcglisthxx for why this wasn't changed --
+// fixing it needs a header change).
 class GLIST {
 public:
   GLIST();
@@ -81,14 +94,24 @@ public:
   GPOSITION* Last();
   GPOSITION* Next(GPOSITION *c);
   GPOSITION* Prev(GPOSITION *c);
+  // Inserts a new cell holding a (tagged with Type) immediately before
+  // c, by inserting after c and then swapping the two cells' contents
+  // -- c keeps its identity/position for any other GPOSITION* already
+  // pointing at it, but now holds the new data.
   GDT_BOOLEAN InsertBefore(GPOSITION *c, GATOM *a, int Type);
+  // c == nullptr is only valid when the list is empty (starts a new
+  // Head/Tail); otherwise inserts immediately after c.
   GDT_BOOLEAN InsertAfter(GPOSITION *c, GATOM *a, int Type);
+  // Same as the 4-argument overloads, tagged with LIST_PTR.
   GDT_BOOLEAN InsertBefore(GPOSITION *c, GATOM *a);
   GDT_BOOLEAN InsertAfter(GPOSITION *c, GATOM *a);
   GATOM* Retrieve(GPOSITION *c);
+  // Replaces c's atom in place; does not change c's type tag.
   GDT_BOOLEAN Update(GPOSITION *c, GATOM *a);
   INT GetLength();
   INT DataType(GPOSITION *c);
+  // Unlinks and frees cell c (not its atom -- see the class comment
+  // above). Any other GPOSITION* pointing at c becomes dangling.
   void Delete(GPOSITION *c);
 
 private:

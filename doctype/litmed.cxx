@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 static const char RCS_Id[]="$Id: litmed.cxx,v 1.1 1998/05/19 21:01:46 cnidr Exp $";
 
 /*
@@ -113,10 +116,10 @@ ________________________________________________________________________________
 ************************************************************************/
 
 /*-@@@
-File:		html.cxx
+File:		litmed.cxx
 Version:	$Revision: 1.1 $
-Description:	Class HTMLTAG - WWW HTML Document Type
-Author:   	Edward C. Zimmermann, edz@bsn.com
+Description:	Class LITMED - WWW LITMED Document Type
+Author:   	Edward C. Zimmermann, edz@bsn.com/Roy Smith, roy@nyu.edu
 Copyright:	Basis Systeme netzwerk, Munich
 @@@-*/
 
@@ -140,6 +143,11 @@ LITMED::LITMED (PIDBOBJ DbParent) : SGMLNORM (DbParent)
 {
 }
 
+// Record splitting is entirely inherited from SGMLNORM; the #else
+// branch below (permanently disabled by #if 1, never compiled) is
+// abandoned work-in-progress per its own "DOES NOT WORK, Why?"
+// comment -- left untouched rather than modernized, same as
+// doctype/html.cxx's identical block.
 void LITMED::ParseRecords (const RECORD& FileRecord)
 {
 #if 1
@@ -184,6 +192,14 @@ void LITMED::ParseRecords (const RECORD& FileRecord)
 }
 
 // Kludge to identity Attribute tags
+//
+// Documented, not changed: Tags[] below holds only its own
+// nullptr-terminator sentinel -- no real entries were ever filled in
+// (unlike doctype/html.cxx's IsHTMLAttributeTag(), the ancestor this
+// was adapted from, whose equivalent table lists "html"/"meta"/"a"/
+// etc.), so this always returns 0 ("not found") for any input. Left
+// as-is rather than guessing at what LITMED-specific tags should be
+// listed here -- there's no basis in this file for inventing content.
 static inline int IsLITMEDAttributeTag (const char *tag)
 {
   // HTML Attributes where we are also interested in values
@@ -191,7 +207,7 @@ static inline int IsLITMEDAttributeTag (const char *tag)
     char *tag;
     unsigned char len;
   } Tags[] = {
-    { NULL, 0 }
+    { nullptr, 0 }
   };
 
   if (*tag == '/')
@@ -289,27 +305,15 @@ static int IgnoreLITMEDTag (const char *tag)
 }
 #endif
 
-// Search for the next occurance of an element of tags in tag_list
-static const char *find_next_tag (const char *const *tag_list, const char *const *tags)
-{
-  if (*tag_list == NULL)
-    return NULL;
-
-  for (size_t i = 1; tag_list[i]; i++)
-    {
-      for (size_t j = 0; tags[j]; j++)
-	{
-	  if (0 == StrCaseCmp (tag_list[i], tags[j]))
-	    {
-//            cout << "LITMED implied: End of < " << *tag_list << "> is <" << tags[j] << ">\n";
-	      return tag_list[i];
-	    }
-	}
-    }
-  return NULL;			// No end tag found
-
-}
-
+// Removed here: a `find_next_tag()` helper (surfaced by
+// -Wunused-function while bringing this file to a clean -Wall -Wextra
+// build for the first time). doctype/html.cxx (this file's own direct
+// ancestor -- see the "based on BSN's html.cxx" note at the top of
+// this file) uses its own copy of this same helper for a "minimized
+// tag" fallback (handling <DD>/<DT>/<LI>/<TL> used without a matching
+// close tag) -- but that fallback logic itself was never carried over
+// into this file's ParseFields(), leaving the helper with no caller
+// at all.
 
 // Parse more-or-less valid HTML (as well as a few typical
 // invalid but common constructs).
@@ -323,7 +327,7 @@ void LITMED::ParseFields (PRECORD NewRecord)
   NewRecord->GetFullFileName (&fn);
   PFILE fp = fopen (fn, "rb");
 
-  if (fp == NULL)
+  if (fp == nullptr)
     {
     error:
       cout << "Unable to parse LITMED file \"" << fn << "\"\n";
@@ -336,10 +340,29 @@ void LITMED::ParseFields (PRECORD NewRecord)
     {
       fseek (fp, 0, SEEK_END);
       RecStart = 0;
-      RecEnd = ftell (fp) - 1;
+      // BUGFIX #2 (docs/BUG_CATALOG.md#doctypelitmedcxx): this file is
+      // based on doctype/html.cxx (see the header comment above and
+      // this file's own top-of-file "based on BSN's html.cxx" note),
+      // whose corresponding line is plain `RecEnd = ftell (fp);` --
+      // the `- 1` here is this file's own, distinct authoring error,
+      // not something carried over unfixed. Same off-by-one shape as
+      // doctype/iknowdoc.cxx's BUGFIX #3: it made RecLength one byte
+      // short of the real file size, so the last byte of the file was
+      // never fread() into RecBuffer.
+      RecEnd = ftell (fp);
     }
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypelitmedcxx): this used to
+  // `goto error` directly, but that shared label's own cout+return
+  // doesn't fclose(fp) -- correctly so for the fp==nullptr case above
+  // (nothing to close), but this call site reaches it with a real,
+  // open fp from the successful fopen() above, leaking it. Same
+  // leaked-resource-on-early-return shape as doctype/html.cxx's
+  // BUGFIX #1 (this file's own direct ancestor).
   if (-1 == fseek (fp, RecStart, SEEK_SET))
-    goto error;			// ERROR
+    {
+      fclose (fp);
+      goto error;		// ERROR
+    }
 
   // Read the whole record in a buffer
   GPTYPE RecLength = RecEnd - RecStart;
@@ -355,7 +378,7 @@ void LITMED::ParseFields (PRECORD NewRecord)
   DFD dfd;
 
   PCHR *tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL)
+  if (tags == nullptr)
     {
       delete[]RecBuffer;	// Clean up
       goto error;		// ERROR
@@ -378,7 +401,7 @@ void LITMED::ParseFields (PRECORD NewRecord)
 
       const char *p = find_end_tag (tags_ptr, *tags_ptr);
 
-      if (p != NULL)
+      if (p != nullptr)
 	{
 	  // We have a tag pair
 	  size_t tag_len = strlen (*tags_ptr);
@@ -426,7 +449,7 @@ void LITMED::ParseFields (PRECORD NewRecord)
 	{
 	  store_attributes (/* Db, */ pdft, RecBuffer, *tags_ptr);
 	}
-      else if (p == NULL)
+      else if (p == nullptr)
 	{
 #if STRICT_LITMED
 	  // Give some information
@@ -443,6 +466,9 @@ void LITMED::ParseFields (PRECORD NewRecord)
   delete [] tags;
 }
 
+// ElementSet BRIEF_MAGIC ("B") returns the "title" field; anything
+// else is treated as a literal field name and delegated to
+// SGMLNORM::Present().
 void LITMED:: Present (const RESULT& ResultRecord, const STRING& ElementSet,
  PSTRING StringBuffer)
 {

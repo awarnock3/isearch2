@@ -42,6 +42,23 @@ Description:	Command-line search utility
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09, reprocessed 2026-08-31
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+// NOTE: this is a `main()`-only CLI entry point (like src/Iget.cxx and
+// src/Iindex.cxx), so it cannot be linked into the shared Catch2 test
+// binary (its `main()` would collide with catch_amalgamated.cpp's
+// own). At 754 lines the deep audit prioritized the search/result-set
+// pipeline (VIDB::Search()/AndSearch() and their return-value handling)
+// and the argument-parsing loop over the JSON-output/interactive-
+// browsing tail of main(). Verified via compile-clean confirmation and
+// manual trace-through, including reading VIDB::Search()/AndSearch()'s
+// own implementation in src/vidb.cxx to confirm a real (not
+// hypothetical) nullptr-return path; see docs/BUG_CATALOG.md for the
+// full note, including a documented-but-unimplemented `-RECT{...}`
+// flag left as-is rather than guessed-at. Reopened 2026-08-31 for a
+// user-reported bug in the very argument-parsing loop this turn's own
+// audit covered but missed -- see `BUGFIX #2`.
+
 #include <stdio.h>
 #include <string.h>
 #include <locale.h>
@@ -86,6 +103,9 @@ static void PrintJsonEscaped(const STRING& Value) {
   delete [] text;
 }
 
+/// Parses search flags (-d/-p/-f/-json/-and/-rpn/-infix/-syn/...) and a
+/// trailing word list, runs the query against the named database, then
+/// either prints JSON (-json) or an interactive/terse result listing.
 int main(int argc, char** argv) {
   if (argc < 2) {
     fprintf(stderr,"Isearch v%s\n", IsearchVersion);
@@ -289,8 +309,22 @@ int main(int argc, char** argv) {
 	LastUsed = x;
       }
       if (Flag.Equals("-V")) {
-	//	fflush(stdout); fflush(stderr); exit (0);
-	RETURN_ERROR;
+	// BUGFIX #2 (docs/BUG_CATALOG.md#srcisearchcxx): this printed
+	// nothing and exited 1 (a real-error code) instead of printing
+	// the version and exiting 0, as the file's own usage text (`-V
+	// # Print the version number.`) promises. Unlike src/Iindex.cxx
+	// -- whose main() prints its version banner unconditionally as
+	// the very first statement, before argument parsing even starts,
+	// so its own near-identical `RETURN_ZERO`-only `-V` case works
+	// only as a side effect -- this file's version print happens
+	// later, gated behind `!TerseFlag`, well after this early-return
+	// case. Confirmed live: `bin/Isearch -V` produced no output and
+	// exited 1 before this fix. Fixed by printing directly here
+	// instead of relying on a later code path this case never
+	// reaches, and returning 0 to match the actual outcome (this is
+	// a successful informational request, not an error).
+	fprintf(stderr,"Isearch v%s\n", IsearchVersion);
+	RETURN_ZERO;
       }
       if (Flag.Equals("-debug")) {
 	DebugFlag = 1;
@@ -470,6 +504,19 @@ int main(int argc, char** argv) {
     pirset = pdb->AndSearch(squery);
   } else {
     pirset = pdb->Search(squery);
+  }
+
+  // BUGFIX #1 (docs/BUG_CATALOG.md#srcisearchcxx): VIDB::Search()/
+  // AndSearch() (src/vidb.cxx) both return nullptr when the virtual
+  // database has no usable sub-databases ("Bail out if no databases",
+  // c_dbcount <= 0) -- a real, reachable state for a misconfigured or
+  // empty virtual-database registry, not just a defensive guess. The
+  // very next line used to dereference pirset unconditionally.
+  if (!pirset) {
+    fprintf(stderr,"ERROR: Search failed (no usable databases).\n");
+    delete [] WordList;
+    delete pdb;
+    RETURN_ERROR;
   }
 
   n = pirset->GetTotalEntries();

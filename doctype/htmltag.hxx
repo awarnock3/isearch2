@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:		htmltag.hxx
 Version:	1.0
@@ -11,7 +14,12 @@ Author:         Nassib Nassar <nassar@etymon.com>
 #include "defs.hxx"
 #include "doctype.hxx"
 
-class HTMLTAG 
+// An HTML DOCTYPE that only ever looks inside <HEAD>...</HEAD>,
+// indexing the <TITLE> text and every <META NAME="..." CONTENT="...">
+// as its own field, via a character-at-a-time fgetc() tokenizer --
+// structurally similar to doctype/eos_guide.cxx, though not derived
+// from it.
+class HTMLTAG
   : public DOCTYPE {
 
 public:

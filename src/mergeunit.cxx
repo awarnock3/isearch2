@@ -35,6 +35,8 @@ THE POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT
 OF OR IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 /*@@@
 File:		mergeunit.cxx
@@ -92,7 +94,8 @@ Author:		Jim Fullton, Jim.Fullton@cnidr.org
 #include "filemap.hxx"
 #include "mergeunit.hxx"
 
-MERGEUNIT::MERGEUNIT() 
+/// Constructs an empty unit; Initialize() must be called before use.
+MERGEUNIT::MERGEUNIT()
 {
   sistring="";
   CachePosition=LoadLim=LIM;
@@ -103,6 +106,17 @@ MERGEUNIT::MERGEUNIT()
   Tag = new CHR[1];
   CacheWritten=FlushWritten=CacheFlush=0;
   ItemsToMerge=TotalLoaded=0;
+  // BUGFIX #3 (docs/BUG_CATALOG.md#srcmergeunithxx): Parent/fp/Map/ID/Gp
+  // were left indeterminate here; ~MERGEUNIT() already dereferences
+  // Parent (via `Parent->ffclose(fp)`) guarded only by `if(fp)`, so a
+  // MERGEUNIT destroyed without Initialize() having been called first
+  // would read fp/Parent as indeterminate values. Matches the same
+  // "indeterminate member" category fixed in nlist.cxx's BUGFIX #2.
+  Parent = nullptr;
+  fp = nullptr;
+  Map = nullptr;
+  ID = 0;
+  Gp = 0;
 }
 
 static void LocalGetSistring(STRING *s, INT Gp, CHR *buf)
@@ -130,6 +144,8 @@ static void LocalGetSistring(STRING *s, INT Gp, CHR *buf)
 
 }
 
+/// Refills the cache (`list`/`Start`/`sistrings`/`Tag`) from `fp`, up to
+/// LoadLim entries, then resolves each entry's sort-comparison string.
 GDT_BOOLEAN MERGEUNIT::CacheLoad()
 {
 
@@ -217,10 +233,14 @@ GDT_BOOLEAN MERGEUNIT::CacheLoad()
 #endif
 	ncount=0;
       }
-      delete p;
+      // BUGFIX #2 (docs/BUG_CATALOG.md#srcmergeunithxx): `p` is
+      // allocated via `new CHR[size+1]` above but was freed with scalar
+      // `delete` -- undefined behavior, confirmed under ASan as a real
+      // alloc-dealloc-mismatch.
+      delete [] p;
     }
-  }  
-  return(GDT_TRUE);  
+  }
+  return(GDT_TRUE);
 }
 
 // flush entire unit to file
@@ -360,16 +380,25 @@ GDT_BOOLEAN MERGEUNIT::Initialize(STRING& FileName,const PIDBOBJ DbParent, FILEM
 
 
 
+/// Closes the source file (if Initialize() was called) and frees the
+/// four owned arrays.
 MERGEUNIT::~MERGEUNIT()
 {
-  
+
   if(fp)
     Parent->ffclose(fp);
   //  delete names;
-  delete list;
+  // BUGFIX #2 (docs/BUG_CATALOG.md#srcmergeunithxx): `list`, `Tag`, and
+  // `Start` are each allocated with array `new` (see the constructor
+  // and SetLoadLimit()) but were freed here with scalar `delete` --
+  // undefined behavior, confirmed under ASan as a real
+  // alloc-dealloc-mismatch, firing on the most basic construct-then-
+  // destroy usage of this class (e.g. `MERGEUNIT A[2];`). Only
+  // `sistrings` was already correct.
+  delete [] list;
   delete [] sistrings;
-  delete Tag;
-  delete Start;
+  delete [] Tag;
+  delete [] Start;
 #ifdef VERBOSE
   printf("=== Unit %i ===\n", ID);
   printf("Written From Cache: %i\n", CacheWritten);

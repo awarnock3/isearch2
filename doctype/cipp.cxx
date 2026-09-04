@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /* $Id: cipp.cxx,v 1.2 2000/04/01 23:37:34 cnidr Exp $ */
 /************************************************************************
 Copyright (c) 1994,1995 Basis Systeme netzwerk, Munich
@@ -140,7 +143,10 @@ CIPP::CIPP (PIDBOBJ DbParent) : SGMLNORM (DbParent)
 }
 
 
-void 
+// Reads the file named by the "-o fieldtype=<filename>" doctype
+// option (prompting interactively if missing) and loads one
+// "FIELDNAME TYPE" entry per line into Db->FieldTypes.
+void
 CIPP::LoadFieldTable() {
   STRLIST StrList;
   STRING  FieldTypeFilename;
@@ -172,7 +178,17 @@ CIPP::LoadFieldTable() {
 
   pBuf = strtok(b,"\n");
 
-  do {
+  // BUGFIX #5 (docs/BUG_CATALOG.md#doctypecippcxx): this was a
+  // do-while, unconditionally running the body (and thus
+  // `Field_and_Type = pBuf;`) once before ever checking pBuf. If the
+  // FIELDTYPE file exists but is empty (IsFile() above only checks
+  // existence, not content), strtok() returns nullptr on the very
+  // first call, and STRING::operator=(const CHR*) calls strlen() on
+  // it unconditionally -- a null-pointer-dereference crash. Checking
+  // pBuf before the first iteration too, not just between iterations,
+  // fixes it. Same bug as, and fixed the same way as,
+  // doctype/cipc.cxx's BUGFIX #5.
+  while (pBuf) {
     Field_and_Type = pBuf;
     Field_and_Type.UpperCase();
 #ifdef WIN32
@@ -183,7 +199,8 @@ CIPP::LoadFieldTable() {
 	}
 #endif
     Db->FieldTypes.AddEntry(Field_and_Type);
-  } while ( (pBuf = strtok((CHR*)NULL,"\n")) );
+    pBuf = strtok((CHR*)nullptr,"\n");
+  }
 
   delete [] b;
 }
@@ -332,7 +349,9 @@ CIPP::UsefulSearchField(const STRING& Field)
 }
 
 
-void 
+// Record splitting is entirely inherited from SGMLNORM; CIPP only
+// customizes field parsing (ParseFields() below).
+void
 CIPP::ParseRecords (const RECORD& FileRecord)
 {
   SGMLNORM::ParseRecords (FileRecord);
@@ -351,8 +370,14 @@ CIPP::ParseDate(const STRING& Buffer, DOUBLE* fStart,
 }
 
 
-void 
-CIPP::ParseDate(const CHR *Buffer, DOUBLE* fStart, 
+// Parses Buffer as either a single date value (a bare number,
+// "present", "unknown") or a <StartDate>...<EndDate> pair, writing
+// both *fStart and *fEnd in either case (a single value maps to the
+// trivial interval fStart==fEnd). The <CALDATE> single-date-block
+// shape (see CIPC::ParseDate) is present but commented out here. Sets
+// DATE_ERROR on any recognized-but-malformed shape.
+void
+CIPP::ParseDate(const CHR *Buffer, DOUBLE* fStart,
 		DOUBLE* fEnd) {
   STRING Hold;
   STRINGINDEX Start, End;
@@ -436,16 +461,36 @@ CIPP::ParseDate(const CHR *Buffer, DOUBLE* fStart,
   // If so, the dates will be tagged with <begdate> and <EndDate>
   //  Hold.UpperCase();
 
-  Start = Hold.Search("<StartDate>");
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypecippcxx): Hold was already
+  // uppercased above (line ~400) -- originally for the now fully
+  // commented-out <CALDATE> block, so it serves no other purpose here
+  // any more -- and is never reset to mixed-case before this point, so
+  // searching it for the mixed-case needle "<StartDate>" could never
+  // match via strstr(). This whole interval-parsing branch was
+  // unreachable dead code, silently falling through to the "out of
+  // tags to look for" DATE_ERROR case at the bottom of this function
+  // for every input, even a well-formed <StartDate>...<EndDate> block.
+  // Search for the uppercase form instead (strlen() below is
+  // unaffected, same length either way). Same bug as, and fixed the
+  // same way as, doctype/cipc.cxx's BUGFIX #1.
+  Start = Hold.Search("<STARTDATE>");
 
   if (Start > 0) {                 // Found the opening tag
     Start += strlen("<StartDate>");
     Hold.EraseBefore(Start);
-    End = Hold.Search("</StartDate");
+    End = Hold.Search("</STARTDATE");
     if (End == 0) {                // but not the closing tag
-      cerr << "[CIPP::ParseDate] <StartDate> found, missing </StartDate>" 
+      cerr << "[CIPP::ParseDate] <StartDate> found, missing </StartDate>"
 	   << endl;
+      // Also fixed here: this branch used to fall through into
+      // Hold.EraseAfter(End-1) with End==0 (a STRINGINDEX underflow to
+      // SIZE_MAX -- harmless only because EraseAfter() itself already
+      // bounds-checks) and then kept going, searching for <EndDate>
+      // despite already having flagged the record as malformed,
+      // leaving *fEnd unset on this path.
       *fStart = DATE_ERROR;
+      *fEnd = *fStart;
+      return;
     }
     Hold.EraseAfter(End-1);
 
@@ -460,9 +505,9 @@ CIPP::ParseDate(const CHR *Buffer, DOUBLE* fStart,
     
     } else {
       *fStart = ParseIsoDate(Hold);
-      
+
       //    } else {
-      //      cerr << "[CIPP::ParseDate] Didn't parse <StartDate>, value=" 
+      //      cerr << "[CIPP::ParseDate] Didn't parse <StartDate>, value="
       //	   << Hold << endl;
       //      *fStart = DATE_ERROR;
     }
@@ -471,13 +516,14 @@ CIPP::ParseDate(const CHR *Buffer, DOUBLE* fStart,
     Hold = Buffer;
     Hold.UpperCase();
 
-    Start = Hold.Search("<EndDate>");
+    // Same BUGFIX #1 case-mismatch as the <StartDate> search above.
+    Start = Hold.Search("<ENDDATE>");
     if (Start > 0) {
       Start += strlen("<EndDate>");
       Hold.EraseBefore(Start);
-      End = Hold.Search("</EndDate");
+      End = Hold.Search("</ENDDATE");
       if (End == 0) {
-	cerr << "[CIPP::ParseDate] <EndDate> found, missing </EndDate>" 
+	cerr << "[CIPP::ParseDate] <EndDate> found, missing </EndDate>"
 	     << endl;
 	*fEnd = DATE_ERROR;
 	return;
@@ -525,8 +571,13 @@ CIPP::ParseDateRange(const STRING& Buffer, DOUBLE* fStart,
 }
 
 
-void 
-CIPP::ParseDateRange(const CHR *Buffer, DOUBLE* fStart, 
+// Same grammar and shape as ParseDate() above (a near-duplicate, not
+// a wrapper, and unlike ParseDate() here has its <CALDATE> block
+// active rather than commented out), but promotes year/month-only
+// dates to a full day range via
+// SRCH_DATE::PromoteToDayStart()/PromoteToDayEnd().
+void
+CIPP::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
 		DOUBLE* fEnd) {
   STRING Hold;
   STRINGINDEX Start, End;
@@ -622,16 +673,21 @@ CIPP::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
   // If so, the dates will be tagged with <StartDate> and <EndDate>
   //  Hold.UpperCase();
 
-  Start = Hold.Search("<StartDate>");
+  // BUGFIX #2: same case-mismatch-makes-this-branch-unreachable bug,
+  // and the same missing-return bug, as ParseDate's BUGFIX #1 above --
+  // this is ParseDateRange, a near-duplicate function. Same fix.
+  Start = Hold.Search("<STARTDATE>");
 
   if (Start > 0) {                 // Found the opening tag
     Start += strlen("<StartDate>");
     Hold.EraseBefore(Start);
-    End = Hold.Search("</StartDate");
+    End = Hold.Search("</STARTDATE");
     if (End == 0) {                // but not the closing tag
-      cerr << "[CIPP::ParseDate] <StartDate> found, missing </StartDate>" 
+      cerr << "[CIPP::ParseDate] <StartDate> found, missing </StartDate>"
 	   << endl;
       *fStart = DATE_ERROR;
+      *fEnd = *fStart;
+      return;
     }
     Hold.EraseAfter(End-1);
     if (Hold.CaseEquals("present")
@@ -660,13 +716,14 @@ CIPP::ParseDateRange(const CHR *Buffer, DOUBLE* fStart,
     Hold = Buffer;
     Hold.UpperCase();
 
-    Start = Hold.Search("<EndDate>");
+    // Same BUGFIX #2 case-mismatch as the <StartDate> search above.
+    Start = Hold.Search("<ENDDATE>");
     if (Start > 0) {
       Start += strlen("<EndDate>");
       Hold.EraseBefore(Start);
-      End = Hold.Search("</EndDate");
+      End = Hold.Search("</ENDDATE");
       if (End == 0) {
-	cerr << "[CIPP::ParseDate] <EndDate> found, missing </EndDate>" 
+	cerr << "[CIPP::ParseDate] <EndDate> found, missing </EndDate>"
 	     << endl;
 	*fEnd = DATE_ERROR;
 	return;
@@ -748,7 +805,6 @@ CIPP::ParseGPoly(const CHR *Buffer, DOUBLE Vertices[])
 {
 
   DOUBLE North,South,East,West;
-  DOUBLE Left;
   CHR Tag[32];
   CHR eTag[32];
 
@@ -778,13 +834,20 @@ CIPP::ParseGPoly(const CHR *Buffer, DOUBLE Vertices[])
 }
 
 
-void 
+// Reads NewRecord's bytes off disk, splits them into SGML-style tags
+// via parse_tags()/find_end_tag(), and adds one DF field per
+// recognized <tag>value</tag> pair -- both under its own short name
+// and under a full, underscore-joined name reflecting its nesting
+// (tracked via the Nested stack of CIP_Element). Attribute values
+// (tag="...") are delegated to SGMLNORM::store_attributes(). See
+// doctype/cipc.cxx's CIPC::ParseFields() -- functionally identical.
+void
 CIPP::ParseFields (RECORD *NewRecord)
 {
   PFILE fp;
   STRING fn;
 
-  if (NewRecord == (RECORD*)NULL) 
+  if (NewRecord == (RECORD*)nullptr) 
     return;                      // ERROR
 
   // Open the file
@@ -824,7 +887,7 @@ CIPP::ParseFields (RECORD *NewRecord)
   NewRecord->GetDocumentType(&doctype);
 
   CHR **tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL) {
+  if (tags == nullptr) {
     cout << "Unable to parse `" << doctype << "' tags in file " << fn << "\n";
     // Clean up
     delete [] RecBuffer;
@@ -832,7 +895,6 @@ CIPP::ParseFields (RECORD *NewRecord)
   }
 
   GSTACK Nested;
-  size_t LastEnd=(size_t)0;
   PDFT pdft = new DFT ();
   GDT_BOOLEAN InCustom;
   size_t val_start;
@@ -855,14 +917,24 @@ CIPP::ParseFields (RECORD *NewRecord)
 	// We keep a stack of the fields we have currently open.  This
 	// handles nested fields by making a long field name out of the
 	// nested values.
-	pTmp = (PCIP_Element)Nested.Top();
-	if (Tag == pTmp->get_tag()) {
-	  pTmp = (PCIP_Element)Nested.Pop();
-	  delete pTmp;
-	  if (Nested.GetSize() != 0) {
-	    pTmp = (PCIP_Element)Nested.Top();
-	    x = FullFieldname.SearchReverse('_');
-	    FullFieldname.EraseAfter(x-1);
+	// BUGFIX #3 (docs/BUG_CATALOG.md#doctypecippcxx): Nested.Top()
+	// was called here with no GetSize()!=0 guard, unlike its two
+	// sibling call sites in this same function -- a closing tag with
+	// nothing open on the stack (e.g. an unmatched/extra closing tag
+	// in the input) made pTmp a null GSTACK::Top() return, and
+	// pTmp->get_tag() below dereferenced it. A stray closing tag with
+	// nothing to match is simply ignored. Same bug as, and fixed the
+	// same way as, doctype/cipc.cxx's BUGFIX #3.
+	if (Nested.GetSize() != 0) {
+	  pTmp = (PCIP_Element)Nested.Top();
+	  if (Tag == pTmp->get_tag()) {
+	    pTmp = (PCIP_Element)Nested.Pop();
+	    delete pTmp;
+	    if (Nested.GetSize() != 0) {
+	      pTmp = (PCIP_Element)Nested.Top();
+	      x = FullFieldname.SearchReverse('_');
+	      FullFieldname.EraseAfter(x-1);
+	    }
 	  }
 	}
 
@@ -874,9 +946,9 @@ CIPP::ParseFields (RECORD *NewRecord)
 
     const CHR *p = find_end_tag (tags_ptr, *tags_ptr);
     size_t tag_len = strlen (*tags_ptr);
-    int have_attribute_val = (NULL != strchr (*tags_ptr, '='));
+    int have_attribute_val = (nullptr != strchr (*tags_ptr, '='));
 
-    if (p != NULL) {
+    if (p != nullptr) {
       // We have a tag pair
       val_start = (*tags_ptr + tag_len + 1) - RecBuffer;
       val_len = (p - *tags_ptr) - tag_len - 2;
@@ -905,7 +977,7 @@ CIPP::ParseFields (RECORD *NewRecord)
 
 	const CHR *unified_name = UnifiedName(*tags_ptr);
 	// Ignore "unclassified" fields
-	if (unified_name == NULL) 
+	if (unified_name == nullptr) 
 	  continue; // ignore these
 	FieldName = unified_name;
 	if (!(FieldName.IsPrint())) {
@@ -926,13 +998,16 @@ CIPP::ParseFields (RECORD *NewRecord)
 	  pTag->set_tag(FieldName);
 	  pTag->set_start(val_start);
 	  pTag->set_end(val_end);
-	  
-	  if (Nested.GetSize() != 0) {
-	    PCIP_Element pTmp;
-	    if (val_start < LastEnd) {
-	      pTmp = (PCIP_Element)Nested.Top();
-	    }
-	  }
+
+	  // Removed here (same as doctype/cipc.cxx): a dead `if
+	  // (Nested.GetSize()!=0) { ... if (val_start < LastEnd) pTmp =
+	  // Nested.Top(); }` block (and the LastEnd variable it was the
+	  // only reader of) -- pTmp's value was never used afterward, so
+	  // the whole block, including the LastEnd comparison, had no
+	  // observable effect. Surfaced by -Wunused-but-set-variable while
+	  // bringing this file to a clean -Wall -Wextra build for the
+	  // first time.
+
 	  if (FullFieldname.GetLength() > 0)
 	    FullFieldname.Cat("_");
 	  FullFieldname.Cat(FieldName);
@@ -1012,14 +1087,13 @@ CIPP::ParseFields (RECORD *NewRecord)
 	    }
 	  }
 	  Nested.Push(pTag);
-	  LastEnd = val_end;
 	}
       }
     }
     if (have_attribute_val) {
       SGMLNORM::store_attributes (pdft, RecBuffer, *tags_ptr);
 
-    } else if (p == NULL) {
+    } else if (p == nullptr) {
 #if 1
       // Give some information
       cout << doctype << " Warning: \""
@@ -1030,7 +1104,21 @@ CIPP::ParseFields (RECORD *NewRecord)
   }
   
   NewRecord->SetDft (*pdft);
-  
+
+  // BUGFIX #4 (docs/BUG_CATALOG.md#doctypecippcxx): any tag left open
+  // (pushed via Nested.Push() above but never matched by a closing tag
+  // -- e.g. overlapping/non-LIFO-nested tags like "<A><B></A></B>",
+  // where </A> can never match while B is on top of the stack) stayed
+  // on Nested forever; Nested only Pop()s+delete()s an element when it
+  // finds a matching close. Drain what's left before this local GSTACK
+  // goes out of scope, or every such stuck tag leaks its CIP_Element.
+  // Same bug as, and fixed the same way as, doctype/cipc.cxx's
+  // BUGFIX #4.
+  while (Nested.GetSize() != 0) {
+    PCIP_Element pLeftover = (PCIP_Element)Nested.Pop();
+    delete pLeftover;
+  }
+
   // Clean up;
   delete [] tags;
   delete pdft;
@@ -1056,9 +1144,13 @@ CIPP::GetCleanedFieldData(const RESULT& ResultRecord,
 }
 
 
-void 
+// ElementSet BRIEF_MAGIC ("B") returns just the ItemDescriptorId; "C"
+// returns an HTML-ish ItemDescriptorId paragraph; "S" returns a
+// multi-field "KEY=value" summary block; "F" returns the raw record
+// file contents; anything else falls back to SGMLNORM::Present().
+void
 CIPP::Present (const RESULT& ResultRecord, const STRING& ElementSet,
-	       const STRING& RecordSyntax, STRING *StringBuffer)
+	       const STRING& /* RecordSyntax */, STRING *StringBuffer)
 {
   STRING FieldName;
   
@@ -1196,7 +1288,6 @@ CIPP::Present (const RESULT& ResultRecord, const STRING& ElementSet,
   } else if (ElementSet.CaseEquals("F")) {
     STRING FullFilename, HoldFilename;
     STRING b;
-    INT n;
 
     STRLIST StrList;
     STRING mpCommand;
@@ -1288,10 +1379,10 @@ CIPP::parse_tags (CHR *b, GPTYPE len) const
 		  // allocate more space
 		  max_num_tags += grow_size;
 		  PCHR *New = new PCHR[max_num_tags];
-		  if (New == NULL)
+		  if (New == nullptr)
 		    {
 		      delete[]t;
-		      return NULL;		// NO MORE CORE!
+		      return nullptr;		// NO MORE CORE!
 		    }
 		  memcpy (New, t, tc * sizeof (CHR*));
 		  delete[]t;
@@ -1350,10 +1441,10 @@ CIPP::parse_tags (CHR *b, GPTYPE len) const
   if (State != OK)
     {
       delete[]t;
-      return NULL;		// Parse ERROR
+      return nullptr;		// Parse ERROR
     }
   
-  t[tc] = (CHR*) NULL;	// Mark end of list
+  t[tc] = (CHR*) nullptr;	// Mark end of list
   return t;
 }
 
@@ -1373,11 +1464,11 @@ const CHR*
 CIPP::find_end_tag (char **t, const char *tag) const
 {
   size_t len;
-  if (t == NULL || *t == NULL)
-    return NULL;		// Error
+  if (t == nullptr || *t == nullptr)
+    return nullptr;		// Error
   
   if (*t[0] == '/')
-    return NULL;		// I'am confused!
+    return nullptr;		// I'am confused!
   
   // Look for "real" tag name
   for (len = 0; tag[len]; len++)
@@ -1405,7 +1496,7 @@ CIPP::find_end_tag (char **t, const char *tag) const
 	  
 	}
     }
-  while ((tt = t[++i]) != NULL);
+  while ((tt = t[++i]) != nullptr);
   
 #if 0
   // No end tag, assume that the document was valid
@@ -1413,6 +1504,6 @@ CIPP::find_end_tag (char **t, const char *tag) const
   // next tag
   return t[1];
 #else
-  return NULL;		// No end tag found
+  return nullptr;		// No end tag found
 #endif
 }

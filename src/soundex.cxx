@@ -39,8 +39,56 @@ Version:	1.00
 Description:	Soundex support for STRING class
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include "soundex.hxx"
+
+// The classic Soundex letter-to-digit map: vowels/H/W/Y/space carry no
+// digit ('0'); everything else not in the map (e.g. embedded
+// punctuation or digits) passes through unchanged, matching the
+// original behavior for non-letter input.
+static CHR
+SoundexDigit(CHR ch) {
+	switch (ch) {
+		case ' ':
+		case 'A':
+		case 'E':
+		case 'H':
+		case 'I':
+		case 'O':
+		case 'U':
+		case 'W':
+		case 'Y':
+			return '0';
+		case 'B':
+		case 'F':
+		case 'P':
+		case 'V':
+			return '1';
+		case 'C':
+		case 'G':
+		case 'J':
+		case 'K':
+		case 'Q':
+		case 'S':
+		case 'X':
+		case 'Z':
+			return '2';
+		case 'D':
+		case 'T':
+			return '3';
+		case 'L':
+			return '4';
+		case 'M':
+		case 'N':
+			return '5';
+		case 'R':
+			return '6';
+		default:
+			return ch;
+	}
+}
 
 void SoundexEncode(const STRING& EnglishWord, PSTRING StringBuffer) {
 	STRING s1, s2;
@@ -48,76 +96,45 @@ void SoundexEncode(const STRING& EnglishWord, PSTRING StringBuffer) {
 	s1.UpperCase();
 	INT x, y;
 	y = s1.GetLength();
-	CHR ch, ch2;
-	s2 += s1.GetChr(1);
+
+	if (y == 0) {
+		*StringBuffer = "";
+		return;
+	}
+
+	// BUGFIX #1: the old two-pass approach (strip every '0' first, then
+	// collapse adjacent duplicates) got the classic Soundex edge cases
+	// wrong two different ways: (1) it never compared the kept first
+	// letter against the next letter's own code, so "PFister" -- where P
+	// and F share the same digit -- kept both instead of collapsing them
+	// ("P123" instead of the correct "P236"); (2) stripping zeros before
+	// deduplicating merges same-digit letters that were originally
+	// separated by a vowel into a false adjacency, undercounting them
+	// ("HONEYMAN" -- N, then M, then N again, each separated by a vowel
+	// -- came out "H500" instead of the correct "H555", and "TYMCZAK"
+	// came out "T520" instead of "T522"). Confirmed against reference
+	// Soundex test vectors (Pfister/Tymczak/Honeyman, all textbook edge
+	// cases) via a standalone repro before this fix; Robert/Rupert
+	// (no first-letter collision) already matched and still do.
+	//
+	// Fixed with a single pass that tracks the previous letter's own
+	// digit (seeded from the first letter's digit, even though the
+	// first letter itself is kept literally) and only appends a new
+	// digit when it's non-zero and differs from that running previous
+	// digit -- the textbook algorithm, applied uniformly instead of as
+	// two separate strip/collapse passes.
+	CHR firstLetter = s1.GetChr(1);
+	s2 += firstLetter;
+	CHR prevDigit = SoundexDigit(firstLetter);
+
 	for (x=2; x<=y; x++) {
-		ch = s1.GetChr(x);
-		switch (ch) {
-			case ' ':
-			case 'A':
-			case 'E':
-			case 'H':
-			case 'I':
-			case 'O':
-			case 'U':
-			case 'W':
-			case 'Y':
-				ch2 = '0';
-				break;
-			case 'B':
-			case 'F':
-			case 'P':
-			case 'V':
-				ch2 = '1';
-				break;
-			case 'C':
-			case 'G':
-			case 'J':
-			case 'K':
-			case 'Q':
-			case 'S':
-			case 'X':
-			case 'Z':
-				ch2 = '2';
-				break;
-			case 'D':
-			case 'T':
-				ch2 = '3';
-				break;
-			case 'L':
-				ch2 = '4';
-				break;
-			case 'M':
-			case 'N':
-				ch2 = '5';
-				break;
-			case 'R':
-				ch2 = '6';
-				break;
-			default:
-				ch2 = ch;
-				break;
+		CHR digit = SoundexDigit(s1.GetChr(x));
+		if (digit != '0' && digit != prevDigit) {
+			s2 += digit;
 		}
-		s2 += ch2;
+		prevDigit = digit;
 	}
-	s1 = "";
-	y = s2.GetLength();
-	for (x=1; x<=y; x++) {
-		ch = s2.GetChr(x);
-		if (ch != '0') {
-			s1 += ch;
-		}
-	}
-	s2 = "";
-	ch = '\0';
-	y = s1.GetLength();
-	for (x=1; x<=y; x++) {
-		ch2 = s1.GetChr(x);
-		if (ch2 != ch) {
-			s2 += ch2;
-		}
-		ch = ch2;
-	}
+
 	if ( (y=s2.GetLength()) > 4 ) {
 		s2.EraseAfter(4);
 	} else {

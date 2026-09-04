@@ -40,14 +40,18 @@ Description:	Soundex support for STRING class
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef SOUNDEX_HXX
 #define SOUNDEX_HXX
 
 #include "gdt.h"
 #include "string.hxx"
 
+// Encodes EnglishWord into its 4-character Soundex code (one letter
+// plus three digits, zero-padded or truncated) and writes it into
+// *StringBuffer. Empty input produces an empty StringBuffer.
 void SoundexEncode(const STRING& EnglishWord, PSTRING StringBuffer);
-// Encodes "EnglishWord" into soundex and puts soundex code-string into
-// "StringBuffer".
 
 #endif /* SOUNDEX_HXX */

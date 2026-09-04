@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 // $Id: anzmeta.hxx,v 1.2 2000/10/11 14:02:16 cnidr Exp $
 /*-@@@
 File:		anzmeta.hxx
@@ -15,6 +18,10 @@ Copyright:	A/WWW Enterprises, MCNC/CNIDR and USGS/FGDC
 
 #ifndef ANZMETA_HXX
 #define ANZMETA_HXX
+
+#ifndef SGMLNORM_HXX
+# include "sgmlnorm.hxx"
+#endif
 
 #ifndef BSN_EXTENSIONS
 # define BSN_EXTENSIONS	0 /* 0==> CNIDR's Isearch 1==> BSn's */

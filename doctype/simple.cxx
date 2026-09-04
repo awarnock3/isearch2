@@ -33,6 +33,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:		simple.cxx
 Version:	1.00
@@ -60,7 +63,10 @@ void SIMPLE::BeforeRset(const STRING& RecordSyntax) {
     cout << "<pre>" << endl;
 }
 
-void SIMPLE::Present(const RESULT& ResultRecord, const STRING& ElementSet, 
+// Element set "B" returns the first NumLines lines of the record's
+// text, skipping leading whitespace before the first line; every other
+// element set defers to DOCTYPE::Present().
+void SIMPLE::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 		PSTRING StringBuffer) {
   if (ElementSet.Equals("B")) {
     // Return first non-empty line of text
@@ -80,6 +86,16 @@ void SIMPLE::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 	z++;
 	*Headline += c;
       }
+      // BUGFIX #1 (docs/BUG_CATALOG.md#doctypesimplecxx): the inner
+      // while loop above stops with `z` still pointing *at* the '\n'
+      // it found (its condition fails before the body's `z++` ever
+      // runs for that character), so without this, every subsequent
+      // outer-loop iteration re-tested the exact same '\n' and its
+      // condition failed immediately every time -- for NumLines > 1
+      // (the "LINES" doctype option's whole reason to exist), only the
+      // first line was ever appended to Headline; every line after it
+      // was silently dropped. Confirmed via a before/after test-revert.
+      if (c == '\n') z++;
     }
     *StringBuffer = *Headline;
     delete Headline;

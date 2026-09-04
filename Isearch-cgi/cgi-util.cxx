@@ -45,8 +45,12 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 
 // change record:
 // reset z and initialized entry_point to fix "GET" method    9/25/96 dtw
+// ISEARCH2-CLEANUP: processed 2026-08-16
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <string.h>
 #include <ctype.h>
+#include <limits>
 #include "cgi-util.hxx"
 
 using namespace std;
@@ -60,9 +64,10 @@ using namespace std;
 void CGIAPP::GetInput() {
   INT ContentLen=0, x, y, z, len, nn;
   CHR temp1[256], temp2[256], temp3[256];
-  CHR *meth, *p, *query=(CHR*)NULL;
+  CHR EmptyQuery[1] = "";
+  CHR *meth, *p, *query=nullptr;
 
-  if ((meth = (char *)getenv("REQUEST_METHOD"))==NULL) {
+  if ((meth = (char *)getenv("REQUEST_METHOD"))==nullptr) {
     cout << "Unable to get request_method" << endl;
     exit(1);
   }
@@ -73,8 +78,19 @@ void CGIAPP::GetInput() {
   } else {
     if (!strcmp(meth,"GET")) {
       query = (char *)getenv("QUERY_STRING");
-      if (query == NULL) {
-        query = (char *)"";
+      if (query == nullptr) {
+        // BUGFIX #3: this pointed query at a string-literal "" instead
+        // of a mutable buffer, but plustospace()/unescape_url() just
+        // below both write through their argument unconditionally
+        // (unescape_url() always writes a '\0' terminator even for an
+        // already-empty string) -- a write to read-only literal memory,
+        // undefined behavior that crashes on a typical modern OS.
+        // Confirmed with a standalone repro under ASan before fixing:
+        // AddressSanitizer: SEGV ... WRITE ... in unescape_url ... in
+        // CGIAPP::GetInput -- triggered by simply not having a
+        // QUERY_STRING set for a GET request. See
+        // docs/BUG_CATALOG.md#isearch-cgicgi-utilhxx.
+        query = EmptyQuery;
       }
       Method=GET;
     } else {
@@ -92,7 +108,27 @@ void CGIAPP::GetInput() {
       if (x >= CGI_MAXENTRIES) {
         break;
       }
-      cin.getline(temp1,ContentLen+1,'&');
+      // BUGFIX #1: this told getline the buffer was ContentLen+1 bytes
+      // -- the *remaining POST body length*, entirely attacker-
+      // controlled via the Content-Length header -- when temp1 is
+      // actually a fixed 256-byte stack array. A POST body over 255
+      // bytes with no '&' in the first 255 overflowed the stack.
+      // Confirmed with a standalone repro under ASan before fixing:
+      // AddressSanitizer: stack-buffer-overflow ... in
+      // std::istream::getline ... in CGIAPP::GetInput. Capping the
+      // read at the buffer's real size fixes the overflow; a field
+      // that doesn't fit is then truncated (getline sets failbit
+      // without extracting the delimiter), so the remainder up to the
+      // real '&' is discarded here to keep the parser aligned with the
+      // stream instead of misreading the leftover bytes as the next
+      // field. See docs/BUG_CATALOG.md#isearch-cgicgi-utilhxx.
+      cin.getline(temp1,sizeof(temp1),'&');
+      if (cin.fail()) {
+        if (cin.eof())
+          break;
+        cin.clear();
+        cin.ignore(std::numeric_limits<std::streamsize>::max(), '&');
+      }
       entry_count++;
       len=strlen(temp1);
       ContentLen=ContentLen-(len+1);
@@ -133,9 +169,23 @@ void CGIAPP::GetInput() {
       if (x >= CGI_MAXENTRIES) {
         break;
       }
+      // BUGFIX #2: these two loops copied one query-string byte per
+      // iteration into temp1/temp2 (each a fixed 256-byte stack array)
+      // with no bound on z at all -- QUERY_STRING is the entire URL
+      // query, fully attacker-controlled with no length limit enforced
+      // before this code runs, so a single name or value segment over
+      // 255 bytes overflowed the stack. Confirmed with a standalone
+      // repro under ASan before fixing (a 400-byte field name):
+      // AddressSanitizer: stack-buffer-overflow ... in
+      // CGIAPP::GetInput. Unlike the POST case above, this is plain
+      // in-memory array iteration (not a stream), so capping the write
+      // -- while still advancing y through the whole field -- keeps y
+      // correctly aligned with the '='/'&' delimiters; only the
+      // written copy is truncated. See
+      // docs/BUG_CATALOG.md#isearch-cgicgi-utilhxx.
       while ((query[y]!='=') && (query[y]!='&') && (y<len)) {
-        temp1[z]=query[y];
-        z++;
+        if (z < (INT)sizeof(temp1)-1)
+          temp1[z++]=query[y];
         y++;
       }
       temp1[z]='\0';
@@ -143,8 +193,8 @@ void CGIAPP::GetInput() {
       if (query[y]=='=') {
         y++;
         while ((query[y]!='&') && (y<len)) {
-          temp2[z]=query[y];
-          z++;
+          if (z < (INT)sizeof(temp2)-1)
+            temp2[z++]=query[y];
           y++;
         }
       }
@@ -191,8 +241,8 @@ void CGIAPP::GetInput() {
 CGIAPP::CGIAPP() {
   INT i;
   for (i = 0; i < CGI_MAXENTRIES; i++) {
-    name[i] = NULL;
-    value[i] = NULL;
+    name[i] = nullptr;
+    value[i] = nullptr;
   }
   entry_count = 0;
   GetInput();
@@ -214,20 +264,20 @@ PCHR CGIAPP::GetValue(INT4 i) {
 }
 
 PCHR CGIAPP::GetValueByName(const CHR *field) {
-  if ((field==NULL) || (field[0]=='\0'))
-    return NULL;
+  if ((field==nullptr) || (field[0]=='\0'))
+    return nullptr;
   INT i;
   for (i=0;i<entry_count;i++) {
-    if ((name[i]==NULL)||(value[i]==NULL))
-      return NULL;
+    if ((name[i]==nullptr)||(value[i]==nullptr))
+      return nullptr;
     if (!strcmp(name[i], field)) {
-      if (value[i] != NULL) {
+      if (value[i] != nullptr) {
         return value[i];
       }
-      return NULL;
+      return nullptr;
     }
   }
-  return NULL;
+  return nullptr;
 
 }
 

@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		html.hxx
 Version:	1.03
@@ -23,6 +26,15 @@ Copyright:	Basis Systeme netzwerk, Munich
 # define STRICT_HTML	0 /* 0==> Accept most tags 1==>Accept only certain tags */
 #endif
 
+// A WWW HTML DOCTYPE built on SGMLNORM's tag-based parsing.
+// ParseFields() walks HTML <tag>value</tag> pairs (delegating the
+// actual scanning to SGMLNORM::parse_tags()/find_end_tag()), skipping
+// tags in IgnoreHTMLTag()'s list (or, if STRICT_HTML is defined,
+// accepting only tags in IsHTMLFieldTag()'s allowlist instead) and
+// applying a hand-rolled fallback for the common "minimized tag" HTML
+// idioms (<DD>/<DT>/<LI>/<TL> used without a matching close). Present()
+// with BRIEF_MAGIC ("B") returns the "title" field, falling back to
+// the filename if there is none.
 class HTML:public SGMLNORM
 {
 public:

@@ -43,6 +43,9 @@ Description:	Document Type configuration utility for Isearch
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*
   #if defined(_MSC_VER) && _MSC_VER > 1010
   #  include <iostream>
@@ -73,7 +76,7 @@ int main() {
   int y;
 #endif
   int TotalDt = 0;
-  char s[MAXSTR], t[MAXSTR], u[MAXSTR], v[MAXSTR];
+  char s[MAXSTR], t[MAXSTR+8], u[MAXSTR], v[MAXSTR];  // t: DtFn[] + ".hxx"
   char* p;
   char* pp;
   FILE* fp;
@@ -91,8 +94,29 @@ int main() {
       }
       *p = '\0';
       if (*s != '\0') {
+	// BUGFIX #2 (docs/BUG_CATALOG.md#doctypedtconfcxx): DtName/DtFn
+	// are fixed-size static arrays (MAXDT entries); TotalDt was
+	// incremented with no bound on it at all, so a dtconf.inf with
+	// more than MAXDT (500) entries would silently overflow both
+	// static arrays. Not reachable with the current dtconf.inf (38
+	// entries), but a real static-buffer overflow risk from
+	// unbounded config-file input. Fixed by refusing to process any
+	// further entries once the table is full, instead of writing
+	// past it.
+	if (TotalDt >= MAXDT) {
+	  fprintf(stderr, "Too many document types configured (max %d); ignoring the rest of dtconf.inf.\n", MAXDT);
+	  break;
+	}
 	strcpy(DtFn[TotalDt], s);
-	sprintf(t, "%s.hxx", DtFn[TotalDt]);	// append .hxx
+	// BUGFIX #1 (docs/BUG_CATALOG.md#doctypedtconfcxx): confirmed via
+	// -Wall -Wextra ("sprintf output between 5 and 84 bytes into a
+	// destination of size 80") -- DtFn[TotalDt] can be up to 79
+	// characters (bounded only by fgets()'s own MAXSTR cap), and
+	// appending ".hxx" (4 more bytes) plus the terminator can exceed
+	// t's 80-byte buffer. Not reachable with any of the short
+	// doctype names in the real dtconf.inf, but a real latent
+	// overflow for a long enough one. Fixed with snprintf.
+	snprintf(t, sizeof(t), "%s.hxx", DtFn[TotalDt]);	// append .hxx
 	fpi = fopen(t, "r");
 	if (fpi) {
 	  x = 0;

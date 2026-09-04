@@ -42,6 +42,8 @@ $Revision: 1.4 $
 Description:	Class DFD - Data Field Definition
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 /*
 #include "string.hxx"
@@ -57,8 +59,23 @@ DFD::DFD() {
 }
 
 
-DFD& 
+DFD&
 DFD::operator=(const DFD& OtherDfd) {
+  // BUGFIX #1: without this guard, `dfd = dfd;` would reach
+  // `Attributes = OtherDfd.Attributes;` with OtherDfd.Attributes being
+  // the very same ATTRLIST as Attributes -- ATTRLIST::operator=()
+  // (src/attrlist.cxx) deletes and reinitializes its target before
+  // reading the source's entry count, so a self-assigning ATTRLIST
+  // (confirmed reachable during sterm.hxx's turn; see
+  // docs/BUG_CATALOG.md#srcoperandhxx) silently empties itself.
+  // ATTRLIST::operator=() itself isn't touched here -- attrlist.hxx is
+  // currently blocked pending a header-signature decision (see
+  // docs/AUTOPILOT_LOG.md#srcattrlisthxx). This guard fixes it for
+  // DFD's own contract without reopening that file, the same pattern
+  // used for DF::operator=() (docs/BUG_CATALOG.md#srcdfcxx, BUGFIX #1).
+  if (this == &OtherDfd) {
+    return *this;
+  }
   //	FieldName = OtherDfd.FieldName;
   FileNumber = OtherDfd.FileNumber;
   Attributes = OtherDfd.Attributes;

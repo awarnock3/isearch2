@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-16
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "api_endpoints.hxx"
 
 #include <dirent.h>
@@ -11,7 +14,7 @@
 
 static bool HasSuffix(const CHR *value, const CHR *suffix)
 {
-  if (value == NULL || suffix == NULL) {
+  if (value == nullptr || suffix == nullptr) {
     return false;
   }
   const size_t value_len = strlen(value);
@@ -68,7 +71,7 @@ void HandleDatabases(const ApiConfig& cfg)
 
   CHR *db_path = cfg.db_path.NewCString();
   DIR *dir = opendir(db_path);
-  if (dir == NULL) {
+  if (dir == nullptr) {
     delete [] db_path;
     WriteHttpHeader(500, true);
     WriteProblem(500,
@@ -79,7 +82,7 @@ void HandleDatabases(const ApiConfig& cfg)
   }
 
   std::vector<STRING> names;
-  for (dirent *entry = readdir(dir); entry != NULL; entry = readdir(dir)) {
+  for (dirent *entry = readdir(dir); entry != nullptr; entry = readdir(dir)) {
     if (!HasSuffix(entry->d_name, ".mdt")) {
       continue;
     }
@@ -108,15 +111,15 @@ void HandleDatabases(const ApiConfig& cfg)
 
 void HandleFetch(const ApiConfig& cfg, const CHR* method, const CHR* body)
 {
-  CGIAPP *cgi = NULL;
-  if (method != NULL && StrCaseCmp(method, "GET") == 0) {
+  CGIAPP *cgi = nullptr;
+  if (method != nullptr && StrCaseCmp(method, "GET") == 0) {
     cgi = new CGIAPP();
   }
 
   ApiFetchRequest req;
   STRING parse_error;
   if (!ParseFetchRequest(cgi, method, body, req, parse_error)) {
-    if (cgi != NULL) delete cgi;
+    if (cgi != nullptr) delete cgi;
     WriteHttpHeader(400, true);
     WriteProblem(400, "https://isearch.invalid/problems/invalid-request",
                  "Invalid request parameters", parse_error);
@@ -126,7 +129,7 @@ void HandleFetch(const ApiConfig& cfg, const CHR* method, const CHR* body)
   ApiFetchResult result;
   STRING error_detail;
   const int status = ExecuteFetch(req, cfg, result, error_detail);
-  if (cgi != NULL) delete cgi;
+  if (cgi != nullptr) delete cgi;
 
   if (status != 200) {
     const CHR *problem_type = (status == 404)

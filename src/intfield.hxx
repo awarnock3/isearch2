@@ -41,6 +41,8 @@ Version:	$Revision: 1.3 $
 Description:	Class INTFIELD - Numeric interval data object
 Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 
 #include "gdt.h"
@@ -49,6 +51,19 @@ Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 #ifndef INTERVALFLD_HXX
 #define INTERVALFLD_HXX
 
+// One numeric-interval entry: a byte offset (GlobalStart) paired with
+// a [StartValue, EndValue] range, indexed for range-overlap search
+// (see INTERVALLIST, src/intlist.hxx, which sorts and range-queries
+// arrays of these). Public interface is non-virtual accessors only;
+// see docs/BUG_CATALOG.md#srcintfieldcxx for two pre-existing header
+// design issues found but not fixed this turn (GENERAL step 4 freezes
+// public signatures): GlobalStart/GetGlobalStart()/SetGlobalStart()
+// here shadow NUMERICFLD's own same-named member/methods instead of
+// reusing them (inherited GetNumericValue()/SetNumericValue() are the
+// only NUMERICFLD members INTERVALFLD doesn't shadow, and go unused by
+// every call site found), and operator= has a non-standard signature
+// (returns by value, takes a non-const reference) that compiles but
+// can't be chained or assigned from a temporary.
 class INTERVALFLD : public NUMERICFLD {
 
 public:

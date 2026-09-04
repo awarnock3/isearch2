@@ -41,6 +41,9 @@ Description:	Class SRCH_DATE - Isearch Date data structures class
 Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef DATE_HXX
 #define DATE_HXX
 
@@ -66,6 +69,12 @@ enum Date_Precision { BAD_DATE=-1, YEAR_PREC, MONTH_PREC, DAY_PREC };
 enum Date_Match { MATCH_ERROR=-1, BEFORE, BEFORE_DURING, DURING_EQUALS, 
 		  DURING_AFTER, AFTER };
 
+// A date stored as a single DOUBLE in YYYY, YYYYMM, or YYYYMMDD
+// format (d_date), with d_prec recording which of the three it is so
+// comparisons between dates of different granularity can trim the
+// more precise one down first (see DateCompare()). A default-
+// constructed SRCH_DATE (d_date == DATE_ERROR, d_prec == BAD_DATE)
+// reads as invalid until assigned a real value.
 class SRCH_DATE
 
 {
@@ -97,6 +106,8 @@ public:
   GDT_BOOLEAN PromoteToDayStart();
   GDT_BOOLEAN PromoteToDayEnd();
 
+  // Sets this to today's local date (YYYYMMDD, DAY_PREC), or an error
+  // state (see BUGFIX #2 in source) if strftime() can't format it.
   void        GetTodaysDate();
   
   GDT_BOOLEAN IsBefore(const SRCH_DATE& OtherDate) const;
@@ -142,6 +153,7 @@ public:
   void  SetEnd(const CHR* NewEnd)        { d_end = NewEnd; }
   void  SetEnd(const STRING& NewEnd)     { d_end = NewEnd; }
 
+  // True iff TestDate falls within [d_start, d_end], inclusive.
   GDT_BOOLEAN Contains(const SRCH_DATE& TestDate) const;
 
   ~DATERANGE();

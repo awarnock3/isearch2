@@ -117,6 +117,9 @@ Copyright:	Basis Systeme netzwerk, Munich
 
 // TODO: Clean-up Record parser and fix to leave off junk between records
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <iostream>
 #include <stdio.h>
 #include <stdlib.h>
@@ -271,7 +274,16 @@ void MEDLINE::ParseRecords (const RECORD& FileRecord)
 
 const CHR *MEDLINE::UnifiedName (const CHR *tag) const
 {
-printf("Medline:UnifiedName called\n");
+  // BUGFIX #6: an unconditional `printf("Medline:UnifiedName
+  // called\n");` used to sit here, firing once per field tag on every
+  // ParseFields() call and up to three more times per Present() call
+  // (the "TI"/"SO"/"AU" brief-headline lookups below). Present() is
+  // exactly the path a CGI frontend (Isearch-cgi/isrch_srch.cxx etc.)
+  // calls while writing an HTTP response to stdout -- this printf()
+  // wrote straight to the C stdio stream backing that same stdout,
+  // interleaving debug spam into the response body. Not a crash, but
+  // clearly leftover debug output, not intended production behavior.
+  // See docs/BUG_CATALOG.md#doctypemedlinecxx.
 #if USE_UNIFIED_NAMES
   // For now
   return tag;
@@ -281,6 +293,10 @@ printf("Medline:UnifiedName called\n");
 }
 
 
+// Reads NewRecord's bytes off disk, splits them into "TAG  -"-tagged
+// segments via the file-local parse_tags(), and adds one DF field
+// (name from UnifiedName(tag), value trimmed of leading/trailing
+// whitespace) per segment to NewRecord's DFT.
 void MEDLINE::ParseFields (PRECORD NewRecord)
 {
   STRING fn;
@@ -297,7 +313,12 @@ void MEDLINE::ParseFields (PRECORD NewRecord)
     {
       fseek (fp, 0L, SEEK_END);
       RecStart = 0;
-      RecEnd = ftell (fp) - 1;
+      // BUGFIX #1: this used to be `ftell(fp) - 1`, silently dropping
+      // the last byte of every record read through this fallback (the
+      // common case). Same bug as, and fixed the same way as,
+      // doctype/colondoc.cxx's BUGFIX #1. See
+      // docs/BUG_CATALOG.md#doctypemedlinecxx.
+      RecEnd = ftell (fp);
     }
   fseek (fp, (long)RecStart, SEEK_SET);
   GPTYPE RecLength = RecEnd - RecStart;
@@ -307,7 +328,7 @@ void MEDLINE::ParseFields (PRECORD NewRecord)
   RecBuffer[ActualLength] = '\0';
 
   PCHR *tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL || tags[0] == NULL)
+  if (tags == nullptr || tags[0] == nullptr)
     {
       STRING doctype;
       NewRecord->GetDocumentType(&doctype);
@@ -334,18 +355,33 @@ void MEDLINE::ParseFields (PRECORD NewRecord)
   for (PCHR * tags_ptr = tags; *tags_ptr; tags_ptr++)
     {
       PCHR p = tags_ptr[1];
-      if (p == NULL)
-	p = &RecBuffer[RecLength];
+      // BUGFIX #5: this fallback used RecLength (the buffer's
+      // allocated capacity), not ActualLength (how much was actually
+      // read) -- same as, and fixed the same way as,
+      // doctype/colondoc.cxx's BUGFIX #3.
+      if (p == nullptr)
+	p = &RecBuffer[ActualLength];
       // eg "AB  -" XXXXX
       int off = 5; // Medline format constant
       INT val_start = (*tags_ptr + off) - RecBuffer;
-      // Skip ' 's 
+      // Skip ' 's
       while (isspace(RecBuffer[val_start]))
 	val_start++, off++;
-      // Also leave off the \n
-      INT val_len = (p - *tags_ptr) - off - 1;
+      INT val_len = (p - *tags_ptr) - off;
+      // BUGFIX #1b: this used to unconditionally subtract 1 more here
+      // ("leave off the \n"), wrong for the last field when the file
+      // doesn't end with '\n'. Same bug as, and fixed the same way as,
+      // doctype/colondoc.cxx's BUGFIX #1b.
+      if (val_len > 0 && p[-1] == '\n')
+	val_len--;
+      // BUGFIX #2: this checked RecBuffer[val_len + val_start], one
+      // byte *past* the value's actual last character, silently
+      // trimming one real trailing character off nearly every field.
+      // Same bug as, and fixed the same way as,
+      // doctype/colondoc.cxx's BUGFIX #2. See
+      // docs/BUG_CATALOG.md#doctypemedlinecxx.
       // Strip potential trailing while space
-      while (val_len > 0 && isspace (RecBuffer[val_len + val_start]))
+      while (val_len > 0 && isspace (RecBuffer[val_start + val_len - 1]))
 	val_len--;
 
       // Do we have some content?
@@ -358,13 +394,18 @@ void MEDLINE::ParseFields (PRECORD NewRecord)
       FieldName = unified_name ? unified_name: "Misc";
 #else
       // Ignore "unclassified" fields
-      if (unified_name == NULL) continue; // ignore these
+      if (unified_name == nullptr) continue; // ignore these
       FieldName = unified_name;
 #endif
       dfd.SetFieldName (FieldName);
       Db->DfdtAddEntry (dfd);
       fc.SetFieldStart (val_start);
-      fc.SetFieldEnd (val_start + val_len);
+      // BUGFIX #4: this used to be `SetFieldEnd(val_start + val_len)`,
+      // one past the correct *inclusive* end index -- same bug as, and
+      // fixed the same way as, doctype/colondoc.cxx's BUGFIX #4 (see
+      // that entry for why it happened to numerically cancel out
+      // against BUGFIX #2 above in the common case).
+      fc.SetFieldEnd (val_start + val_len - 1);
       PFCT pfct = new FCT ();
       pfct->AddEntry (fc);
       df.SetFct (*pfct);
@@ -466,6 +507,23 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
   max_num_tags = TAG_GROW_SIZE;
   t = new PCHR [max_num_tags];
 
+  // BUGFIX #7: len is unsigned (GPTYPE); `len - 4` below underflows to
+  // a huge value whenever len < 4 (an empty or near-empty record --
+  // e.g. one that only contains junk between real records, see the
+  // "TODO: ... fix to leave off junk between records" comment at the
+  // top of this file), turning both loops below into a scan reading
+  // far past the tiny allocated buffer. Confirmed a real heap-buffer-
+  // overflow with a standalone repro (a 2-byte record) before fixing:
+  // AddressSanitizer: heap-buffer-overflow ... READ of size 1 ...
+  // in parse_tags. A record this short can't contain a valid tag
+  // anyway (one needs at least the 4 bytes checked via b[i+4] below),
+  // so bail out immediately instead. See
+  // docs/BUG_CATALOG.md#doctypemedlinecxx.
+  if (len < 4) {
+    t[0] = nullptr;
+    return t;
+  }
+
   // Skip leading White space and sep number
   for (i = 0; i < len - 4; i++)
     if (!isspace(b[i]) && !isdigit(b[i])) break;
@@ -490,10 +548,10 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
   	      // allocate more space
   	      max_num_tags += TAG_GROW_SIZE;
 	      PCHR *New = new PCHR [max_num_tags];
-	      if (New == NULL)
+	      if (New == nullptr)
 		{
 		  delete [] t;
-		  return NULL; // NO MORE CORE!
+		  return nullptr; // NO MORE CORE!
 		}
 	      memcpy(New, t, tc*sizeof(PCHR));
  	      delete [] t;
@@ -513,6 +571,6 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
 	State = CONTINUING;
       i++; // increment
     }
-  t[tc] = (PCHR) NULL;
+  t[tc] = nullptr;
   return t;
 }

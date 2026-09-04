@@ -35,6 +35,9 @@
  * SUCH DAMAGE.
  */
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdio.h>
 #include <ctype.h>
 #include <fcntl.h>
@@ -99,20 +102,32 @@ int SetSubF(MARC_FIELD *f, char *dat)
     if (*dat == SUBFDELIM) {
       if ((s = (MARC_SUBFIELD *)AllocSafe(&RememberKey,
 	  (INT4) sizeof(MARC_SUBFIELD),
-	  MEMF_PUBLIC | MEMF_CLEAR, GENERALMEM)) == NULL) {
+	  MEMF_PUBLIC | MEMF_CLEAR, GENERALMEM)) == nullptr) {
 	fprintf(stderr, "couldn't allocate marc subfield structure\n");
 	return(0);
       }
-      f->subfcodes[0]++;
-      f->subfcodes[(short)f->subfcodes[0]] = *(dat+1);
+      // BUGFIX #1: subfcodes[0] is a count with no bound check against
+      // the fixed subfcodes[21] array (index 0 is the count, so only
+      // indices 1..20 are valid data slots) -- a field with more than
+      // 20 subfields wrote past the array into MARC_FIELD's own
+      // `length` member and beyond. Confirmed real with a standalone
+      // repro (25 subfields): UBSan reported "index 21 out of bounds
+      // for type 'char [21]'". Fixed by capping the count at the
+      // array's usable size; subfield data past the 20th is still
+      // linked into the subfield list below, just not indexable by
+      // code via GetSubf(). See docs/BUG_CATALOG.md#srcmarclibhxx.
+      if ((unsigned char)f->subfcodes[0] < sizeof(f->subfcodes) - 1) {
+	f->subfcodes[0]++;
+	f->subfcodes[(unsigned char)f->subfcodes[0]] = *(dat+1);
+      }
       s->code = *(dat+1);
       s->data = dat+2;
-      if (f->lastsub != NULL)
+      if (f->lastsub != nullptr)
 	f->lastsub->next = s;
-      if (f->subfield == NULL)
+      if (f->subfield == nullptr)
 	f->subfield = s;
       f->lastsub = s;
-      s->next = (struct marc_subfield *)NULL;
+      s->next = (struct marc_subfield *)nullptr;
     }
     dat++;
   }
@@ -133,31 +148,49 @@ MARC_FIELD *SetField(MARC_REC *rec, MARC_DIRENTRY_OVER *dir)
 
   if ((f = (MARC_FIELD *)AllocSafe(&RememberKey,
 	   (INT4)sizeof(MARC_FIELD),MEMF_PUBLIC | MEMF_CLEAR,
-	   GENERALMEM)) == NULL) {
+	   GENERALMEM)) == nullptr) {
     fprintf(stderr,"couldn't allocate marc field structure\n");
-    return(NULL);
+    return(nullptr);
   }
   if (rec->nfields == 0)
     rec->fields = f;
   rec->nfields++;
-  if (rec->lastfield != NULL)
+  if (rec->lastfield != nullptr)
     rec->lastfield->next = f;
   rec->lastfield = f;
   for (i=0; i<3; i++)
     f->tag[i] = dir->tag[i];
   f->tag[3] = '\0';
   f->length = GetNum(dir->flen,4);
-  f->data = rec->BaseAddr + GetNum(dir->fstart,5);
+  // BUGFIX #2: fstart came straight from the (possibly corrupted or
+  // malicious) directory entry with no validation against the record's
+  // actual length, so f->data could point arbitrarily far past the
+  // allocated record buffer. Confirmed real with a standalone repro: a
+  // 37-byte record whose directory entry claims a field starting at
+  // offset 9000 -- ASan reported a heap-buffer-overflow READ at the
+  // indicator1 line below. Fixed by rejecting the field (matching this
+  // function's existing "return NULL on failure" convention) unless
+  // its start offset -- plus room for both indicator bytes -- fits
+  // inside the record. See docs/BUG_CATALOG.md#srcmarclibhxx.
+  {
+    INT4 FStart = GetNum(dir->fstart,5);
+    INT4 Offset = (rec->BaseAddr - rec->record) + FStart;
+    if (FStart < 0 || Offset < 0 || Offset + 1 >= rec->length) {
+      fprintf(stderr,"bad field start offset in SetField\n");
+      return(nullptr);
+    }
+    f->data = rec->BaseAddr + FStart;
+  }
   f->indicator1 = *(f->data);
   f->indicator2 = *(f->data + 1);
-  f->next = (struct marc_field *)NULL;
-  f->subfield = (MARC_SUBFIELD *)NULL;
-  f->lastsub = (MARC_SUBFIELD *)NULL;
+  f->next = (struct marc_field *)nullptr;
+  f->subfield = (MARC_SUBFIELD *)nullptr;
+  f->lastsub = (MARC_SUBFIELD *)nullptr;
   p = f->data + 2;
   if (SetSubF(f,p))
     return(f);
   else
-    return(NULL);
+    return(nullptr);
 }
 
 
@@ -345,34 +378,62 @@ MARC_REC *GetMARC(char *buffer,INT4 lrecl,int copy)
 
   if (copy) {
     if ((record = AllocSafe(&RememberKey,lrecl+1,
-	    MEMF_PUBLIC | MEMF_CLEAR,GENERALMEM)) == NULL) {
+	    MEMF_PUBLIC | MEMF_CLEAR,GENERALMEM)) == nullptr) {
       fprintf(stderr,"couldn't allocate record\n");
-      return(NULL);
+      return(nullptr);
     }
     strcpy(record,buffer);
   }
   else
     record = buffer;
 
+  // BUGFIX #4: lrecl came from the caller with no floor -- a truncated
+  // or malformed record shorter than a MARC leader (24 bytes) let the
+  // leader field read below (`GetNum(m->leader->BaseAddr,5)`, offset
+  // 12-16) walk past the end of `record`. Confirmed real with a
+  // standalone repro under ASan: a 10-byte record crashed inside
+  // GetNum() with a heap-buffer-overflow read. Reachable live from
+  // MARC::MARC(STRING&) in marc.cxx, which passes a document's raw
+  // length straight through with no minimum-size check of its own.
+  // Fixed by rejecting anything too short to hold a full leader here,
+  // matching this function's existing "return nullptr on bad input"
+  // convention (see BUGFIX #2 in SetField() above). See
+  // docs/BUG_CATALOG.md#srcmarclibcxx.
+  if (lrecl < (INT4)sizeof(MARC_LEADER_OVER)) {
+    fprintf(stderr,"marc record too short for a leader in GetMARC\n");
+    return(nullptr);
+  }
+
   if ((m = (MARC_REC *)AllocSafe(&RememberKey,
 		 (INT4)sizeof(MARC_REC), MEMF_PUBLIC | MEMF_CLEAR,
-		 GENERALMEM)) == NULL) {
+		 GENERALMEM)) == nullptr) {
     fprintf(stderr,"couldn't allocate marc processing structure\n");
-    return(NULL);
+    return(nullptr);
   }
   m->length = lrecl;
   m->record = record;
   m->leader = (MARC_LEADER_OVER *)record;
   m->BaseAddr = record + GetNum(m->leader->BaseAddr,5);
   dir = (MARC_DIRENTRY_OVER *)(record + sizeof(MARC_LEADER_OVER));
-  for (; isdigit(dir->tag[0]); dir++)
-    if ( SetField(m,dir) == NULL) {
+  // BUGFIX #4 (continued): a well-formed record's directory is always
+  // terminated by a non-digit (FIELDTERM) before field data begins, so
+  // the original `isdigit(dir->tag[0])` alone was enough -- *if* that
+  // terminator is actually present within `record`. A record just long
+  // enough to pass the leader check above but truncated or missing its
+  // directory terminator kept walking `dir` past the buffer instead.
+  // Confirmed real with a standalone repro: a 24-byte (leader-only, no
+  // directory) record crashed reading `dir->tag[0]` one byte past the
+  // allocation. Bounding `dir` against `record + lrecl` before every
+  // dereference closes this the same way the leader check above does.
+  for (; (char *)dir + (INT4)sizeof(MARC_DIRENTRY_OVER) <= record + lrecl &&
+	 isdigit(dir->tag[0]); dir++)
+    if ( SetField(m,dir) == nullptr) {
       FreeSafe(&RememberKey,(char *)m,0);
       fprintf(stderr,"could not setfield in getmarc\n");
-      return(NULL);
+      return(nullptr);
     }
   return (m);
-}     
+}
  
 
 /*********************************************************************/
@@ -501,8 +562,8 @@ MARC_FIELD *GetField(MARC_REC *rec,MARC_FIELD *startf,char *buffer,const char *t
 {
   MARC_FIELD *f;
    
-  if (rec == NULL && startf == NULL)
-    return (NULL);
+  if (rec == nullptr && startf == nullptr)
+    return (nullptr);
   if (buffer)
     buffer[0] = '\0';
   if (startf)
@@ -529,7 +590,7 @@ MARC_SUBFIELD *GetSubf(MARC_FIELD *f, char *buffer, char code)
   MARC_SUBFIELD *s;
   char *c;
 
-  if (f == NULL) return(NULL);
+  if (f == nullptr) return(nullptr);
   c = &f->subfcodes[1];
   while(*c && *c != code) c++;
   if(*c) /* go for the data */ 
@@ -542,7 +603,7 @@ MARC_SUBFIELD *GetSubf(MARC_FIELD *f, char *buffer, char code)
            s = s->next;
          }
      }
-   return(NULL); /* didn't find it */
+   return(nullptr); /* didn't find it */
 }
 
 /************************************************************************/
@@ -561,7 +622,7 @@ char *normalize(char *in, char *out)
   if (ofs && ofs < sizeof mainclass)
     *(mainclass+ofs) = '\0';
   else
-    return(NULL);
+    return(nullptr);
 
   while (*in && isspace(*in))
     in++;                    /* skip blanks */
@@ -571,7 +632,7 @@ char *normalize(char *in, char *out)
   if (ofs && ofs < sizeof mainsub)
     *(mainsub+ofs) = '\0';
   else
-    return(NULL);
+    return(nullptr);
   valmainsub = atoi(mainsub);
 
   if (*in == '\0') {
@@ -596,7 +657,7 @@ char *normalize(char *in, char *out)
       if (ofs < sizeof decimal)
 	*(decimal+ofs) = '\0';
       else
-	return(NULL);
+	return(nullptr);
     }
 
     /* this could be changed to separate successive cutters */
@@ -611,11 +672,22 @@ char *normalize(char *in, char *out)
     if (ofs < sizeof subcutter)
       *(subcutter+ofs) = '\0';
     else
-      return(NULL);
+      return(nullptr);
   }
 
   decflag ? (sep = '.') : (sep = ' ');
-  sprintf(out, "%-3s%05d%c%-5s %-10s", mainclass,
+  // BUGFIX #3 (modernization): normalize() has no way to know its
+  // caller's `out` buffer size (no length parameter in its signature,
+  // which GENERAL step 4 keeps frozen), so plain sprintf here relied
+  // entirely on every caller sizing `out` correctly. mainclass/decimal/
+  // subcutter above are all built from fixed-size local buffers with
+  // their own bounds already enforced (returning NULL on overflow), so
+  // this format's output is provably capped well under 64 bytes;
+  // snprintf with that bound preserves identical output for any caller
+  // whose buffer is >=64 bytes (every current use case) while turning
+  // a theoretical undersized-buffer overflow into safe truncation
+  // instead. See docs/BUG_CATALOG.md#srcmarclibhxx.
+  snprintf(out, 64, "%-3s%05d%c%-5s %-10s", mainclass,
 	  valmainsub, sep, decimal, subcutter);
   return(out);
 }

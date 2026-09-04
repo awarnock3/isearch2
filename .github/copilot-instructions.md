@@ -16,12 +16,17 @@ This repository uses GNU make/autoconf and C++ sources (`.cxx`/`.hxx`).
 - Build CGI tools only (after core build):
   - `cd Isearch-cgi && make`
 
-There are no dedicated lint or automated test targets in the Makefiles.
+There's no lint target, but there are two automated Makefile targets
+now (see CLAUDE.md for the full cleanup-effort context both live in):
+`make tests`/`make tests-asan` (Catch2 unit tests), and `make
+smoke-test` (builds `isearch`/`isearch-cgi`, indexes the sample corpus,
+and verifies each document is actually findable by search).
 
-Use this single-command smoke test after a build:
+To run the smoke test by hand instead: note the sample `.txt` files
+live under `data/TEXT/`, not directly in `data/`.
 
 ```bash
-./bin/Iindex -d /tmp/ISEARCH_SMOKE ./data/*.txt && ./bin/Isearch -d /tmp/ISEARCH_SMOKE dust
+./bin/Iindex -d /tmp/ISEARCH_SMOKE ./data/TEXT/*.txt && ./bin/Isearch -d /tmp/ISEARCH_SMOKE dust
 ```
 
 ## High-level architecture

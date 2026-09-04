@@ -40,15 +40,23 @@ File:		infix2rpn.cxx
 Version:	1.02
 $Revision: 1.11 $
 Description:	Class INFIX2RPN - translates an INFIX query to RPN
-Author:		
+Author:
 @@@*/
+
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <string.h>
 
 #include "infix2rpn.hxx"
 
 
-INFIX2RPN::INFIX2RPN()  {
+INFIX2RPN::INFIX2RPN() : TermsWithNoOps(0) {
+  // BUGFIX #1: TermsWithNoOps used to be left uninitialized by this
+  // constructor (the other two indirectly initialize it via Parse()'s
+  // `TermsWithNoOps = 0;`, but this one never calls Parse()) -- calling
+  // InputParsedOK() before ever calling Parse() would read garbage.
+  // See docs/BUG_CATALOG.md#srcinfix2rpncxx.
   strcpy(DefaultOp,"AND");
 }
 
@@ -61,7 +69,14 @@ INFIX2RPN::INFIX2RPN(const STRING &StrInput, STRING *StrOutput) {
 
 INFIX2RPN::INFIX2RPN(const STRING &StrInput, STRING *StrOutput,
 		     const CHR *Op) {
-  strcpy(DefaultOp,Op);
+  // BUGFIX #2: this used to strcpy(DefaultOp, Op) directly, with no
+  // length check against DefaultOp's fixed MAX_OP_LEN (8) bytes --
+  // confirmed a real stack-buffer-overflow with a standalone repro
+  // (an Op longer than 7 characters overflows DefaultOp). SetDefaultOp()
+  // already has the correct bounds check (falls back to "AND" if Op is
+  // too long); just delegate to it instead of duplicating/skipping the
+  // check. See docs/BUG_CATALOG.md#srcinfix2rpncxx.
+  SetDefaultOp(Op);
   Parse(StrInput, StrOutput);
 }
 

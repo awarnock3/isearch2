@@ -40,6 +40,17 @@ Description:	Templates for Isearch library
 Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+// Pure convenience aggregator: declares nothing of its own, just
+// #includes every core engine header (STRING/RECORD/MDT/DOCTYPE/query-
+// evaluation classes, etc.) that a doctype parser or CGI frontend
+// typically needs, so those files can write one #include instead of
+// dozens. Confirmed self-contained (compiles standalone as the sole
+// #include in a translation unit) -- see
+// docs/BUG_CATALOG.md#srcisearchhxx.
+
 #ifndef ISEARCH_HXX
 #define ISEARCH_HXX
 

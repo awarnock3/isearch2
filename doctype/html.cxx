@@ -107,6 +107,9 @@ ________________________________________________________________________________
 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		html.cxx
 Version:	$Revision: 1.8 $
@@ -135,6 +138,11 @@ HTML::HTML (PIDBOBJ DbParent) : SGMLNORM (DbParent)
 {
 }
 
+// Record splitting is entirely inherited from SGMLNORM; the #else
+// branch below (permanently disabled by #if 1, never compiled) is
+// abandoned work-in-progress per its own "DOES NOT WORK, Why?"
+// comment -- left untouched rather than modernized, same as any other
+// genuinely dead code.
 void HTML::ParseRecords (const RECORD& FileRecord)
 {
 #if 1
@@ -203,7 +211,7 @@ static int IsHTMLAttributeTag (const char *tag)
 //  { "img", 3 },
 //  { "nextid", 6 },
 //  { "font", 4 },
-    { NULL, 0 }
+    { nullptr, 0 }
   };
 
   if (*tag == '/')
@@ -359,8 +367,8 @@ static int IgnoreHTMLTag (const char *tag)
 // Search for the next occurance of an element of tags in tag_list
 static const char *find_next_tag (char *const *tag_list, const char *const *tags)
 {
-  if (*tag_list == NULL)
-    return NULL;
+  if (*tag_list == nullptr)
+    return nullptr;
 
   for (size_t i = 1; tag_list[i]; i++)
     {
@@ -373,7 +381,7 @@ static const char *find_next_tag (char *const *tag_list, const char *const *tags
 	    }
 	}
     }
-  return NULL;			// No end tag found
+  return nullptr;			// No end tag found
 
 }
 
@@ -390,7 +398,7 @@ void HTML::ParseFields (PRECORD NewRecord)
   NewRecord->GetFullFileName (&fn);
   PFILE fp = fopen (fn, "rb");
 
-  if (fp == NULL)
+  if (fp == nullptr)
     {
     error:
       cout << "Unable to parse HTML file \"" << fn << "\"\n";
@@ -405,8 +413,18 @@ void HTML::ParseFields (PRECORD NewRecord)
       RecStart = 0;
       RecEnd = ftell (fp);
     }
+  // BUGFIX #1 (docs/BUG_CATALOG.md#doctypehtmlcxx): this used to `goto
+  // error` directly, but that shared label's own cout+return doesn't
+  // fclose(fp) -- correctly so for the fp==nullptr case just above (where
+  // there's nothing to close), but this call site reaches it with a
+  // real, open fp from the successful fopen() above, leaking it. Same
+  // leaked-resource-on-early-return shape as doctype/bibtex.cxx's
+  // BUGFIX #3. Fixed by closing fp here, before the jump.
   if (-1 == fseek (fp, (long)RecStart, SEEK_SET))
-    goto error;			// ERROR
+    {
+      fclose (fp);
+      goto error;		// ERROR
+    }
 
   // Read the whole record in a buffer
   GPTYPE RecLength = RecEnd - RecStart;
@@ -422,7 +440,7 @@ void HTML::ParseFields (PRECORD NewRecord)
   DFD dfd;
 
   PCHR *tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL)
+  if (tags == nullptr)
     {
       delete[]RecBuffer;	// Clean up
       goto error;		// ERROR
@@ -446,17 +464,17 @@ void HTML::ParseFields (PRECORD NewRecord)
       const char *p = find_end_tag (tags_ptr, *tags_ptr);
 
       // Hack to support min tags and most "common" incorrect uses of DD, DT, LI and TL
-      if (p == NULL)
+      if (p == nullptr)
 	{
 	  if (StrCaseCmp (*tags_ptr, "dd") == 0)
 	    {
 	      // Look for nearest <DT> or </DL>
-	      static const char * const tags[] = {"dt", "/dl", NULL};
+	      static const char * const tags[] = {"dt", "/dl", nullptr};
 	      p = find_next_tag (tags_ptr, tags);
-	      if (p == NULL)
+	      if (p == nullptr)
 		{
 		  // Some bogus uses
-		  static const char * const tags[] = {"dd", "/ul", "/ol", NULL};
+		  static const char * const tags[] = {"dd", "/ul", "/ol", nullptr};
 		  p = find_next_tag (tags_ptr, tags);
 		  if (p)
 		    {
@@ -470,12 +488,12 @@ void HTML::ParseFields (PRECORD NewRecord)
 	  else if (StrCaseCmp (*tags_ptr, "dt") == 0)
 	    {
 	      // look for next <DD> or </DL>
-	      static const char * const tags[] = {"DD", "/DL", NULL};
+	      static const char * const tags[] = {"DD", "/DL", nullptr};
 	      p = find_next_tag (tags_ptr, tags);
-	      if (p == NULL)
+	      if (p == nullptr)
 		{
 		  // Some bogus uses
-		  static const char * const tags[] = {"dt", "/ul", "/ol", NULL};
+		  static const char * const tags[] = {"dt", "/ul", "/ol", nullptr};
 		  p = find_next_tag (tags_ptr, tags);
 		  if (p)
 		    {
@@ -489,18 +507,18 @@ void HTML::ParseFields (PRECORD NewRecord)
 	  else if (StrCaseCmp (*tags_ptr, "li") == 0)
 	    {
 	      // look for next <LI>, </OL> or </UL>
-	      static const char * const tags[] = {"li", "/ol", "/ul", NULL};
+	      static const char * const tags[] = {"li", "/ol", "/ul", nullptr};
 	      p = find_next_tag (tags_ptr, tags);
 	    }
 	  else if (StrCaseCmp (*tags_ptr, "tl") == 0)
 	    {
 	      // look for nearest <TL> or </TLI>
-	      static const char * const tags[] = {"tl", "/tli", NULL};
+	      static const char * const tags[] = {"tl", "/tli", nullptr};
 	      p = find_next_tag (tags_ptr, tags);
 	    }
 	}			// end code to handle some HTML minimized tags
 
-      if (p != NULL)
+      if (p != nullptr)
 	{
 	  // We have a tag pair
 	  size_t tag_len = strlen (*tags_ptr);
@@ -548,7 +566,7 @@ void HTML::ParseFields (PRECORD NewRecord)
 	{
 	  store_attributes (/* Db, */ pdft, RecBuffer, *tags_ptr);
 	}
-      else if (p == NULL)
+      else if (p == nullptr)
 	{
 #if STRICT_HTML
 	  // Give some information
@@ -565,7 +583,12 @@ void HTML::ParseFields (PRECORD NewRecord)
   delete [] tags;
 }
 
-void HTML::GetMetadata(const RECORD& record, const STRING& mdType,
+// Renders a minimal GILS-style <Locator> XML stub for record, filling
+// in only <Title> (via Present()'s "title" field); every other element
+// is emitted empty as a placeholder for metadata this class doesn't
+// itself extract. mdType is currently unused -- accepted for a future
+// per-metadata-type rendering that was never implemented.
+void HTML::GetMetadata(const RECORD& record, const STRING& /* mdType */,
 			 STRING* buffer) {
 	RESULT result;
 	STRING s;
@@ -615,6 +638,9 @@ void HTML::GetMetadata(const RECORD& record, const STRING& mdType,
 	buffer->Cat("</Locator>\n");
 }
 
+// ElementSet BRIEF_MAGIC ("B") returns the "title" field, falling back
+// to the record's filename if there is none; anything else is treated
+// as a literal field name and delegated to SGMLNORM::Present().
 void HTML:: Present (const RESULT& ResultRecord, const STRING& ElementSet,
  PSTRING StringBuffer)
 {

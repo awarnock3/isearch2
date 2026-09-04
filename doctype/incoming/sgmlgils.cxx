@@ -33,6 +33,9 @@ IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		sgmlgils.cxx
 Version:	1.00
@@ -48,22 +51,23 @@ Copyright:	CNIDR
 #include "doctype.hxx"
 #include "sgmlgils.hxx"
 
-#define GILSRECORD_PATH "/home1/kgamiel/dev/GILS/records"
-
 //#include "../../zdist-1.09/ztags.hxx"
 
 SGMLGILS::SGMLGILS (PIDBOBJ DbParent): SGMLNORM::SGMLNORM (DbParent)
 {
 }
 
+// Dispatches by RecordSyntax OID (see BUGFIX #1: this file compares
+// against OID strings, not the plain-name constants most other
+// RecordSyntax-aware DOCTYPEs in this tree use).
 void SGMLGILS::
-Present (const RESULT& ResultRecord, const STRING& ElementSet, 
+Present (const RESULT& ResultRecord, const STRING& ElementSet,
 	const STRING & RecordSyntax, PSTRING StringBuffer)
 {
 
-	if(RecordSyntax == SUTRS_OID)
+	if(RecordSyntax == SutrsRecordSyntaxOID)
 		GetSUTRSRecord(ResultRecord, ElementSet, StringBuffer);
-	else if(RecordSyntax == GRS1_OID)
+	else if(RecordSyntax == GRS1RecordSyntaxOID)
 		GetGRS1Record(ResultRecord, ElementSet, StringBuffer);
 	else {
 		*StringBuffer = "Unsupported record syntax of ";
@@ -72,17 +76,28 @@ Present (const RESULT& ResultRecord, const STRING& ElementSet,
 	}
 }
 
-void SGMLGILS::GetSUTRSRecord (const RESULT& ResultRecord, 
+// BUGFIX #3 (docs/BUG_CATALOG.md#doctypeincomingsgmlgilscxx): a
+// minimal placeholder, matching this function's own "F"/"G" element
+// sets below -- GRS1 (Generic Record Syntax 1) formatting was never
+// implemented in this file.
+void SGMLGILS::GetGRS1Record (const RESULT& /* ResultRecord */,
 	const STRING& ElementSet, PSTRING StringBuffer)
 {
-	*StringBuffer = "";
-
-	if(ElementSet == "B") {
-		
-	}
+	*StringBuffer = "Unsupported element set name of ";
+	*StringBuffer += ElementSet;
+	*StringBuffer += " requested (GRS1 not implemented)";
 }
 
-void SGMLGILS::GetSUTRSRecord (const RESULT& ResultRecord, 
+// BUGFIX #2 (docs/BUG_CATALOG.md#doctypeincomingsgmlgilscxx): this
+// file used to define GetSUTRSRecord() twice with an identical
+// signature -- a hard ODR violation the file never actually compiled
+// under. The first definition was an empty stub (`*StringBuffer = "";
+// if(ElementSet == "B") { }`, doing nothing); this second, complete
+// definition is the one that survives. Composes a brief ("B") headline
+// from Title/Control-Identifier/Originator/Local-Control-Number
+// per GILS's suggested format; "F"/"G" are unimplemented placeholders;
+// "HTML HTML 0" reads a sibling ".htm" file.
+void SGMLGILS::GetSUTRSRecord (const RESULT& ResultRecord,
 	const STRING& ElementSet, PSTRING StringBuffer)
 {
 	if(ElementSet == "B") {

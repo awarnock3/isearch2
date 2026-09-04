@@ -42,6 +42,9 @@ Description:	Command-line utilities for Isearch databases
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #define GILS_DIRNAME "gils.out"
 
 #include <stdlib.h>
@@ -74,10 +77,11 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "registry.hxx"
 #include "idb.hxx"
 
+/// IDB with a silent IndexingStatus() override; Iutil doesn't index, so it has no progress to report.
 class IDBC : public IDB {
 public:
-	IDBC(const STRING& NewPathName, const STRING& NewFileName, 
-	     const STRLIST& NewDocTypeOptions) 
+	IDBC(const STRING& NewPathName, const STRING& NewFileName,
+	     const STRLIST& NewDocTypeOptions)
 		:	IDB(NewPathName, NewFileName, NewDocTypeOptions) {};
 
 protected:
@@ -87,7 +91,13 @@ protected:
 
 typedef IDBC* PIDBC;
 
-void 
+/**
+ * @brief Removes the .mdt/.num files IDB::KillAll() leaves behind for
+ * database @p db (worked around here rather than in ~IDB(), per the
+ * comment below).
+ * @param db Database root name/path passed to KillAll().
+ */
+void
 cleanupAfterKillAll(const STRING& db) {
   // for some reason these files are not getting deleted
   // by KillAll() or are being written out again,
@@ -103,7 +113,21 @@ cleanupAfterKillAll(const STRING& db) {
 }
 
 
-int 
+/**
+ * @brief Iutil CLI entry point: parses flags (see the usage text printed
+ * below when @p argc < 2) and dispatches to the corresponding IDB
+ * maintenance operation(s) against the database named by -d — optimize/
+ * collapse indexes, erase, view info/fields/documents, delete/undelete
+ * by key, cleanup, generate GILS metadata, or replace one database with
+ * another.
+ * @param argc Argument count, including the program name.
+ * @param argv Argument vector; argv[1..] are the flags/values described
+ * in the usage text.
+ * @return 0 on completion or a handled usage/database error (via
+ * RETURN_ZERO); 1 if -replace's source and destination are the same
+ * database.
+ */
+int
 main(int argc, char** argv) {
   fprintf(stderr,"Iutil v%s\n", IsearchVersion);
   if (argc < 2) {
@@ -385,6 +409,11 @@ main(int argc, char** argv) {
       DBName.Print(stderr);
       fprintf(stderr," does not need optimizing.\n");
       delete [] CheckName;
+      // BUGFIX #1 (docs/BUG_CATALOG.md#srciutilcxx): pdb (allocated
+      // above) was leaked on this early return -- every other exit
+      // path in main() either deletes pdb first or hasn't allocated it
+      // yet.
+      delete pdb;
       RETURN_ZERO;
     } else {
       delete [] CheckName;
@@ -401,6 +430,9 @@ main(int argc, char** argv) {
       DBName.Print(stderr);
       fprintf(stderr," cannot be collapsed.\n");
       delete [] CheckName;
+      // BUGFIX #2 (docs/BUG_CATALOG.md#srciutilcxx): same pdb leak as
+      // BUGFIX #1 above, mirrored in the -collapse branch.
+      delete pdb;
       RETURN_ZERO;
     } else {
       delete [] CheckName;
@@ -669,6 +701,9 @@ main(int argc, char** argv) {
     printf(" will be included.\n");
     // parse defaults file
     REGISTRY* metadef = parseMetaDefaults(MetaFn);
+    // BUGFIX #3 (docs/BUG_CATALOG.md#srciutilcxx): metadef and each
+    // loop iteration's meta below were both leaked -- see the deletes
+    // added at the end of this block and inside the loop.
     // generate gils records
 #ifdef UNIX
     mkdir(GILS_DIRNAME, 0777);
@@ -706,9 +741,11 @@ main(int argc, char** argv) {
 	meta->PrintSgml(fp, position);
 	fclose(fp);
       }
+      delete meta;
     }
+    delete metadef;
   }
-	
+
   if (GilsIndex) {
     printf("Creating GILS metadata...\n");
     STRING GilsBuffer,GilsFile;
@@ -717,10 +754,17 @@ main(int argc, char** argv) {
     GilsFile.Cat(".gils");
     GilsBuffer.WriteFile(GilsFile);
     FILE* fp = fopen(GilsFile, "a");
-    pdb->WriteCentroid(fp);
-    fprintf(fp, "</Locator>\n");
-    fclose(fp);
-     
+    // BUGFIX #4 (docs/BUG_CATALOG.md#srciutilcxx): fp was used
+    // unconditionally, with no check for a failed fopen() (e.g. an
+    // unwritable directory or a full disk) -- a null-pointer
+    // dereference on WriteCentroid()/fprintf() below.
+    if (fp) {
+      pdb->WriteCentroid(fp);
+      fprintf(fp, "</Locator>\n");
+      fclose(fp);
+    } else {
+      perror(GilsFile);
+    }
   }
 
   delete pdb;
@@ -760,7 +804,7 @@ main(int argc, char** argv) {
     CHR *pattern = sourcePattern.NewCString();
     glob_t matches;
     memset(&matches, 0, sizeof(matches));
-    const int status = glob(pattern, 0, NULL, &matches);
+    const int status = glob(pattern, 0, nullptr, &matches);
     if (status == 0) {
       AddTrailingSlash(&dest);
       for (size_t i = 0; i < matches.gl_pathc; ++i) {

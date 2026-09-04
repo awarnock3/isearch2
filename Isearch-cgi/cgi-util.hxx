@@ -43,6 +43,9 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 		Tim Gemma, stone@k12.cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-16
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef _CGIUTIL_HXX
 #define _CGIUTIL_HXX
 
@@ -56,6 +59,13 @@ Authors:        Kevin Gamiel, kgamiel@cnidr.org
 #define POST 0
 #define GET 1
 
+// Parses CGI form input (GET's QUERY_STRING or POST's stdin body,
+// picked via REQUEST_METHOD) into up to CGI_MAXENTRIES name/value
+// pairs at construction time, decoding %XX escapes and '+'-as-space
+// along the way. See docs/BUG_CATALOG.md#isearch-cgicgi-utilhxx for
+// three confirmed, externally-reachable crashes fixed in GetInput()
+// this turn (a client fully controls REQUEST_METHOD, CONTENT_LENGTH,
+// QUERY_STRING, and the POST body).
 class CGIAPP {
   PCHR name[CGI_MAXENTRIES];
   PCHR value[CGI_MAXENTRIES];
@@ -66,6 +76,11 @@ class CGIAPP {
 public:
   CGIAPP();
   void Display();
+  // No bounds checking against the actual entry count -- there's no
+  // public accessor for it either, so these are only really safe to
+  // call from a loop this class itself controls (see Display()).
+  // GetValueByName() below is the safe, bounds-checked way to look up
+  // a specific field.
   PCHR GetName(INT4 i);
   PCHR GetValue(INT4 i);
   PCHR GetValueByName(const CHR *name);
@@ -75,6 +90,12 @@ public:
 
 void plustospace(PCHR p);
 void unescape_url(PCHR p);
+// BUGFIX note (docs/BUG_CATALOG.md#isearch-cgicgi-utilhxx): out has no
+// size parameter, so its caller must independently know this can write
+// up to 3x strlen(url) bytes (every non-alnum, non-space input byte
+// becomes a 3-byte %XX escape) -- easy to get wrong, and fixing it
+// needs a signature change this turn left alone since there are
+// currently no callers anywhere in the tree to get it wrong yet.
 void escape_url(PCHR url, PCHR out);
 void spacetoplus(PCHR str);
 CHR x2c(PCHR p);

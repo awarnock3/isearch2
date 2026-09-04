@@ -41,6 +41,8 @@ Version:	$Revision: 1.3 $
 Description:	Class INTFIELD - Numeric interval data object
 Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 
 #include "intfield.hxx"

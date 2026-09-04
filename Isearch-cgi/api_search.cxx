@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-16
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "api_search.hxx"
 
 #include <string.h>
@@ -32,7 +35,7 @@ static const CHR *OperatorToken(const BoolOperator op)
 
 static void BuildQueryFromTerms(const ApiRequest& req, STRING *query)
 {
-  if (query == NULL || req.terms.empty()) {
+  if (query == nullptr || req.terms.empty()) {
     return;
   }
 
@@ -85,7 +88,7 @@ static bool HasBooleanTokens(const STRING& query_text)
 static bool BuildSquery(const ApiRequest& req, SQUERY *search_query,
                         STRING *interpreted_query, STRING& error_detail)
 {
-  if (search_query == NULL || interpreted_query == NULL) {
+  if (search_query == nullptr || interpreted_query == nullptr) {
     error_detail = "Internal error building query.";
     return false;
   }
@@ -103,7 +106,26 @@ static bool BuildSquery(const ApiRequest& req, SQUERY *search_query,
 
   *interpreted_query = query_text;
 
-  const bool force_rpn = req.rpn || req.infix || req.search_type == SEARCH_BOOLEAN;
+  // BUGFIX #1 (docs/BUG_CATALOG.md#isearch-cgiapi_searchhxx-isearch-cgiapi_searchcxx):
+  // req.rpn means query_text is *already* in RPN (postfix) form -- exactly
+  // what SQUERY::SetRpnTerm() expects directly (src/squery.cxx: it just
+  // pushes tokens onto an operand/operator stack in the order given, no
+  // precedence handling). INFIX2RPN::Parse() below does the opposite
+  // conversion (infix -> rpn) and was being applied here too, before this
+  // fix, confirmed via a live repro: a valid RPN query ("Watersheds
+  // Oceanography AND") submitted with rpn=true was rejected outright with
+  // a 422 "query was unparseable" -- InputParsedOK()'s already-RPN-shaped
+  // token stream doesn't satisfy the infix parser's own well-formedness
+  // check. req.rpn/req.infix/req.and_mode are mutually exclusive
+  // (enforced by api_request.cxx's ValidateRequest() before this
+  // function is ever reached), so handling req.rpn here first and
+  // returning is safe.
+  if (req.rpn) {
+    search_query->SetRpnTerm(query_text);
+    return true;
+  }
+
+  const bool force_rpn = req.infix || req.search_type == SEARCH_BOOLEAN;
 
   if (!force_rpn && req.search_type == SEARCH_SIMPLE) {
     search_query->SetTerm(query_text);
@@ -141,20 +163,20 @@ static bool BuildSquery(const ApiRequest& req, SQUERY *search_query,
 
 static void BuildResultUrl(const STRING& full_name, STRING *url_out)
 {
-  if (url_out == NULL) {
+  if (url_out == nullptr) {
     return;
   }
   *url_out = "";
 
   CHR *name = full_name.NewCString();
-  if (name == NULL) {
+  if (name == nullptr) {
     return;
   }
 
   CHR *http_path = (CHR *)getenv("DOCUMENT_ROOT");
-  if (http_path != NULL) {
+  if (http_path != nullptr) {
     CHR *url = strstr(name, http_path);
-    if (url != NULL) {
+    if (url != nullptr) {
       url += strlen(http_path);
       *url_out = url;
     }
@@ -190,7 +212,7 @@ int ExecuteSearch(const ApiRequest& req, const ApiConfig& cfg,
   meta.interpreted_query = interpreted_query;
 
   VIDB *pdb = new VIDB(db_path, req.database);
-  if (pdb == NULL) {
+  if (pdb == nullptr) {
     error_detail = "Failed to open database.";
     return 500;
   }
@@ -201,17 +223,17 @@ int ExecuteSearch(const ApiRequest& req, const ApiConfig& cfg,
     return 404;
   }
 
-  const time_t start_time = time(NULL);
-  PIRSET pirset = NULL;
+  const time_t start_time = time(nullptr);
+  PIRSET pirset = nullptr;
   if ((req.op == OP_AND || req.and_mode) && req.search_type == SEARCH_SIMPLE &&
       !req.rpn && !req.infix) {
     pirset = pdb->AndSearch(query);
   } else {
     pirset = pdb->Search(query);
   }
-  const time_t end_time = time(NULL);
+  const time_t end_time = time(nullptr);
 
-  if (pirset == NULL) {
+  if (pirset == nullptr) {
     error_detail = "Search execution failed.";
     delete pdb;
     return 500;

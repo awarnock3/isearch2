@@ -6,6 +6,9 @@ Author:		Edward C. Zimmermann, edz@bsn.com
 Copyright:	Basis Systeme netzwerk, Munich
 @@@-*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef MAILFOLDER_HXX
 #define MAILFOLDER_HXX
 
@@ -14,7 +17,14 @@ Copyright:	Basis Systeme netzwerk, Munich
 # include "doctype.hxx"
 #endif
 
-class MAILFOLDER 
+// A Unix mail-folder (mbox-style) DOCTYPE: splits a folder into
+// per-message records at blank-line-then-"From "/"Article " boundaries
+// (ParseRecords()), then parses each message's RFC822-ish headers into
+// fields plus a "Message-body" field for everything after the blank
+// line separating headers from the body (ParseFields()). See the
+// format comment above accept_tag() in mailfolder.cxx for the full
+// grammar and known limitations (MIME/encodings not handled).
+class MAILFOLDER
   :  public DOCTYPE {
 public:
     MAILFOLDER(PIDBOBJ DbParent);

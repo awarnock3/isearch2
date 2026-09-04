@@ -41,21 +41,69 @@ $Revision: 1.8 $
 Description:	Class IRSET - Internal Search Result Set
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-05
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef IRSET_HXX
 #define IRSET_HXX
 
+// BUGFIX #1: previously had no includes at all (not even a commented-out
+// block like most other files in this tree) despite needing OPERAND,
+// PIDBOBJ, IRESULT, PRSET, MDT and more below. Mirrors the include list
+// irset.cxx itself already needed to use this header at all.
+#include "defs.hxx"
+#include "string.hxx"
+#include "vlist.hxx"
+#include "attr.hxx"
+#include "attrlist.hxx"
+#include "mdtrec.hxx"
+#include "mdt.hxx"
+#include "dfd.hxx"
+#include "dfdt.hxx"
+#include "fc.hxx"
+#include "fct.hxx"
+#include "result.hxx"
+#include "strlist.hxx"
+#include "df.hxx"
+#include "dft.hxx"
+#include "record.hxx"
+#include "idbobj.hxx"
+#include "iresult.hxx"
+#include "opobj.hxx"
+#include "operand.hxx"
+#include "rset.hxx"
+
+// The internal, working search result set the query engine builds up
+// while evaluating a query (as opposed to RSET, the materialized,
+// user-facing result set produced at the end via GetRset()/Fill()).
 class IRSET : public OPERAND {
 public:
   IRSET(const PIDBOBJ DbParent);
+  // BUGFIX #2: added -- previously absent, so copy-constructing an
+  // IRSET (e.g. `IRSET b = a;`, pass/return by value) used the
+  // compiler-generated shallow copy of Table, and both copies'
+  // destructors then deleted the same heap array: confirmed
+  // double-free/use-after-free under ASan. Deep-copies entries the
+  // same way operator= does, below.
+  IRSET(const IRSET& OtherIrset);
   OPOBJ&  operator=(const OPOBJ& OtherIrset);
   void    Init(const PIDBOBJ DbParent);
   INT     GetOperandType() const { return TypeRset; };
   OPOBJ*  Duplicate() const;
   IRSET*  Duplicate();
+  // Adds ResultRecord, or merges it into an existing entry with the
+  // same MdtIndex (accumulating hit count/score) if one exists. O(n).
   void    AddEntry(const IRESULT& ResultRecord, const INT AddHitCounts);
+  // Like AddEntry, but always appends without checking for an existing
+  // entry with the same MdtIndex -- callers are responsible for later
+  // sorting (SortByIndex) and deduplicating (MergeEntries) themselves.
   void    FastAddEntry(const IRESULT& ResultRecord, const INT AddHitCounts);
+  // Consolidates consecutive entries sharing the same MdtIndex; Table
+  // must already be sorted by index (SortByIndex) for this to work.
   void    MergeEntries(const INT AddHitCounts);
+  // Copies the Index'th entry (1-based) into *ResultRecord; leaves
+  // *ResultRecord untouched if Index is out of [1, GetTotalEntries()]
+  // range.
   void    GetEntry(const INT Index, PIRESULT ResultRecord) const;
   PRSET   GetRset();
   PRSET   GetRset(INT4 Start, INT4 End);

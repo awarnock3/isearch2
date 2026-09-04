@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*
 
 File:        bibtex.hxx
@@ -15,6 +18,10 @@ Author:      Erik Scott, Scott Technologies, Inc.
 #include "doctype.hxx"
 #endif
 
+// A BibTeX DOCTYPE: splits a file into "}"-terminated entries and
+// extracts each entry's "title = "..."" value as its sole indexed
+// field. See doctype/bibtex.cxx for the exact grammar and known
+// limitations (no escaped-quote handling).
 class BIBTEX : public DOCTYPE {
 public:
    BIBTEX(PIDBOBJ DbParent);

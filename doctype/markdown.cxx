@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-16
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*@@@
 File:		markdown.cxx
 Version:	1.00
@@ -13,6 +16,10 @@ Author:		Copilot
 MARKDOWN::MARKDOWN(PIDBOBJ DbParent) : DOCTYPE(DbParent) {
 }
 
+// Fills BriefBuffer with RecordText's first ATX heading ("#"/"##"/...
+// prefixed line, stripped of the leading '#' run and surrounding
+// whitespace), or, if no heading is found anywhere in the text, its
+// first non-empty line. Leaves BriefBuffer empty for a blank record.
 static void
 ExtractMarkdownBrief(const STRING& RecordText, PSTRING BriefBuffer) {
   *BriefBuffer = "";
@@ -75,6 +82,10 @@ ExtractMarkdownBrief(const STRING& RecordText, PSTRING BriefBuffer) {
   delete [] Text;
 }
 
+// Element set "B" returns ExtractMarkdownBrief()'s heading/first-line
+// summary; "S" returns ExtractMarkdownHeaders()'s "#"-prefixed heading
+// lines; every other element set (including "F") returns the raw
+// record text unchanged.
 static void
 ExtractMarkdownHeaders(const STRING& RecordText, PSTRING HeaderBuffer) {
   *HeaderBuffer = "";

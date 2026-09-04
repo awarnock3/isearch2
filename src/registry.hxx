@@ -42,6 +42,9 @@ Description:	Class REGISTRY - Structured Profile Registry
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef REGISTRY_HXX
 #define REGISTRY_HXX
 
@@ -52,15 +55,29 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "vlist.hxx"
 #include "strlist.hxx"
 
+// A tree of named nodes -- first-child/next-sibling representation
+// (Next chains a node's siblings, Child points to its first child) --
+// used to hold structured config/profile data (e.g. parsed INI-style
+// "[section]\nkey=val1,val2" files via Profile*, or the nested
+// "<tag>...</tag>" meta-defaults format via parseMetaDefaults() below)
+// addressable by a STRLIST path of node names down from the root.
 class REGISTRY {
 public:
   REGISTRY(const STRING& Title);
   REGISTRY(const CHR *Title);
+  // Deep-copies OtherRegistry's whole subtree (via clone() below);
+  // safe under self-assignment.
   REGISTRY& operator=(const REGISTRY& OtherRegistry);
+  // Recursively deep-copies this node and its whole subtree.
   REGISTRY* clone() const;
   void PrintSgml(FILE* fp, const STRLIST& Position);
+  // Replaces Position's children with Value's entries (one child node
+  // per entry).
   void SetData(const STRLIST& Position, const STRLIST& Value);
+  // Appends Value's entries as additional children of Position.
   void AddData(const STRLIST& Position, const STRLIST& Value);
+  // Fills *StrlistBuffer with Position's direct children's data, or
+  // clears it if Position doesn't exist.
   void GetData(const STRLIST& Position, STRLIST *StrlistBuffer);
   void SaveToFile(const STRING& FileName, const STRLIST& Position);
   void LoadFromFile(const STRING& FileName, const STRLIST& Position);
@@ -106,6 +123,8 @@ private:
 
 typedef REGISTRY* PREGISTRY;
 
+// Parses a simple "<tag>...</tag>"-nested meta-defaults file into a
+// REGISTRY tree rooted at a "meta" node, keyed by tag-name path.
 REGISTRY*   parseMetaDefaults(const STRING& filename);
 
 #endif

@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		cip-collection.hxx
 Version:	1.00
@@ -10,6 +13,10 @@ Copyright:	A/WWW Enterprises, MCNC/CNIDR and NASA
 
 #ifndef CIPC_HXX
 #define CIPC_HXX
+
+#ifndef SGMLNORM_HXX
+# include "sgmlnorm.hxx"
+#endif
 
 #ifndef BSN_EXTENSIONS
 # define BSN_EXTENSIONS	0 /* 0==> CNIDR's Isearch 1==> BSn's */
@@ -25,6 +32,15 @@ Copyright:	A/WWW Enterprises, MCNC/CNIDR and NASA
 
 #define CIPC_SGML_EXTENSION "cip"
 
+// A NASA/CIP (Collection Information Product) SGML-tagged metadata
+// DOCTYPE, built on SGMLNORM's tag-based parsing. ParseFields() walks
+// SGML-style <tag>value</tag> pairs (nesting handled via the Nested
+// stack of CIPC_Element), indexing both a short field name and a
+// full, underscore-joined nested field-path name for each recognized
+// tag. See doctype/cipc.cxx for the exact grammar. Note:
+// store_attributes() below is declared but never defined here --
+// ParseFields() always calls SGMLNORM::store_attributes() explicitly
+// instead, so this declaration is inert (never ODR-used).
 class CIPC
   : public SGMLNORM
 {

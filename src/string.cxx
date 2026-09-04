@@ -41,6 +41,8 @@ $Revision: 1.41 $
 Description:	Class STRING
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-05
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -303,7 +305,7 @@ STRING::STRING()
 
 STRING::STRING(const STRING& OtherString) 
 {
-  Buffer = (UCHR*)NULL;
+  Buffer = nullptr;
   Length = BufferSize = 0; 
   Copy(OtherString.Buffer, OtherString.Length);		
 #ifdef METRICS
@@ -314,7 +316,7 @@ STRING::STRING(const STRING& OtherString)
 
 STRING::STRING(const CHR* CString) 
 {
-  Buffer = (UCHR*)NULL;
+  Buffer = nullptr;
   Length = BufferSize = 0; 
   Copy((UCHR *)CString, strlen(CString));
 #ifdef METRICS
@@ -325,7 +327,7 @@ STRING::STRING(const CHR* CString)
 
 STRING::STRING(const UCHR* CString) 
 {
-  Buffer = (UCHR*)NULL;
+  Buffer = nullptr;
   Length = BufferSize = 0; 
   Copy(CString, strlen((CHR *)CString));
 #ifdef METRICS
@@ -336,7 +338,7 @@ STRING::STRING(const UCHR* CString)
 
 STRING::STRING(const CHR* NewBuffer, const STRINGINDEX BufferLength) 
 {
-  Buffer = (UCHR*)NULL;
+  Buffer = nullptr;
   Length = BufferSize = 0; 
   Copy((UCHR *)NewBuffer, BufferLength);
 #ifdef METRICS
@@ -347,7 +349,7 @@ STRING::STRING(const CHR* NewBuffer, const STRINGINDEX BufferLength)
 
 STRING::STRING(const UCHR* NewBuffer, const STRINGINDEX BufferLength) 
 {
-  Buffer = (UCHR*)NULL;
+  Buffer = nullptr;
   Length = BufferSize = 0; 
   Copy(NewBuffer, BufferLength);
 #ifdef METRICS
@@ -358,10 +360,10 @@ STRING::STRING(const UCHR* NewBuffer, const STRINGINDEX BufferLength)
 
 STRING::STRING(const INT IntValue) 
 {
-  Buffer = (UCHR*)NULL;
+  Buffer = nullptr;
   Length = BufferSize = 0;
   CHR s[256];
-  sprintf(s, "%i", IntValue);
+  snprintf(s, sizeof(s), "%i", IntValue);
   Copy((UCHR *)s, strlen(s));
 #ifdef METRICS
   NumTimesConstructed++;
@@ -379,7 +381,7 @@ STRING& STRING::operator=(const CHR* CString)
 STRING& STRING::operator=(const GDT_BOOLEAN BoolValue) 
 {
   CHR s[256];
-  sprintf(s, "%i", (INT)BoolValue);
+  snprintf(s, sizeof(s), "%i", (INT)BoolValue);
   *this = s;
   return *this;
 }
@@ -387,7 +389,7 @@ STRING& STRING::operator=(const GDT_BOOLEAN BoolValue)
 
 STRING& STRING::operator=(const INT IntValue) {
   CHR s[256];
-  sprintf(s, "%i", IntValue);
+  snprintf(s, sizeof(s), "%i", IntValue);
   *this = s;
   return *this;
 }
@@ -395,7 +397,7 @@ STRING& STRING::operator=(const INT IntValue) {
 
 STRING& STRING::operator=(const LONG LongValue) {
   CHR s[256];
-  sprintf(s, "%li", LongValue);
+  snprintf(s, sizeof(s), "%li", LongValue);
   *this = s;
   return *this;
 }
@@ -403,7 +405,7 @@ STRING& STRING::operator=(const LONG LongValue) {
 
 STRING& STRING::operator=(const DOUBLE DoubleValue) {
   CHR s[256];
-  sprintf(s, "%f", DoubleValue);
+  snprintf(s, sizeof(s), "%f", DoubleValue);
   *this = s;
   return *this;
 }
@@ -717,7 +719,7 @@ STRING::Cat(const UCHR Character)
 
   } else {
     UCHR *Temp = Buffer;
-    Buffer = (UCHR*)NULL;
+    Buffer = nullptr;
     StrBuffAlloc(Length + 2);
     if (Length>0)
       memcpy(Buffer, Temp, Length);
@@ -756,7 +758,7 @@ STRING::Cat(const CHR* CString, STRINGINDEX CLength) {
 
   } else {
     UCHR *Temp = Buffer;
-    Buffer = (UCHR*)NULL;
+    Buffer = nullptr;
     StrBuffAlloc(Length + CLength + 1);
     if (Length>0)
       memcpy(Buffer, Temp, Length);
@@ -806,7 +808,7 @@ STRING::Insert(const STRINGINDEX InsertionPoint, const STRING& OtherString) {
   }
   else {
     UCHR* Temp = Buffer;
-    Buffer = (UCHR*)NULL;
+    Buffer = nullptr;
     StrBuffAlloc(Length + StringLength + 1);
     
     //index of the rest of the string
@@ -883,12 +885,24 @@ STRING::SearchReverse(const UCHR Character) const {
 }
 
 
-INT 
+INT
 STRING::Replace(const CHR* CStringSearch, const CHR* CStringReplace) {
   STRING NewString, S;
   STRINGINDEX Position;
   INT4 CSLen = strlen(CStringSearch);
   INT Count = 0;
+  // BUGFIX #3: an empty CStringSearch would otherwise loop forever below.
+  // Search("") matches at position 1 every time (strstr() semantics: an
+  // empty needle always matches at the start), and EraseBefore(Position +
+  // CSLen) = EraseBefore(1) is defined as a no-op ("if (Index <= 1)
+  // return"), so *this never shrinks and Position never changes --
+  // Count and NewString would grow without bound. Not exercised by any
+  // current caller (all pass non-empty literals), so this wasn't run to
+  // a crash -- doing so would just hang -- but the mechanism above is
+  // deterministic given Search()'s and EraseBefore()'s own logic.
+  if (CSLen == 0) {
+    return 0;
+  }
   while ( (Position=Search(CStringSearch)) != 0) {
     Count++;
     S = *this;
@@ -903,12 +917,16 @@ STRING::Replace(const CHR* CStringSearch, const CHR* CStringReplace) {
 }
 
 
-INT 
+INT
 STRING::Replace(const CHR* CStringSearch, const STRING& CStringReplace) {
   STRING NewString, S;
   STRINGINDEX Position;
   INT4 CSLen = strlen(CStringSearch);
   INT Count = 0;
+  // BUGFIX #3: see the CHR*/CHR* overload above for why this guard exists.
+  if (CSLen == 0) {
+    return 0;
+  }
   while ( (Position=Search(CStringSearch)) != 0) {
     Count++;
     S = *this;
@@ -1033,69 +1051,64 @@ STRING::WriteFile(const STRING& FileName) const {
 }
 
 
+// BUGFIX #1: delegates to the CHR* overload below instead of duplicating
+// its logic (and, before the fix, duplicating its bug -- see there).
 GDT_BOOLEAN
-STRING::ReadFile(const STRING& FileName) 
+STRING::ReadFile(const STRING& FileName)
 {
-  PFILE fp;
-  struct stat status;
-
-  if (Buffer)
-    delete [] Buffer;
-
-  // See if we have a legitimate file
-  if (stat(FileName,&status) == 0) {
-    Length = GetFileSize(FileName);
-    if (Length >= 0) {
-      BufferSize = Length + 1;
-      Buffer = new UCHR[BufferSize];
-      if (Buffer) {                    // make sure the allocation succeeded
-        if ( (Length > 0) && (fp = fopen(FileName, "rb")) ) {
-	  // Zero length is ok, except we read nothing
-               size_t BytesRead = fread((char*)Buffer, 1, Length, fp);
-               Length = (STRINGINDEX)BytesRead;
-	  fclose(fp);
-	}
-      Buffer[Length] = '\0';
-      }
-    } else {
-      Length = 0;
-    }
-    return GDT_TRUE;
-  }
-  return GDT_FALSE;
+  return ReadFile((const CHR*)FileName);
 }
 
 
 GDT_BOOLEAN
-STRING::ReadFile(const CHR* FileName) 
+STRING::ReadFile(const CHR* FileName)
 {
-  PFILE fp;
   struct stat status;
+
+  // BUGFIX #1: check the file exists *before* touching Buffer. The
+  // original unconditionally ran `if (Buffer) delete [] Buffer;` here,
+  // then returned GDT_FALSE without ever reallocating it if stat()
+  // failed below -- leaving Buffer a dangling pointer to already-freed
+  // memory. Any later use of this STRING, including its own destructor,
+  // would then delete the same memory a second time. Confirmed with a
+  // standalone ASan repro: default-construct a STRING, call ReadFile()
+  // on a nonexistent path, let it go out of scope -> aborts on
+  // double-free in ~STRING().
+  if (stat(FileName, &status) != 0) {
+    return GDT_FALSE;
+  }
 
   if (Buffer)
     delete [] Buffer;
 
-  // See if we have a legitimate file
-  if (stat(FileName,&status) == 0) {
-    Length = GetFileSize(FileName);
-    if (Length >= 0) {
-      BufferSize = Length + 1;
-      Buffer = new UCHR[BufferSize];
-      if (Buffer) {                    // make sure the allocation succeeded
-        if ( (Length > 0) && (fp = fopen(FileName, "rb")) ) { 
-	  // Zero length is ok, except we read nothing
-          size_t BytesRead = fread((char*)Buffer, 1, Length, fp);
-          Length = (STRINGINDEX)BytesRead;
-	  fclose(fp);
-	}
-      Buffer[Length] = '\0';
-      }
+  // BUGFIX #1: reuse the size from the stat() call above instead of the
+  // original's second, redundant GetFileSize() call (which re-stats the
+  // same file). That second stat() raced this one: if the file vanished
+  // in between, GetFileSize() returned -1, which silently became a huge
+  // value once assigned to the unsigned Length (STRINGINDEX), passing
+  // the original's always-true `Length >= 0` check (Length can never be
+  // negative -- it's unsigned) and leading to a wildly undersized
+  // BufferSize via integer overflow, which fread() would then be told
+  // to fill far past its actual size.
+  Length = (STRINGINDEX)status.st_size;
+  BufferSize = Length + 1;
+  Buffer = new UCHR[BufferSize];
+  if (Length > 0) {
+    PFILE fp = fopen(FileName, "rb");
+    if (fp) {
+      // Zero length is ok, except we read nothing
+      size_t BytesRead = fread((char*)Buffer, 1, Length, fp);
+      Length = (STRINGINDEX)BytesRead;
+      fclose(fp);
     } else {
+      // BUGFIX #1: previously left Length at the stat()'d size with
+      // Buffer's bytes never written, exposing uninitialized heap
+      // memory as if it were the file's content.
       Length = 0;
     }
-    return GDT_TRUE;
-  } 
-  return GDT_FALSE;
+  }
+  Buffer[Length] = '\0';
+  return GDT_TRUE;
 }
 
 
@@ -1136,38 +1149,38 @@ STRING::MakePrintable() {
 
 
 const CHR *translate[] = {
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //   0 -  7
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //   8 - 15
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //  16
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //  24
-  NULL, NULL, "&quot;", NULL, NULL, NULL, "&amp;", "&apos;", // 32
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //  40
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //  48
-  NULL, NULL, NULL, NULL, "&lt;", NULL, "&gt;", NULL, // 56
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //  64
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //  72
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //  80
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //  88
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, //  96
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 104
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 112
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 120 - 127
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 128
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 136
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 144
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 152
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 160
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 168
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 176
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 184
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 192
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 200
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 208
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 216
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 224
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 232
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL, // 240
-  NULL, NULL, NULL, NULL, NULL, NULL, NULL, NULL  // 248 - 255
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, //   0 -  7
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, //   8 - 15
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, //  16
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, //  24
+  nullptr, nullptr, "&quot;", nullptr, nullptr, nullptr, "&amp;", "&apos;", // 32
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, //  40
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, //  48
+  nullptr, nullptr, nullptr, nullptr, "&lt;", nullptr, "&gt;", nullptr, // 56
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, //  64
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, //  72
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, //  80
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, //  88
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, //  96
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 104
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 112
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 120 - 127
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 128
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 136
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 144
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 152
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 160
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 168
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 176
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 184
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 192
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 200
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 208
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 216
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 224
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 232
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, // 240
+  nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr, nullptr  // 248 - 255
 };
 
 
@@ -1205,7 +1218,17 @@ char *transcode (char *buffer, const char *const *transarray)
 {
   char *obuf=buffer;            // Beginning of old buffer
   char *obufscan=obuf;          // Scanning point of old buffer
-  long lennbuf=strlen(obuf)*6;  // Maximum length of new string
+  // BUGFIX #2: was `strlen(obuf)*6` with no slack for the trailing null
+  // terminator. maxipnt below reserves the last byte of the buffer for
+  // that terminator by stopping writes one short of the end, which is
+  // correct when there's spare room -- but in the worst case (every
+  // character needs a full 6-byte "&#NNN;" entity), 6*len leaves no
+  // spare room at all, so the reserved-for-the-terminator byte eats into
+  // the last entity instead, silently dropping its closing ';'.
+  // Confirmed real: transcode()'ing three bytes >= 128 (each forcing a
+  // 6-byte entity) produced "&#200;&#201;&#202" -- 17 chars, missing the
+  // final ';' -- instead of the correct 18-char "&#200;&#201;&#202;".
+  long lennbuf=strlen(obuf)*6+1; // Maximum length of new string, +1 for '\0'
   char *nbuf;                   // Pointer to start of new string buffer
   char *ipnt;                   // Insertion point into new buffer
   char *maxipnt;                // End of new buffer
@@ -1239,7 +1262,7 @@ char *transcode (char *buffer, const char *const *transarray)
 	*ipnt++ = *obufscan;
       } else {
 	//	fprintf(stderr,"3. %d\n",(unsigned char)*obufscan);
-	sprintf(entity,"&#%d;",(unsigned char)*obufscan);
+	snprintf(entity, sizeof(entity), "&#%d;", (unsigned char)*obufscan);
 	for (rscan=entity;
 	   *rscan != '\0' && ipnt<maxipnt; 
 	   rscan++,ipnt++) {
@@ -1278,6 +1301,12 @@ STRING::TrimLeading() {
 }
 
 
+// Unlike Equals()/CaseEquals() above (which use memcmp() bounded by
+// Length, correctly handling embedded null bytes), this stops comparing
+// at the first embedded null in either buffer, same as any strcmp().
+// Not changed: every real caller (src/thesaurus.cxx) compares plain-text
+// terms, never embedded-null data, so this is a documented inconsistency
+// rather than a fix -- see BUG_CATALOG.md.
 INT
 STRING::Cmp(const STRING& OtherString) {
   return(strcmp((const CHR*)Buffer,(const CHR*)OtherString.Buffer));
@@ -1285,8 +1314,7 @@ STRING::Cmp(const STRING& OtherString) {
 
 
 STRING::~STRING() {
-  //  if (BufferSize)
-  if (Buffer != (UCHR*)NULL)
+  if (Buffer != nullptr)
     delete [] Buffer;
 }
 

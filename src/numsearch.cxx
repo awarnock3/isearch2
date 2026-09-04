@@ -42,6 +42,9 @@ Description:	Class INDEX - numeric search methods
 Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -237,13 +240,27 @@ INDEX::NumericSearch(const DOUBLE fKey, const STRING& FieldName,
   NUMERICLIST List;
 
   Parent->FieldTypes.GetValue(FieldName,&FieldType);
-  
+
   if (FieldType.GetLength() == 0)
     FieldType = "TEXT";
+  // BUGFIX #1 (docs/BUG_CATALOG.md#srcnumsearchcxx): this is the
+  // actual source of the null-return pattern already confirmed to
+  // crash 8+ call sites this pass (src/geosearch.cxx's BUGFIX #1,
+  // src/datesearch.cxx's BUGFIX #1) -- every current caller has since
+  // been fixed to guard against it (geosearch.cxx's 8 call sites
+  // directly, everything through src/index.cxx by way of its blanket
+  // `if (!NewIrset) NewIrset = new IRSET(Parent);` catch-all), so this
+  // exact `return nullptr` is no longer reachable-and-unguarded
+  // anywhere in the tree today -- but fixing the root instead of only
+  // its symptoms removes the footgun for any future caller, and
+  // matches this codebase's own established convention (every other
+  // "can't search this way" boundary condition, including this same
+  // function's own NO_MATCH path a few lines below, already returns
+  // an empty IRSET, never nullptr).
   if(FieldType == "TEXT")
-    return((PIRSET)NULL);
-  
-  pirset=new IRSET(Parent);  
+    return new IRSET(Parent);
+
+  pirset=new IRSET(Parent);
   
   /*  We'll fix the rset cache when we can feed the server name to it
   

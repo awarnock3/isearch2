@@ -40,6 +40,9 @@ Description:	Class RECORD - Database Record
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "defs.hxx"
 #include "string.hxx"
 #include "common.hxx"
@@ -60,6 +63,21 @@ RECORD::RECORD() {
 }
 
 RECORD::RECORD(STRING& NewPathName, STRING& NewFileName) {
+	// BUGFIX #2 (docs/BUG_CATALOG.md#srcrecordcxx): unlike the default
+	// constructor above, this one left RecordStart/RecordEnd
+	// indeterminate -- both are plain GPTYPE (unsigned int) members
+	// with no default member initializer, so they're only safely
+	// zeroed when a constructor explicitly sets them (Key/DocumentType
+	// don't have this problem: STRING's own default constructor
+	// already runs for them regardless of what this constructor's body
+	// does). No live call site constructs a RECORD with this
+	// constructor today (confirmed via grep: every real RECORD Record;
+	// in this tree uses the default constructor), so this was latent,
+	// not an active bug -- matches the same "indeterminate primitive
+	// member" category already fixed for RESULT/NUMERICFLD/NUMERICLIST/
+	// MERGEUNIT elsewhere in this project.
+	RecordStart=0;
+	RecordEnd=0;
 	PathName = NewPathName;
 	AddTrailingSlash(&PathName);
 	// Comment out to correctly handle relative paths
@@ -153,8 +171,15 @@ void RECORD::Write(PFILE fp) const {
 	fprintf(fp, "\n");
 	FileName.Print(fp);
 	fprintf(fp, "\n");
-	fprintf(fp, "%d\n", RecordStart);
-	fprintf(fp, "%d\n", RecordEnd);
+	// BUGFIX #1 (docs/BUG_CATALOG.md#srcrecordcxx): RecordStart/RecordEnd
+	// are GPTYPE (UINT4, unsigned); %d is signed, a format/argument-type
+	// mismatch that's undefined behavior per the C standard regardless
+	// of whether it happens to round-trip correctly on any given
+	// platform (it does on this one -- see the Read() comment below,
+	// and the identical case already found and fixed in
+	// src/fc.cxx's Write()/Read()). %u matches the actual type.
+	fprintf(fp, "%u\n", RecordStart);
+	fprintf(fp, "%u\n", RecordEnd);
 	DocumentType.Print(fp);
 	fprintf(fp, "\n");
 	Dft.Write(fp);
@@ -165,10 +190,22 @@ void RECORD::Read(PFILE fp) {
 	Key.FGet(fp, DocumentKeySize);
 	PathName.FGet(fp, DocPathNameSize);
 	FileName.FGet(fp, DocFileNameSize);
+	// BUGFIX #1 (cont'd): GetInt() returns a signed 32-bit INT, which
+	// can't represent GPTYPE values above INT_MAX. On this platform the
+	// original %d/GetInt() pairing happened to round-trip anyway
+	// (confirmed via a standalone repro: a RecordStart/RecordEnd above
+	// INT_MAX wrote and read back correctly even before this fix) --
+	// both printf's signed reinterpretation of the unsigned bit pattern
+	// and atoi()'s int-to-unsigned assignment wrap modulo 2^32 the same
+	// way -- but it's unspecified/implementation-defined behavior, not
+	// a guarantee. GetLong() (LONG = 64-bit long here) parses the full
+	// unsigned 32-bit range as a valid LONG with no narrowing, which is
+	// what actually makes the round-trip portable rather than
+	// accidental.
 	s.FGet(fp, 16);
-	RecordStart = s.GetInt();
+	RecordStart = s.GetLong();
 	s.FGet(fp, 16);
-	RecordEnd = s.GetInt();
+	RecordEnd = s.GetLong();
 	DocumentType.FGet(fp, DocumentTypeSize);
 	Dft.Read(fp);
 }

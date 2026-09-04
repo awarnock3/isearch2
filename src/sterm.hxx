@@ -39,16 +39,28 @@ Version:	1.00
 Description:	Class STERM - String Search Term
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-06
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef STERM_HXX
 #define STERM_HXX
-/*
-#include "defs.hxx"
-#include "string.hxx"
-#include "termobj.hxx"
-*/
+
+#include "defs.hxx"    // BUGFIX #1: was commented out; below needs it transitively.
+#include "string.hxx"  // BUGFIX #1: was commented out; STRING/PSTRING below need it.
+#include "termobj.hxx" // BUGFIX #1: was commented out; base class.
+
+// A concrete search term (a single word/phrase) operand -- the leaf
+// TERMOBJ subclass that actually stores the query text.
 class STERM : public TERMOBJ {
 public:
+	// BUGFIX #2: un-hides TERMOBJ::operator= (itself exposing
+	// OPERAND::operator=, per BUGFIX #2 in src/termobj.hxx). Same
+	// "-Woverloaded-virtual" pattern as TERMOBJ/OPERATOR: STERM's own
+	// operator=(const OPOBJ&) override below doesn't stop the compiler
+	// from also implicitly generating operator=(const STERM&), which
+	// hides it from ordinary lookup. Each derived class needs its own
+	// using declaration -- it doesn't propagate from TERMOBJ's.
+	using TERMOBJ::operator=;
 	STERM();
 	OPOBJ* Duplicate() const;
 	OPOBJ& operator=(const OPOBJ& OtherOp);

@@ -1,5 +1,19 @@
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdio.h>
 #include <string.h>
+// BUGFIX #1 (docs/BUG_CATALOG.md#doctypeunifiedgen_unifiedc): this file
+// called exit()/atoi() and isspace()/isdigit()/tolower() with neither
+// <stdlib.h> nor <ctype.h> included -- confirmed via -Wall -Wextra:
+// every one of those calls fell back to an implicit int-returning
+// declaration (a hard error under strict C99+, a warning under GNU
+// dialects). Harmless by luck on this platform since the assumed
+// signatures happen to match, but real undefined behavior per the C
+// standard, and the same "header not self-contained" defect already
+// fixed throughout this project (e.g. src/fc.hxx's BUGFIX #1).
+#include <stdlib.h>
+#include <ctype.h>
 
 #define COMMENT_CHAR '#'
 
@@ -17,11 +31,11 @@ FILE *myopen(const char *ext)
   char buf[256];
   char rootname[] = "unified";
 
-  sprintf(buf, "%s.%s", rootname, ext);
+  snprintf(buf, sizeof(buf), "%s.%s", rootname, ext);
   return fopen(buf, "w");
 }
 
-main(int argc, char **argv)
+int main(int argc, char **argv)
 {
  char buf[256];
  char temp[256];
@@ -33,10 +47,23 @@ main(int argc, char **argv)
  FILE *fp2 = myopen("c");
  FILE *fp3 = myopen("inc");
 
- if (argc != 1)
-  freopen(argv[1], "r", stdin);
+ // BUGFIX #2 (docs/BUG_CATALOG.md#doctypeunifiedgen_unifiedc): argv[1]
+ // not existing/being unreadable left freopen() failing silently --
+ // its return value was never checked, so stdin was left unusable and
+ // the fgets() loop below would simply never run, silently producing
+ // near-empty (header-only) unified.h/.c/.inc instead of reporting the
+ // real problem.
+ if (argc != 1 && freopen(argv[1], "r", stdin) == NULL) {
+   printf("ERROR: could not open input file %s\n", argv[1]);
+   exit(-1);
+ }
 
- if (fp1 == NULL || fp2 == NULL) {
+ // BUGFIX #3 (docs/BUG_CATALOG.md#doctypeunifiedgen_unifiedc): fp3 (the
+ // .inc file) was never checked for NULL here, unlike fp1/fp2 -- if
+ // opening it specifically failed (e.g. a pre-existing unified.inc
+ // that isn't writable), it would reach the unconditional
+ // fprintf(fp3, ...) below as a null-pointer dereference.
+ if (fp1 == NULL || fp2 == NULL || fp3 == NULL) {
    printf("ERROR\n");
    exit(-1);
  }

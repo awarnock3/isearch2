@@ -42,6 +42,20 @@ Description:	Class INDEX - spatial search methods
 Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+// This file implements INDEX's geographic bounding-box search.
+// BoundingRectangle() finds records whose NORTHBC/SOUTHBC/EASTBC/WESTBC
+// numeric fields overlap the query rectangle, handling the
+// International-Date-Line-crossing case by splitting into two
+// intervals and ORing them. Interval() is the shared building block:
+// it finds records whose indexed [WESTBC,EASTBC]x[SOUTHBC,NORTHBC]
+// range intersects a given interval, via four NumericSearch() calls
+// (src/numsearch.cxx) ANDed together. Both funnel through
+// NumericSearch(), which returns nullptr when the field in question
+// isn't numerically typed in this database -- see BUGFIX #1 below.
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <ctype.h>
@@ -92,7 +106,22 @@ Author:		Archie Warnock (warnock@clark.net), A/WWW Enterprises
 #include "dictionary.hxx"
 #endif
 
-PIRSET 
+/**
+ * @brief Finds records whose geographic bounding box overlaps the
+ * query rectangle [WestBC,EastBC] x [SouthBC,NorthBC].
+ * @param NorthBC Northern boundary (latitude).
+ * @param SouthBC Southern boundary (latitude).
+ * @param WestBC Western boundary (longitude).
+ * @param EastBC Eastern boundary (longitude).
+ * @return An IRSET of matching records (possibly empty, never
+ * nullptr). Empty if NORTHBC/SOUTHBC/EASTBC/WESTBC aren't all numeric
+ * fields in this database (BUGFIX #1).
+ *
+ * Handles a query rectangle that crosses the International Date Line
+ * (WestBC > EastBC) by splitting the northern/southern boundary
+ * intervals in two (one on each side of +/-180) and ORing the halves.
+ */
+PIRSET
 INDEX::BoundingRectangle(DOUBLE NorthBC,
 			 DOUBLE SouthBC,
 			 DOUBLE WestBC,
@@ -148,22 +177,46 @@ INDEX::BoundingRectangle(DOUBLE NorthBC,
   
   FieldName="NORTHBC";
   LessThanNorth=NumericSearch(NorthBC,FieldName,1);
-  
+  // BUGFIX #1 (docs/BUG_CATALOG.md#srcgeosearchcxx): NumericSearch()
+  // (src/numsearch.cxx) returns nullptr when FieldName isn't a numeric
+  // field in this database (e.g. missing from the DFDT, or typed
+  // "TEXT") -- every call below dereferenced the result immediately
+  // with no check. A geo search needs all four boundary fields to be
+  // numeric to mean anything, so a null here means "can't evaluate
+  // this query," not "no hits within a valid search" -- bail out with
+  // an empty result rather than crash.
+  if (!LessThanNorth) {
+    return new IRSET(Parent);
+  }
+
   FieldName="EASTBC";
   LessThanEast=NumericSearch(EastBC,FieldName,1);
-  
+  if (!LessThanEast) {
+    delete LessThanNorth;
+    return new IRSET(Parent);
+  }
+
   LessThanNorth->And(*LessThanEast);
   delete LessThanEast;
-  
+
   FieldName="SOUTHBC";
   MoreThanSouth=NumericSearch(SouthBC,FieldName,4);
-  
+  if (!MoreThanSouth) {
+    delete LessThanNorth;
+    return new IRSET(Parent);
+  }
+
   FieldName="WESTBC";
   MoreThanWest=NumericSearch(WestBC,FieldName,4);
-  
+  if (!MoreThanWest) {
+    delete LessThanNorth;
+    delete MoreThanSouth;
+    return new IRSET(Parent);
+  }
+
   MoreThanSouth->And(*MoreThanWest);
   delete MoreThanWest;
-  
+
   LessThanNorth->And(*MoreThanSouth);
   delete MoreThanSouth;
   
@@ -241,13 +294,19 @@ INDEX::BoundingRectangle(DOUBLE NorthBC,
 }
 
 
-// this functions takes a pair of points forming an interval
-// and match them to intervals in the database.
-// option - pass the field names with the values.
-// We assume that the West Longitude is <= East Longitude
-// and South Latitude <=North Latitude
-
-PIRSET 
+/**
+ * @brief Finds records whose indexed [WESTBC,EASTBC] x [SOUTHBC,NORTHBC]
+ * range intersects the given interval.
+ * @param WestLongitude Western boundary; assumed <= EastLongitude (no
+ * Date Line handling here -- see BoundingRectangle() for that).
+ * @param EastLongitude Eastern boundary.
+ * @param SouthLatitude Southern boundary; assumed <= NorthLatitude.
+ * @param NorthLatitude Northern boundary.
+ * @return An IRSET of matching records (possibly empty, never
+ * nullptr). Empty if NORTHBC/SOUTHBC/EASTBC/WESTBC aren't all numeric
+ * fields in this database (BUGFIX #1).
+ */
+PIRSET
 INDEX::Interval(DOUBLE WestLongitude, DOUBLE EastLongitude,
 		DOUBLE SouthLatitude, DOUBLE NorthLatitude)
 {
@@ -264,7 +323,15 @@ INDEX::Interval(DOUBLE WestLongitude, DOUBLE EastLongitude,
   // Put a cacheing structure here to avoid search duplication
   FieldName="WESTBC";
   ResultA=NumericSearch(EastLongitude,FieldName,2); //LTE
-  
+  // BUGFIX #1 (docs/BUG_CATALOG.md#srcgeosearchcxx): NumericSearch()
+  // returns nullptr when FieldName isn't a numeric field in this
+  // database -- every ResultA/B/C/D use below dereferenced the result
+  // immediately with no check. See BoundingRectangle()'s own BUGFIX #1
+  // comment for the full explanation.
+  if (!ResultA) {
+    return new IRSET(Parent);
+  }
+
 #ifdef DEBUG
   printf("Got %i entries <= %i in ", ResultA->GetTotalEntries(),
 	 EastLongitude);
@@ -282,7 +349,11 @@ INDEX::Interval(DOUBLE WestLongitude, DOUBLE EastLongitude,
   
   FieldName="EASTBC";
   ResultB=NumericSearch(WestLongitude,FieldName,4); //GTE
-  
+  if (!ResultB) {
+    delete ResultA;
+    return new IRSET(Parent);
+  }
+
 #ifdef DEBUG
   printf("Got %i entries >= %i in ", ResultB->GetTotalEntries(),
 	 WestLongitude);
@@ -318,7 +389,11 @@ INDEX::Interval(DOUBLE WestLongitude, DOUBLE EastLongitude,
   
   FieldName="NORTHBC";
   ResultC=NumericSearch(SouthLatitude,FieldName,4); //GTE
-  
+  if (!ResultC) {
+    delete ResultA;
+    return new IRSET(Parent);
+  }
+
 #ifdef DEBUG
   printf("Got %i entries >= %i in ", ResultC->GetTotalEntries(),
 	SouthLatitude);
@@ -338,7 +413,12 @@ INDEX::Interval(DOUBLE WestLongitude, DOUBLE EastLongitude,
   FieldName="SOUTHBC";
   
   ResultD=NumericSearch(NorthLatitude,FieldName,2); //LTE
-  
+  if (!ResultD) {
+    delete ResultA;
+    delete ResultC;
+    return new IRSET(Parent);
+  }
+
 #ifdef DEBUG
   printf("Got %i entries <= %i in ", ResultD->GetTotalEntries(),
 	 NorthLatitude);
@@ -364,12 +444,16 @@ INDEX::Interval(DOUBLE WestLongitude, DOUBLE EastLongitude,
   
   if (ResultC->GetTotalEntries() == 0) {
     // no hits rules out entire search
+    // BUGFIX #2 (docs/BUG_CATALOG.md#srcgeosearchcxx): ResultA was
+    // never deleted on this path -- every other early-return in this
+    // function frees it first, but this one (the last of five) didn't.
+    delete ResultA;
 #ifdef DEBUG
     printf("No hits in last search, so bailing out\n");
 #endif
     return(ResultC);
   }
-  
+
   // ResultA and ResultC contain our Lat/Long intrsections.  AND them
   ResultA->And(*ResultC);
   delete ResultC;

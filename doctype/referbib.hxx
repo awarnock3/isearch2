@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		referbib.hxx
 Version:	1.00
@@ -14,6 +17,11 @@ Copyright:	Basis Systeme netzwerk, Munich
 # include "doctype.hxx"
 #endif
 
+// A DOCTYPE for Unix `refer`-style bibliography records: one record
+// per blank-line-separated entry, each made of "%X value" tag lines
+// (see the file-local parse_tags()'s own header comment for the
+// grammar). UnifiedName() maps single-letter refer tags (%A, %T, ...)
+// to full field names via a fixed table.
 class REFERBIB :  public DOCTYPE {
 public:
 	REFERBIB(PIDBOBJ DbParent);

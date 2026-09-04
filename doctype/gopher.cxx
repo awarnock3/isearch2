@@ -1,3 +1,6 @@
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*
 
 File:        gopher.cxx
@@ -21,7 +24,7 @@ GOPHER::GOPHER(PIDBOBJ DbParent) : DOCTYPE(DbParent) {
 
 void GOPHER::Present(const RESULT& ResultRecord, const STRING& ElementSet,
 		STRING* StringBufferPtr) {
-	
+
 *StringBufferPtr = "Confused...";
 // Basic strategy:  Given /local/fname
 // If an "F" present, dump the entire file out.
@@ -43,7 +46,7 @@ else {
    pathName.Cat(".cap/");
    pathName.Cat(fname);
    nameFile = fopen(pathName,"rb");
-   if (nameFile == (FILE *)0) {
+   if (nameFile == nullptr) {
       // must not be a capfile, so we just emit the filename
 #ifdef FULLFILENAME
       *StringBufferPtr = pathName;
@@ -66,6 +69,11 @@ else {
             *StringBufferPtr = linebuff;
             }
          } // end of while loop
+      // BUGFIX #1 (docs/BUG_CATALOG.md#doctypegophercxx): nameFile was
+      // never fclose()'d on this (successfully-opened) path -- a real,
+      // always-reachable file-descriptor leak on every "B" present of
+      // a record that actually has a .cap file, not just an edge case.
+      fclose(nameFile);
       } // end of else we're going to read the capfile
    } // end of else it was a "B" present
          

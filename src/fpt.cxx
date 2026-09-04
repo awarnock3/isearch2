@@ -43,6 +43,9 @@ Description:	Class FPT - File Pointer Table
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <limits.h>
 /*
 #include "defs.hxx"
@@ -144,7 +147,22 @@ FPT::LowPriority(const INT Index) {
 }
 
 
-PFILE 
+/**
+ * @brief Opens FileName in the given mode, reusing a cached handle if
+ * this table already has FileName open in the same mode.
+ * @param FileName File to open.
+ * @param Type fopen()-style mode string ("r", "w", "a", ...).
+ * @return The (possibly cached) FILE*, or nullptr on a genuine
+ * fopen() failure once every cache path has been exhausted.
+ *
+ * Evicts the table's least-recently-touched entry if it's already at
+ * MaximumEntries capacity. The evicted entry is only physically
+ * fclose()'d if it was already logically closed (GetClosed()) --
+ * otherwise its FilePointer is silently overwritten below without
+ * being closed, a known leak when every cached entry is still
+ * logically open at eviction time (see docs/BUG_CATALOG.md).
+ */
+PFILE
 FPT::ffopen(const STRING& FileName, const CHR *Type) {
   // Check if file is already open
   INT z;
@@ -154,12 +172,20 @@ FPT::ffopen(const STRING& FileName, const CHR *Type) {
     FPREC Fprec;
     STRING Fn, Om;
     PFILE Fp;
-    GDT_BOOLEAN Closed;
     Fprec = Table[z-1];
     Fp = Fprec.GetFilePointer();
     Fprec.GetFileName(&Fn);
     Fprec.GetOpenMode(&Om);
-    Closed = Fprec.GetClosed();
+    // BUGFIX #2: `GDT_BOOLEAN Closed = Fprec.GetClosed();` used to be
+    // read here and never consulted by any branch below (confirmed by
+    // tracing every path: the "w"/"a" branches unconditionally
+    // fclose()+reopen, the "r" branch always reuses the cached Fp, and
+    // that reuse is safe regardless of Closed's value -- ffclose()
+    // never physically closes an entry still reachable via Lookup(),
+    // only CloseAll() (which also zeroes TotalEntries, hiding the slot
+    // from Lookup()) or an eviction/mode-change (which replaces the
+    // slot's FilePointer before anyone could reuse the stale one) do.
+    // Dead read, not a missing check; removed. See docs/BUG_CATALOG.md.
     if (Om == Type) {
       // If same OpenMode, use the cached information
       if (Om.SearchReverse("w")) {

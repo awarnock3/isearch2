@@ -31,8 +31,16 @@ IN NO EVENT SHALL MCNC/CNIDR BE LIABLE FOR ANY SPECIAL, INCIDENTAL,
 INDIRECT OR CONSEQUENTIAL DAMAGES OF ANY KIND, OR ANY DAMAGES WHATSOEVER
 RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER OR NOT ADVISED OF THE
 POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
-IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
+IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 ************************************************************************/
+
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+// NOTE: at 5000+ lines, this file's audit was deliberately scoped to
+// ParseRecords()/ParseFields()/Present() and the GB class (the core
+// parse/index entry points) rather than the ~40 pato_* presentation-
+// formatting helpers (~4500 lines); see the docs/BUG_CATALOG.md entry
+// for this file for the full rationale.
 
 /*@@@
 File:		uspat.cxx
@@ -120,15 +128,22 @@ USPAT::ParseRecords(const RECORD& FileRecord)
 }
 
 
-void 
-USPAT::ParseFields(PRECORD NewRecord) 
+/// Reads NewRecord's [RecStart, RecEnd) byte range out of its source
+/// file and builds its DFT via GB::BuildDft(). RecEnd == 0 is the
+/// whole-file sentinel (ParseRecords() never splits a file into
+/// multiple records -- see the class-level comment in uspat.hxx), so
+/// this seeks to EOF and uses ftell(fp) for RecEnd instead; for an
+/// empty file this must not subtract 1 (GPTYPE is unsigned, so 0 - 1
+/// underflows to UINT_MAX — see BUGFIX #1).
+void
+USPAT::ParseFields(PRECORD NewRecord)
 {
   PFILE fp;
   STRING fn;
   GPTYPE RecStart, RecEnd, RecLength, ActualLength;
   PDFT pdft;
   static INT xx=0;
-	
+
   NewRecord->GetFullFileName(&fn);
   fp = fopen(fn, "rb");
   if (!fp) {
@@ -141,7 +156,16 @@ USPAT::ParseFields(PRECORD NewRecord)
   if (RecEnd == 0) {
     fseek(fp, 0, 2);
     RecStart = 0;
-    RecEnd = ftell(fp) - 1;
+    // BUGFIX #1 (docs/BUG_CATALOG.md#doctypeuspatcxx): this used to be
+    // `ftell(fp) - 1`, the same off-by-one truncation already fixed in
+    // doctype/colondoc.cxx's BUGFIX #1, doctype/marcdump.cxx's
+    // BUGFIX #2, doctype/memodoc.cxx's BUGFIX #1, and
+    // doctype/referbib.cxx's BUGFIX #2 -- confirmed via a before/after
+    // test-revert to drop the last byte of every record read through
+    // this fallback. RecEnd is also GPTYPE (unsigned UINT4,
+    // src/defs.hxx), so for a genuinely empty file the old `- 1`
+    // underflowed to UINT_MAX.
+    RecEnd = ftell(fp);
   }
   fseek(fp, RecStart, 0);
   RecLength = RecEnd - RecStart;
@@ -192,9 +216,15 @@ USPAT::ParseFields(PRECORD NewRecord)
 #
 ###################################################################
 */
-void 
-USPAT::Present(const RESULT& ResultRecord, const STRING& ElementSet, 
-	const STRING &RecordSyntax, PSTRING StringBuffer) 
+/// Renders ResultRecord into StringBuffer for the requested ElementSet
+/// and record syntax Rs, by reading the raw record bytes, parsing them
+/// via pato_ReadPatent(), and dispatching to pato_ElementSet(). Frees
+/// Buffer, ThePatent, pcPRS, RecBuffer, and PreferredRecordSyntax on
+/// every exit path (see BUGFIX #2 — PreferredRecordSyntax was
+/// previously leaked).
+void
+USPAT::Present(const RESULT& ResultRecord, const STRING& ElementSet,
+	const STRING &RecordSyntax, PSTRING StringBuffer)
 {
 
   // Following case added by NRN to allow Greenbook to be returned for
@@ -212,7 +242,7 @@ USPAT::Present(const RESULT& ResultRecord, const STRING& ElementSet,
   PATO_PATENT *ThePatent;
   PATO_BUFFER Buffer;
   PATO_OUTPUT Output;
-  PCHR pcPRS=NULL;
+  PCHR pcPRS=nullptr;
   STRING Before, After;
   
   // these next two lines will go away when DOCTYPE::Present
@@ -256,9 +286,9 @@ USPAT::Present(const RESULT& ResultRecord, const STRING& ElementSet,
     pato_Get_PN(ThePatent,PN,64);
     AddCommas(PN,PN2);
     if(PreferredRecordSyntax->Equals(SutrsRecordSyntax))
-      sprintf(MyString,"(%s) %s",PN2,TTL);
+      snprintf(MyString,sizeof(MyString),"(%s) %s",PN2,TTL);
     else
-      sprintf(MyString,"(<B>%s</B>) %s",PN2,TTL);
+      snprintf(MyString,sizeof(MyString),"(<B>%s</B>) %s",PN2,TTL);
     *StringBuffer=MyString;
   }else if(ElementSet.Equals("PN")){
     CHR PN[64];
@@ -280,7 +310,9 @@ USPAT::Present(const RESULT& ResultRecord, const STRING& ElementSet,
   pato_DisposePatent(ThePatent);
   delete [] pcPRS;
   delete [] RecBuffer ;
-  
+  // BUGFIX #2 (docs/BUG_CATALOG.md#doctypeuspatcxx): PreferredRecordSyntax
+  // was allocated above via `new STRING` and never freed on any exit path.
+  delete PreferredRecordSyntax;
 }
 
 
@@ -383,7 +415,13 @@ USPAT::pato_Get_TI(PATO_PATENT* Patent, PCHR S, INT SSize) const
    #
    ###################################################################
    */
-PATO_PATENT* 
+/// Parses PatentSize bytes of raw Buffer into a linked PATO_PATENT
+/// group/field structure, line by line. Each line is copied into a
+/// fixed 256-byte scratch buffer via memccpy(), bounded to whichever is
+/// smaller of 200 bytes or the bytes actually remaining in Buffer (see
+/// BUGFIX #4 — a line-less tail shorter than 200 bytes previously let
+/// memccpy() read past the end of Buffer).
+PATO_PATENT*
 USPAT::pato_ReadPatent(PCHR Buffer, INT PatentSize) const
 {
   PATO_PATENT* Patent;
@@ -392,16 +430,26 @@ USPAT::pato_ReadPatent(PCHR Buffer, INT PatentSize) const
   int Done = 0;
   int Pos = 0;
   int On = 0,j,tLen;
-  Patent = NULL;
-  CurrentGroup = NULL;
+  Patent = nullptr;
+  CurrentGroup = nullptr;
   while ( (Pos < PatentSize) && (!Done) ) {
-    
+
     /* strncpy(Si, Buffer+Pos, 80);  for real greenbook */
-    
-    
+
+
     for(j=0; j<256; j++)
       Si[j]='\0';
-    memccpy(Si,Buffer+Pos,(int)'\n',200);
+    // BUGFIX #4 (docs/BUG_CATALOG.md#doctypeuspatcxx): the previous
+    // unconditional `memccpy(Si, Buffer+Pos, '\n', 200)` could read up
+    // to 200 bytes starting at Buffer+Pos regardless of how many bytes
+    // actually remained in Buffer -- reachable whenever the final
+    // line's tail is shorter than 200 bytes and contains no trailing
+    // '\n' for memccpy() to stop at first.
+    {
+      int Remaining = PatentSize - Pos;
+      int CopyLen = (Remaining < 200) ? Remaining : 200;
+      memccpy(Si,Buffer+Pos,(int)'\n',CopyLen);
+    }
     tLen=strlen(Si);
     
     if (On) {
@@ -410,12 +458,12 @@ USPAT::pato_ReadPatent(PCHR Buffer, INT PatentSize) const
 	/* Logical group */
 	PATO_GROUP* G;
 	G = (PATO_GROUP*)calloc(1, sizeof(PATO_GROUP));
-	if (Patent->Groups == NULL) {
+	if (Patent->Groups == nullptr) {
 	  Patent->Groups = G;
 	} else {
 	  PATO_GROUP* F;
 	  F = Patent->Groups;
-	  while (F->Next != NULL)
+	  while (F->Next != nullptr)
 	    F = F->Next;
 	  F->Next = G;
 	}
@@ -423,15 +471,15 @@ USPAT::pato_ReadPatent(PCHR Buffer, INT PatentSize) const
 	strcpy(G->ID, Si);
       } else {
 	/* Field */
-	if (CurrentGroup != NULL) {
+	if (CurrentGroup != nullptr) {
 	  PATO_FIELD* F;
 	  F = (PATO_FIELD*)calloc(1, sizeof(PATO_FIELD));
-	  if (CurrentGroup->Fields == NULL) {
+	  if (CurrentGroup->Fields == nullptr) {
 	    CurrentGroup->Fields = F;
 	  } else {
 	    PATO_FIELD* E;
 	    E = CurrentGroup->Fields;
-	    while (E->Next != NULL)
+	    while (E->Next != nullptr)
 	      E = E->Next;
 	    E->Next = F;
 	  }
@@ -4776,6 +4824,8 @@ USPAT::pato_text_Names(PATO_OUTPUT* Output, PATO_GROUP* GroupStart) const
 }
 
 
+/// Constructs a parser over a single Greenbook-format record. Record is
+/// borrowed (not copied or owned) and must outlive this GB instance.
 GB::GB(CHR *Record, const INT4 Length)
 {
   c_length = Length;
@@ -4894,8 +4944,27 @@ PDFT GB::BuildDft(PIDBOBJ Db, STRLIST& FieldNameList, STRLIST& HierarchiesList)
 // 	NextFieldStart will contain the position of the next field in c_record.
 //		If no more fields exist, this value will be 0.
 //
+/// Both the initial 4-byte tag read at Start and the subsequent
+/// blank-column scan are bounds-checked against c_length (see BUGFIX #3
+/// below) — Start may legally land at or past the last tag when a
+/// record ends without a trailing delimiter.
 INT GB::GetFieldName(const INT4 Start, STRING *Name, INT4 *NextFieldStart)
 {
+  // BUGFIX #3 (docs/BUG_CATALOG.md#doctypeuspatcxx): without this guard,
+  // the memcpy() just below read 4 bytes unconditionally, even when
+  // fewer than 4 real bytes remained at Start -- reachable for a
+  // genuinely empty record (Start=0, c_length=0), and (see the second
+  // half of this fix, at the bottom of this function) for *any* record
+  // whose trailing blank-line scan runs off the end of the buffer,
+  // which the very next call would then be invoked with. Both are real
+  // heap-buffer-overflow reads, not theoretical: the second case in
+  // particular is reachable by any record ending in a newline, an
+  // ordinary and common case, not an edge case.
+  if (Start + 4 > c_length) {
+    *NextFieldStart = strlen(c_record);
+    return 1;
+  }
+
   CHR tmp[5];
   memcpy(tmp, c_record+Start, 4);
   tmp[4] = '\0';
@@ -4904,7 +4973,7 @@ INT GB::GetFieldName(const INT4 Start, STRING *Name, INT4 *NextFieldStart)
   t = Name->Search(' ');
   if(t > 0)
     Name->EraseAfter(t-1);
-  
+
   INT 	Done=0;
   CHR 	*ColumnStartPtr=c_record + Start, *ptr;
   do {
@@ -4916,10 +4985,22 @@ INT GB::GetFieldName(const INT4 Start, STRING *Name, INT4 *NextFieldStart)
       Done=1;
       *NextFieldStart = strlen(c_record);
     }
-    
-  } while((!Done) && ((ColumnStartPtr-c_record)<c_length) && 
+
+  } while((!Done) && ((ColumnStartPtr-c_record)<c_length) &&
 	  (*ColumnStartPtr==' '));
-  if(!Done)
+  // BUGFIX #3, continued: exiting the loop above because
+  // (ColumnStartPtr-c_record) >= c_length (ran off the end of the
+  // record while skipping blank lines) used to leave Done at 0, so the
+  // caller (GB::BuildDft()) invoked this function again with an
+  // out-of-bounds Start -- straight into the guard added at the top of
+  // this function, which is what originally surfaced this path as a
+  // real, confirmed heap-buffer-overflow (not just a defensive guess)
+  // via a before/after test-revert under ASan.
+  if (!Done && (ColumnStartPtr - c_record) >= c_length) {
+    Done = 1;
+    *NextFieldStart = strlen(c_record);
+  }
+  else if(!Done)
     *NextFieldStart = ColumnStartPtr - c_record;
   return(Done);
 }

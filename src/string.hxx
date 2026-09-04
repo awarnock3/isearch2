@@ -39,6 +39,8 @@ Version:	1.01
 Description:	Class STRING
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-05
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef STRING_HXX
 #define STRING_HXX
@@ -60,6 +62,10 @@ extern CHR *transcode (CHR *buffer, const CHR *const *transarray);
 typedef size_t STRINGINDEX;
 typedef STRINGINDEX* PSTRINGINDEX;
 
+// A growable byte-string with a heap-allocated buffer it owns and
+// manages itself (allocation policy lives in StrBuffAlloc/Copy). Unlike
+// STL strings, several methods here are 1-based (GetChr/SetChr, Search's
+// return value, EraseBefore/EraseAfter's Index) -- see each method below.
 class STRING {
 public:
   STRING();
@@ -103,32 +109,55 @@ public:
   GDT_BOOLEAN FGetMultiLine(PFILE FilePointer, 
 			    const STRINGINDEX MaxCharacters);
   STRINGINDEX GetLength() const;
+  // 1-based: GetChr(1) is the first character. Returns 0 for an
+  // out-of-range Index rather than raising an error.
   UCHR        GetChr(STRINGINDEX Index) const;
+  // 1-based, like GetChr. Index beyond the current length pads with
+  // spaces up to Index-1 before setting NewChr, growing the string.
   void        SetChr(const STRINGINDEX Index, const UCHR NewChr);
   void        Cat(const UCHR Character);
   void        Cat(const CHR* CString);
   void        Cat(const CHR* CString, STRINGINDEX CLength);
   void        Cat(const STRING& OtherString);
-  void        Insert(const STRINGINDEX InsertionPoint, 
+  // 1-based: InsertionPoint=1 inserts before the first character.
+  void        Insert(const STRINGINDEX InsertionPoint,
 		     const STRING& OtherString);
+  // Returns the 1-based position of the first match, or 0 if not found.
   STRINGINDEX Search(const CHR* CString) const;
   STRINGINDEX Search(const UCHR Character) const;
+  // Returns the 1-based position of the last match, or 0 if not found.
   STRINGINDEX SearchReverse(const CHR* CString) const;
   STRINGINDEX SearchReverse(const UCHR Character) const;
+  // Replaces every occurrence of CStringSearch and returns the count
+  // replaced. CStringSearch must be non-empty (an empty search string
+  // would never advance and would loop forever -- see BUGFIX #3).
   INT         Replace(const CHR* CStringSearch, const CHR* CStringReplace);
   INT         Replace(const CHR* CStringSearch, const STRING& CStringReplace);
+  // Drops every character before the 1-based Index, so Index itself
+  // becomes the new first character. Index <= 1 is a no-op.
   void        EraseBefore(const STRINGINDEX Index);
+  // Truncates to the first Index characters (1-based, inclusive).
+  // Index >= GetLength() is a no-op.
   void        EraseAfter(const STRINGINDEX Index);
   void        UpperCase();
+  // Copies up to BufferSize-1 characters plus a null terminator into
+  // CStringBuffer, truncating silently if this string is longer.
   void        GetCString(CHR* CStringBuffer, const INT BufferSize) const;
   CHR*        NewCString() const;	// Remember to delete [] !!
   UCHR*       NewUCString() const;	// Remember to delete [] !!
   void        WriteFile(const STRING& FileName) const;
+  // Replaces this string's contents with FileName's contents. Returns
+  // GDT_FALSE (leaving this string untouched) if FileName doesn't exist;
+  // see BUGFIX #1 for why untouched-on-failure matters here.
   GDT_BOOLEAN ReadFile(const STRING& FileName);
   GDT_BOOLEAN ReadFile(const CHR* FileName);
   GDT_BOOLEAN IsNumber();
   GDT_BOOLEAN IsPrint();
   void        MakePrintable();
+  // Escapes XML special characters (&, <, >, ", ') via transcode(),
+  // after first un-escaping any existing entities so re-escaping only
+  // touches the delimiter characters themselves, not entities already
+  // present. See BUGFIX #2 for a transcode() sizing fix this depends on.
   void        XmlCleanup();
   void        Trim();
   void        TrimLeading();
@@ -154,6 +183,7 @@ public:
   void        SetBufLenIncr(STRINGINDEX BufLenIncr);
   void        SetDoDoubleBufLen(GDT_BOOLEAN DoDoubling);
   void        StrBuffAlloc(STRINGINDEX BufferSizeRequest);
+  // strcmp()-style: negative/zero/positive, not a boolean equality test.
   INT         Cmp(const STRING& OtherString);
   ~STRING();
 private:

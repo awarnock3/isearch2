@@ -40,6 +40,9 @@ Description:	Class SQUERY - Search Query
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef SQUERY_HXX
 #define SQUERY_HXX
 
@@ -68,14 +71,30 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "rset.hxx"
 #include "irset.hxx"
 #include "opstack.hxx"
-#include "squery.hxx"
 #include "operator.hxx"
 #include "tokengen.hxx"
 #include "thesaurus.hxx"
 
+/// A parsed/parseable boolean search query (an OPSTACK of operators and
+/// terms), with optional synonym expansion via an owned THESAURUS
+/// (see OpenThesaurus()/CloseThesaurus()/ExpandQuery()). Copying an
+/// SQUERY (via the copy constructor or operator=) always starts the
+/// copy with no thesaurus of its own -- there's no defined meaning for
+/// sharing or duplicating another SQUERY's open synonym-file state (see
+/// BUGFIX #1).
 class SQUERY {
 public:
   SQUERY();
+  // BUGFIX #1 (docs/BUG_CATALOG.md#srcsqueryhxx): SQUERY owns a
+  // heap-allocated `Thesaurus` (via OpenThesaurus()) but declared no
+  // copy constructor at all -- the compiler-generated one shallow-
+  // copied `Thesaurus`, confirmed to cause a heap-use-after-free (ASan)
+  // once both the original and the copy call CloseThesaurus(). The
+  // existing operator= had the identical bug (see its definition in
+  // squery.cxx). Fixed by adding a real copy constructor and by fixing
+  // operator= to match: both copy Opstack/c_kwaqs_term but leave the
+  // target's Thesaurus null rather than aliasing the source's.
+  SQUERY(const SQUERY& OtherSquery);
   SQUERY& operator=(const SQUERY& OtherSquery);
   void SetOpstack(const OPSTACK& NewOpstack);
   void GetOpstack(POPSTACK OpstackBuffer) const;

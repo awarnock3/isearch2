@@ -40,6 +40,9 @@ Description:	Class IRSET - Internal Search Result Set
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-09
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include <stdlib.h>
 
 #include "defs.hxx"
@@ -103,11 +106,46 @@ IRSET::Init(const PIDBOBJ DbParent)
   Parent = DbParent;
   MinScore=999999.0;
   MaxScore=0.0;
-  INT ScoreSort=0;		// 1 if sorted by score
+  // BUGFIX #3: was `INT ScoreSort=0;`, declaring a local that shadowed
+  // (and was never read past) the ScoreSort member instead of
+  // initializing it, leaving the member uninitialized garbage until the
+  // first SortByScore()/SortByIndex() call. No current caller reads
+  // ScoreSort, so this had no observable effect, but it's still an
+  // uninitialized member and the source of a standing -Wunused-variable
+  // warning on every build.
+  ScoreSort=0;		// 1 if sorted by score
 }
 
 
-DOUBLE 
+// BUGFIX #2: see the declaration in irset.hxx for why this is needed.
+// Deliberately does NOT base-construct via `OPERAND(OtherIrset)`: that
+// would invoke OPERAND's own implicit copy constructor, which -- since
+// ATTRLIST (OPERAND::Attributes' type) has the identical missing-copy-
+// constructor defect one level down (see docs/BUG_CATALOG.md under
+// src/operand.hxx) -- shallow-copies ATTRLIST's own Table and produces
+// the exact same double-free, just one hop deeper. Confirmed by hitting
+// it: the standalone repro below aborted in ATTRLIST::~ATTRLIST() until
+// this was reworked to default-construct the OPERAND base instead and
+// copy Attributes through GetAttributes()/SetAttributes(), both of
+// which go through ATTRLIST::operator=, which -- unlike its copy
+// constructor -- already deep-copies correctly.
+IRSET::IRSET(const IRSET& OtherIrset) : OPERAND()
+{
+  Init(OtherIrset.Parent);
+  ATTRLIST Attrs;
+  OtherIrset.GetAttributes(&Attrs);
+  SetAttributes(Attrs);
+  INT x;
+  for (x = 0; x < OtherIrset.TotalEntries; x++) {
+    FastAddEntry(OtherIrset.Table[x], 0);
+  }
+  MinScore = OtherIrset.MinScore;
+  MaxScore = OtherIrset.MaxScore;
+  ScoreSort = OtherIrset.ScoreSort;
+}
+
+
+DOUBLE
 IRSET::GetMaxScore(){
   return(MaxScore);
 }
@@ -119,8 +157,18 @@ IRSET::GetMinScore(){
 }
 
 
-OPOBJ& 
+// BUGFIX #4: was missing a self-assignment guard. On `x = x;`,
+// OtherIrset *is* `*this`, so the original unconditionally deleted
+// Table and re-Init()'d before ever reading OtherIrset.GetTotalEntries()
+// -- by which point that count (reading the same, just-reset object)
+// was 0, silently discarding every entry. Confirmed real with a
+// standalone repro: a 1-entry IRSET self-assigned through its OPOBJ&
+// interface dropped to 0 entries.
+OPOBJ&
 IRSET::operator=(const OPOBJ& OtherIrset) {
+  if (&OtherIrset == this) {
+    return *this;
+  }
   if (Table) {
     delete [] Table;
   }
@@ -209,10 +257,9 @@ IRSET::MergeEntries(const INT AddHitCounts)
 }
 
 
-void 
-IRSET::FastAddEntry(const IRESULT& ResultRecord, const INT AddHitCounts) 
+void
+IRSET::FastAddEntry(const IRESULT& ResultRecord, const INT AddHitCounts)
 {
-  DOUBLE x;
   if (TotalEntries == MaxEntries)
     Expand();
   Table[TotalEntries] = ResultRecord;
@@ -376,11 +423,24 @@ IRSET::Fill(INT Start, INT End, PRSET set)
 }
 
 
-void 
+/**
+ * @brief Grows Table's capacity, doubling it (or seeding a minimum of
+ * 1 if it's currently 0).
+ */
+void
 IRSET::Expand() {
   //  Resize(TotalEntries+1000);
   // Really resize this
-  Resize(TotalEntries*2);
+  // BUGFIX #5 (docs/BUG_CATALOG.md#srcirsetcxx): Resize(TotalEntries*2)
+  // never grows once MaxEntries reaches 0 (reachable via CleanUp()/
+  // Resize() on an empty IRSET) -- 0*2 is still 0, so every subsequent
+  // AddEntry()/FastAddEntry() wrote one element past a zero-size
+  // allocation. Confirmed with a standalone repro under ASan: CleanUp()
+  // on an empty IRSET followed by AddEntry() reported a
+  // heap-buffer-overflow right here. Falling back to a minimum of 1
+  // breaks the stuck-at-zero cycle; doubling from there recovers in a
+  // handful of calls.
+  Resize((TotalEntries > 0) ? (TotalEntries * 2) : 1);
 }
 
 
@@ -526,8 +586,12 @@ IRSET::CharProx(const OPOBJ& OtherIrset, const INT Distance) {
 
 #ifndef MULTI
 // AndNOT added by Glenn MacStravic
-void 
-IRSET::AndNot(const OPOBJ& OtherIrset) 
+/**
+ * @brief Removes from this set every entry whose MdtIndex also appears
+ * in OtherIrset.
+ */
+void
+IRSET::AndNot(const OPOBJ& OtherIrset)
 {
   IRESULT OtherIresult;
   IRSET MyResult(Parent);
@@ -548,7 +612,7 @@ IRSET::AndNot(const OPOBJ& OtherIrset)
 			      TotalEntries, sizeof(IRESULT), 
 			      IrsetIndexCompare);
 #endif
-    if (match == NULL) {
+    if (match == nullptr) {
       MyResult.FastAddEntry(OtherIresult, 0);
       count++;
     }
@@ -557,15 +621,31 @@ IRSET::AndNot(const OPOBJ& OtherIrset)
   MyResult.SortByIndex();
   MyResult.MergeEntries(0);
   delete [] Table;
-  TotalEntries=count;
+  // BUGFIX #6 (docs/BUG_CATALOG.md#srcirsetcxx): TotalEntries was set to
+  // `count`, the number of entries added to MyResult BEFORE
+  // MergeEntries(0) collapses duplicate MdtIndex entries (reachable
+  // since FastAddEntry(), used just above, bypasses AddEntry()'s own
+  // dedup). Table itself is MyResult's post-merge, deduplicated array,
+  // so whenever OtherIrset contained duplicate entries, TotalEntries
+  // overstated Table's real element count and any later GetEntry() past
+  // the true end read out of bounds. Confirmed with a standalone repro
+  // under ASan: And()'ing against an IRSET with duplicate MdtIndex
+  // entries produced a heap-buffer-overflow read in GetEntry(). Using
+  // MyResult's own post-merge count (captured before StealTable()
+  // resets it) matches Table's actual contents.
+  TotalEntries=MyResult.GetTotalEntries();
   MaxEntries=MyResult.MaxEntries;
   Table = MyResult.StealTable();
 }
 
 
 // Faster AND implementation added by Glenn MacStravic
-void 
-IRSET::And(const OPOBJ& OtherIrset) 
+/**
+ * @brief Reduces this set to only the entries whose MdtIndex also
+ * appears in OtherIrset, combining hit counts and scores for each match.
+ */
+void
+IRSET::And(const OPOBJ& OtherIrset)
 {
   IRESULT OtherIresult;
   IRSET MyResult(Parent);
@@ -589,7 +669,7 @@ IRSET::And(const OPOBJ& OtherIrset)
 			      sizeof(IRESULT), IrsetIndexCompare);
     
 #endif
-    if (match != NULL) {
+    if (match != nullptr) {
 #ifdef DO_HIGHLIGHTING  
       match->AddToHitTable(OtherIresult);
 #endif
@@ -610,7 +690,10 @@ IRSET::And(const OPOBJ& OtherIrset)
   MyResult.SortByIndex();
   MyResult.MergeEntries(0);
   delete [] Table;
-  TotalEntries=count;
+  // BUGFIX #6 (docs/BUG_CATALOG.md#srcirsetcxx): see the identical fix
+  // and rationale in AndNot() above -- `count` is the pre-merge match
+  // count, not Table's actual post-merge element count.
+  TotalEntries=MyResult.GetTotalEntries();
   MaxEntries=MyResult.MaxEntries;
   if (MyResult.GetMaxScore() > MaxScore) {
     MaxScore = MyResult.GetMaxScore();

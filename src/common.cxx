@@ -41,6 +41,8 @@ Version:	$Revision: 1.21 $
 Description:	Common functions
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-10
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <stdlib.h>
 #include <string.h>
@@ -79,11 +81,27 @@ panic(const char *filename, long line)
 }
 
 
-void 
-AddTrailingSlash(STRING* PathName) 
+// BUGFIX #7 (docs/BUG_CATALOG.md#srccommoncxx): found 2026-08-10 while
+// processing Isearch-cgi/api_search.hxx (a pending file, not part of
+// this file's original turn) -- the length guard was `> 1`, so a
+// single-character path like "." (a very ordinary "use the current
+// directory" value -- e.g. Isearch-cgi/api_search.cxx's own
+// ExecuteSearch() falls back to it when ISEARCH_DB_PATH isn't
+// configured) never got a trailing slash appended at all. Confirmed
+// with a standalone repro: AddTrailingSlash(".") left it as "." (not
+// "./"), while AddTrailingSlash("/tmp") correctly produced "/tmp/".
+// Concatenating a database filename onto the un-slashed result
+// (".mydb.mdt" instead of "./mydb.mdt") makes every database lookup
+// against a "." path fail even when the database genuinely exists --
+// confirmed live via Isearch-cgi/api_search.cxx's own JSON API path.
+// Fixed by changing the guard to `> 0`, so only a truly empty path (for
+// which appending a slash would change "no path" into "root
+// directory", a real, deliberate behavior difference) is left alone.
+void
+AddTrailingSlash(STRING* PathName)
 {
   STRINGINDEX x;
-  if ( ((x=PathName->GetLength()) > 1) &&
+  if ( ((x=PathName->GetLength()) > 0) &&
        (PathName->GetChr(x) != DIR_SLASH) ) {
     PathName->Cat(DIR_SLASH);
   }
@@ -109,12 +127,17 @@ RemoveFileName(STRING* PathName)
 }
 
 
-void 
-RemoveFileExtension(STRING* PathName) 
+void
+RemoveFileExtension(STRING* PathName)
 {
   STRINGINDEX x;
-  x = PathName->SearchReverse('.');
-  PathName->EraseAfter(x);
+  // BUGFIX #4: SearchReverse returns 0 when there's no '.', and
+  // EraseAfter(0) truncates to zero characters -- so a file with no
+  // extension had its whole name wiped instead of being left alone,
+  // unlike the analogous no-op guard in RemovePath() above.
+  if ((x = PathName->SearchReverse('.')) != 0) {
+    PathName->EraseAfter(x);
+  }
 }
 
 
@@ -176,7 +199,11 @@ IsFile(const STRING FileName)
     }
 
 #if (defined(_MSDOS) || defined(_WIN32)) && !defined(UNIX)
-  if (_S_IFREG && status.st_mode)
+  // BUGFIX #1: was `_S_IFREG && status.st_mode` -- a nonzero constant
+  // logically ANDed with the mode word, which is true for anything
+  // stat() could report (directories included), not just regular
+  // files. Needs the actual bitwise AND against the file-type bits.
+  if (status.st_mode & _S_IFREG)
 #else
   if (S_ISREG(status.st_mode))
 #endif
@@ -203,7 +230,11 @@ IsFile(const CHR* FileName)
     }
 
 #if (defined(_MSDOS) || defined(_WIN32)) && !defined(UNIX)
-  if (_S_IFREG && status.st_mode)
+  // BUGFIX #1: was `_S_IFREG && status.st_mode` -- a nonzero constant
+  // logically ANDed with the mode word, which is true for anything
+  // stat() could report (directories included), not just regular
+  // files. Needs the actual bitwise AND against the file-type bits.
+  if (status.st_mode & _S_IFREG)
 #else
   if (S_ISREG(status.st_mode))
 #endif
@@ -279,15 +310,26 @@ ExpandFileSpec(STRING* FileSpec)
 }
 
 
-void 
-GpSwab(PGPTYPE GpPtr) 
+void
+GpSwab(PGPTYPE GpPtr)
 {
-  GPTYPE Gp;
-#ifdef CROSS_PLATFORM
-  swab((CHR*)GpPtr, (CHR*)&Gp, sizeof(GPTYPE));
-#endif
-  *((UINT2*)GpPtr) = (UINT2)((UINT2)*(((UINT2*)&Gp)+1));
-  *(((UINT2*)GpPtr)+1) = (UINT2)*((UINT2*)&Gp);
+  // BUGFIX #2: the old body read an uninitialized `GPTYPE Gp;` into
+  // the word-swap below whenever CROSS_PLATFORM isn't defined -- true
+  // everywhere in this build (see docs/BUG_CATALOG.md#srccommoncxx) --
+  // producing stack garbage instead of a byte-swapped value. Simply
+  // seeding Gp from *GpPtr isn't enough to fix it either: the
+  // word-swap alone only reverses GpPtr's two 16-bit halves, not its
+  // 4 individual bytes. A full reversal (the behavior every real
+  // caller relies on -- see FC::FlipBytes()/MDTREC::FlipBytes(), only
+  // ever invoked when the on-disk data's endianness doesn't match the
+  // host's) only happened when CROSS_PLATFORM was defined, because
+  // swab() additionally byte-swapped each half before the word-swap
+  // ran. Replaced with a direct, unconditional 4-byte reversal that's
+  // correct regardless of CROSS_PLATFORM or swab() availability.
+  PUCHR p = (PUCHR)GpPtr;
+  UCHR tmp;
+  tmp = p[0]; p[0] = p[3]; p[3] = tmp;
+  tmp = p[1]; p[1] = p[2]; p[2] = tmp;
 }
 
 
@@ -341,7 +383,13 @@ rename(const STRING From, const STRING To) {
   remove(To);
 #endif
 
-  return rename(From, To);
+  // BUGFIX #3: `rename(From, To)` here was an exact-match call to this
+  // very overload -- STRING needs a user-defined conversion to reach
+  // the C library's rename(const char*, const char*), and overload
+  // resolution always prefers an exact match, so every call recursed
+  // into itself until the stack overflowed. Casting to const char*
+  // first makes the C library overload the exact match instead.
+  return rename((const char*)From, (const char*)To);
 }
 
 // From Ahti "Ade" Nevalainen <c72092@UWasa.Fi> to handle non-latin chars
@@ -391,7 +439,11 @@ ParseIsoDate(const STRING DateString) {
   INT YYYY,MM,DD;
   INT hh,mm;
   FLOAT ss;
-  DOUBLE date_val,time_val;
+  // BUGFIX #5: both left uninitialized and read by the final `return`
+  // below whenever the input doesn't match the sub-format each is set
+  // in -- no '-' in the date portion, or a 'T' present but no ':' in
+  // the time portion.
+  DOUBLE date_val = 0.0, time_val = 0.0;
 
   TmpDate = DateString;
 
@@ -425,10 +477,15 @@ ParseIsoDate(const STRING DateString) {
     if (isdigit(tDate[0])) {
       // We might have to look explictly for - if the formatting is bad
       sscanf(tDate,"%4d-%2d-%2d",&YYYY,&MM,&DD);
-      sprintf(tDate,"%04d%02d%02d",YYYY,MM,DD);
+      snprintf(tDate, TmpDate.GetLength() + 1, "%04d%02d%02d", YYYY, MM, DD);
       TmpDate = tDate;
       date_val = TmpDate.GetFloat();
     } else {
+      // BUGFIX #6: this early return used to skip the delete [] below,
+      // leaking tDate on every non-digit date. Confirmed with
+      // LeakSanitizer via tests/src/test_common.cxx's non-digit-date
+      // test.
+      delete [] tDate;
       return -99999999.0;
     }
     delete [] tDate;

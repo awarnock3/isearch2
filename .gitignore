@@ -69,3 +69,48 @@ Testing/
 .cache/
 db/
 
+# Isearch2 cleanup: Catch2 test build output (see CLAUDE.md TESTING)
+tests/run_tests
+tests/run_tests-asan
+tests/reports/
+*.o.asan
+
+# Isearch2 cleanup: generated PDF reports (see /blocked-report) --
+# disposable, timestamped artifacts, not tracked project state, same
+# treatment as tests/reports/ above.
+docs/reports/
+
+# Isearch2 cleanup: local Claude Code permission config — machine-specific,
+# never share bypassPermissions (or any permission override) via the branch
+.claude/settings.json
+.claude/settings.local.json
+
+# Isearch2 cleanup: compiled CLI/CGI binaries -- build output, not source.
+# bin/zpresent and bin/zsearch were previously checked in as binary blobs
+# (inconsistently -- the other four bin/ binaries never were); untracked
+# below, along with the Isearch-cgi/ binaries, for consistency.
+bin/Iget
+bin/Iindex
+bin/Isearch
+bin/Iutil
+bin/zpresent
+bin/zsearch
+Isearch-cgi/isrch_api
+Isearch-cgi/isrch_fetch
+Isearch-cgi/isrch_html
+Isearch-cgi/isrch_srch
+Isearch-cgi/search_form
+doctype/dtconf
+
+# Isearch2 cleanup: stray default-named index database left at repo root
+# by running Iindex/Isearch without -d (defaults to DB name "ISEARCH",
+# see src/defs.cxx) -- not a fixture anything relies on, just leftover
+# scratch state from manual testing.
+/ISEARCH.mdt
+/ISEARCH.sta
+
+# Isearch2 cleanup: Python bytecode cache from running the .claude/tools/
+# report generators locally -- not source, regenerated automatically.
+__pycache__/
+*.pyc
+

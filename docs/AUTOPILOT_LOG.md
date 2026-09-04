@@ -1,0 +1,779 @@
+# Isearch2 Cleanup — Autopilot Log
+
+One running file, one `##` section per file GENERAL blocked at step 4
+while running unattended (see AUTONOMY in CLAUDE.md).
+
+## src/reclist.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `RECLIST` owns a
+heap-allocated `PRECORD Table` array (`new RECORD[...]` in the
+constructor/`Resize`, `delete [] Table` in the destructor/`Resize`) but
+declares no copy constructor or copy-assignment operator, so the
+compiler-generated ones do a shallow pointer copy. Confirmed real with
+a standalone repro: copy-construct a second `RECLIST` from an existing
+one, let the copy go out of scope, then destroy the original — ASan
+reported a `heap-use-after-free` in `RECLIST::~RECLIST()` (the second
+`delete []` on the already-freed `Table`). `RECLIST` is currently
+dormant (its only two references in the live tree, `src/Iindex.cxx`
+and `src/idb.hxx`, are both commented out), so this isn't an active
+crash today, but it's a real defect in the class as declared.
+
+Fixing it requires adding two declarations to `reclist.hxx` that don't
+exist today — `RECLIST(const RECLIST&);` and
+`RECLIST& operator=(const RECLIST&);` (deep-copying `Table`,
+`TotalEntries`, `MaxEntries`), or alternatively `= delete`-ing both to
+make the class explicitly non-copyable if deep-copy semantics aren't
+wanted. Either is a public signature change to a class with two
+(commented-out, so currently invisible to the compiler, but real once
+uncommented) external references — exactly the kind of call GENERAL
+step 4 reserves for a human. Row set to `blocked`; needs a
+signature-change decision (deep-copy vs. non-copyable) before
+reprocessing via `/process src/reclist.hxx`.
+
+## src/vlist.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `VLIST` (doubly linked
+circular list base class) declares a virtual destructor but no copy
+constructor and no `operator=` — only a commented-out
+`virtual VLIST& operator=(const VLIST&) = 0;` — so the compiler
+generates both, shallow-copying the raw `Next`/`Prev` pointers instead
+of splicing the copy into (or out of) the circle. This exact risk was
+flagged in advance during the `dft.hxx` turn (see
+`docs/BUG_CATALOG.md#srcdfthxx`, "Found but out of scope" section:
+"`vlist.hxx` (Order 27, `FCT`'s base class)... has the identical
+pattern one level further down").
+
+Confirmed real with a standalone repro (`VLIST* a = new VLIST();
+VLIST* b = new VLIST(*a); delete b; delete a;` — copy-construct one
+node from another default-constructed "circle of one" node, then
+delete both): `b`'s implicit copy ctor makes `b->Next == b->Prev ==
+a`, so `delete b` runs `~VLIST()`, which nulls `a->Next` and then
+recursively `delete`s `a` (its `Next`/`Prev` both alias `a`, which is
+not code that owns `a`'s allocation). AddressSanitizer reported a
+heap-use-after-free with the free happening inside the very
+`VLIST::~VLIST()` cascade the copy triggered, then the outer `delete
+a;` would be a second free of the same block. Unlike `reclist.hxx`,
+`VLIST` isn't dormant: `FCT` (Order 2, already processed) and
+`STRLIST` (Order 29, still pending) both derive from it (`class FCT :
+public VLIST`, `src/strlist.hxx:56`), and neither declares its own
+copy constructor either, so a copy of either subclass would hit this
+transitively today.
+
+Fixing it requires adding `VLIST(const VLIST&);` (and/or
+`VLIST& operator=(const VLIST&);`) to `vlist.hxx` — no declaration
+that exists today — or explicitly `= delete`-ing both to make the
+class non-copyable, mirroring the deep-copy-vs-non-copyable choice
+already pending on `reclist.hxx`. Note a deep-copy fix here is
+semantically odd for a *circular* list: copying a `Next`/`Prev` pair
+only makes sense relative to the specific circle the node lives in, so
+"deep copy" likely means "splice as a new one-node circle" rather than
+literally duplicating the chain — a design call, not just a mechanical
+fix, which is itself an argument for a human decision here. Row set to
+`blocked`; needs a signature-change decision before reprocessing via
+`/process src/vlist.hxx`.
+
+## src/attrlist.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `ATTRLIST` owns a
+heap-allocated `PATTR Table` array (`new ATTR[...]` in `Init()`/
+`Resize()`, `delete [] Table` in the destructor/`Resize()`/`operator=`)
+but declares no copy constructor — only `operator=` — so the
+compiler-generated copy constructor does a shallow pointer copy of
+`Table`. Exactly the same pattern already blocked at
+`docs/AUTOPILOT_LOG.md#srcreclisthxx` (`RECLIST`), and extensively
+forward-flagged across three earlier turns before reaching its own:
+first noted as a latent risk during `operand.hxx`'s turn
+(`docs/BUG_CATALOG.md#srcoperandhxx`, "Found but out of scope" —
+`OPERAND::Attributes` is an `ATTRLIST`), then hit and worked around
+during `irset.hxx`'s turn (`IRSET::IRSET(const IRSET&)` deliberately
+base-constructs `OPERAND` rather than copy-constructing it, specifically
+to avoid triggering this bug transitively — see the `BUGFIX #2` comment
+at `src/irset.cxx:117`), then confirmed reachable in practice (not just
+theoretical) during `sterm.hxx`'s turn, where self-assigning a live
+`STERM` through its `OPOBJ&` interface silently wiped its `Attributes`.
+
+Confirmed real again here with a standalone repro specific to the
+copy-constructor path (as opposed to the self-assignment path already
+confirmed at `sterm.hxx`'s turn): build an `ATTRLIST`, add one entry,
+copy-initialize a second (`ATTRLIST b = a;` — copy constructor, not
+`operator=`, since `b` doesn't exist yet), let `b` go out of scope,
+then let `a` be destroyed at end of scope. AddressSanitizer reported a
+`heap-use-after-free` in `ATTRLIST::~ATTRLIST()` (`attrlist.cxx:356`):
+`b`'s implicit shallow copy shared `a`'s `Table` pointer, `b`'s
+destructor freed it first, and `a`'s destructor then read/freed the
+same already-freed block.
+
+Fixing it requires adding `ATTRLIST(const ATTRLIST&);` to
+`attrlist.hxx` — no declaration exists today — deep-copying `Table`,
+`TotalEntries`, `MaxEntries` (mirroring `operator=`'s already-correct
+logic), or alternatively `= delete`-ing it to make the class explicitly
+non-copyable, the same deep-copy-vs-non-copyable choice already pending
+on `reclist.hxx` and `vlist.hxx`. Unlike those two, non-copyable is a
+harder sell here: `ATTRLIST` is a live member of `OPERAND`
+(`src/operand.hxx:65`) and `DFD` (`src/dfd.hxx:72`), both of which are
+copy-constructed/assigned in the tree today, so `= delete` would need
+each of those call sites re-audited too — exactly the kind of ripple
+GENERAL step 4 reserves for a human, not an autopilot guess.
+
+Also found, not fixed here since step 4 gates the rest of this file's
+pipeline for this turn: `ATTRLIST::operator=` (`attrlist.cxx:61`) has
+no self-assignment guard (`delete [] Table; Init();` runs before
+`OtherAttrlist.GetTotalEntries()` is read, so `x = x;` silently empties
+the list) — already documented at
+`docs/BUG_CATALOG.md#srcoperandhxx` and confirmed reachable at
+`sterm.hxx`'s turn. This one doesn't need a header change (`operator=`'s
+signature is unchanged, only its body) and can be fixed the next time
+this file is reprocessed, alongside the copy-constructor decision.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable, and if non-copyable, an audit of `OPERAND`'s and `DFD`'s
+copy sites) before reprocessing via `/process src/attrlist.hxx`.
+
+## src/dfdt.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `DFDT` owns a
+heap-allocated `PDFD Table` array (`new DFD[...]` in `Initialize()`/
+`Resize()`, `delete [] Table` in the destructor/`Resize()`/`operator=`)
+but declares no copy constructor — only `operator=` — so the
+compiler-generated copy constructor does a shallow pointer copy of
+`Table`. The third instance of the exact pattern already blocked at
+`docs/AUTOPILOT_LOG.md#srcreclisthxx` (`RECLIST`) and
+`docs/AUTOPILOT_LOG.md#srcattrlisthxx` (`ATTRLIST`) this same batch —
+unlike `DF`'s/`DFD`'s *inherited* versions of this risk (via their
+`FCT`/`ATTRLIST` members, documented and deferred without blocking
+those files), `DFDT` owns the raw array directly, so the fix belongs in
+`dfdt.hxx` itself.
+
+Confirmed real with a standalone repro, same shape as `ATTRLIST`'s:
+build a `DFDT`, add one entry, copy-initialize a second (`DFDT b = a;`
+— copy constructor, not `operator=`, since `b` doesn't exist yet), let
+`b` go out of scope, then let `a` be destroyed at end of scope.
+AddressSanitizer reported a `heap-use-after-free` in `DFDT::~DFDT()`
+(`dfdt.cxx:371`): `b`'s implicit shallow copy shared `a`'s `Table`
+pointer, `b`'s destructor freed it first, and `a`'s destructor then
+read/freed the same already-freed block. No confirmed copy-construction
+call site was found in the live tree (every site found uses `DFDT*`,
+default-construction, or `*DfdtBuffer = *MainDfdt;` — assignment, not
+construction), so this is latent rather than actively crashing today,
+the same status `RECLIST` and `ATTRLIST` had when they were blocked.
+
+Fixing it requires adding `DFDT(const DFDT&);` to `dfdt.hxx` — no
+declaration exists today — deep-copying `Table`, `TotalEntries`,
+`MaxEntries`, `Changed` (mirroring `operator=`'s already-correct logic),
+or alternatively `= delete`-ing it to make the class explicitly
+non-copyable, the same deep-copy-vs-non-copyable choice already pending
+on `reclist.hxx`, `vlist.hxx`, and `attrlist.hxx`.
+
+Also found, not fixed here since step 4 gates the rest of this file's
+pipeline for this turn: `DFDT::operator=` (`dfdt.cxx:61`) has no
+self-assignment guard — the identical `delete [] Table; Initialize();`
+-before-reading-`OtherDfdt.GetTotalEntries()` shape as `ATTRLIST`'s and
+`STRLIST`'s already-fixed/blocked instances of the same bug (see
+`docs/BUG_CATALOG.md#srcstrlistcxx`, `BUGFIX #1`, and
+`docs/AUTOPILOT_LOG.md#srcattrlisthxx`). Doesn't need a header change
+and can be fixed the next time this file is reprocessed, alongside the
+copy-constructor decision. Two more pre-existing findings, not fixed
+for the same reason: `DFDT::LoadTable` casts `NULL` to `(CHR*)NULL` for
+`strtok`'s second-and-later calls rather than using `nullptr` (ordinary
+modernization, not a bug); `DFDT::GetDfdRecord`
+(`dfdt.cxx:295`) assigns `DfdRecord=(PDFD)NULL;` to the local
+out-parameter *pointer itself* on a not-found lookup rather than to
+`*DfdRecord`, which has no effect the caller can observe (the pointer
+argument is passed by value) and leaves `*DfdRecord` holding whatever
+the caller passed in — likely meant to signal "not found" but silently
+doesn't; worth a closer look alongside the copy-constructor fix.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable) before reprocessing via `/process src/dfdt.hxx`.
+
+## src/mdt.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `MDT` owns two
+heap-allocated arrays (`KEYREC* KeyIndex`, `GPREC* GpIndex`, both
+`new`'d in the constructor/`Resize()`, `delete []`'d in the destructor/
+`Resize()`) *and* a raw `FILE* MdtFp` (opened in the constructor,
+`fclose()`'d in the destructor) — but, unlike every other class blocked
+this batch, declares **no** copy constructor and **no** `operator=` at
+all, not even a (buggy) hand-written one. `MDT` has a user-declared
+destructor but no user-declared copy operations or move operations, so
+under C++11 rules the compiler still implicitly generates both a copy
+constructor and a copy-assignment operator (merely deprecated, not
+suppressed) — both doing a member-wise shallow copy of `KeyIndex`,
+`GpIndex`, *and* `MdtFp` together.
+
+Confirmed real with a standalone repro, same shape as `ATTRLIST`'s/
+`DFDT`'s: construct an `MDT` against a real temp file stem (mirroring
+`tests/src/test_filemap.cxx`'s `TempMdt` fixture), add one entry,
+copy-initialize a second (`MDT b = *a;` — copy constructor), let `b` go
+out of scope, then destroy `a`. AddressSanitizer reported a
+`heap-use-after-free` — not even in `MDT::~MDT()` itself this time, but
+one level further in: `a`'s destructor calls `FlushMDTIndexes()` →
+`SortGpIndex()` → `qsort()` on `GpIndex`, which `b`'s destructor had
+already `delete []`'d. The `MdtFp` sharing is real too by the same
+mechanism (both copies' destructors call `fclose()` on the same
+`FILE*`) but wasn't reached in this repro — the array free hit first.
+No confirmed copy-construction call site was found in the live tree
+(every site found uses `MDT*`/`new MDT(...)`, never a bare `MDT` value
+or an assignment between two `MDT`s), so this is latent rather than
+actively crashing today, the same status the other three raw-resource
+classes had when they were blocked.
+
+Fixing it requires adding `MDT(const MDT&);` and
+`MDT& operator=(const MDT&);` to `mdt.hxx` — deep-copying `KeyIndex`/
+`GpIndex` and, for the `FILE*`, either re-opening `MdtFp` against the
+same `FileStem` or deciding copies shouldn't share live file state at
+all — or `= delete`-ing both to make the class explicitly non-copyable,
+which seems like the more natural fit here specifically: unlike
+`ATTRLIST`/`DFDT`, nothing in the live tree ever copies an `MDT` by
+value already (see above), and a "copy" of an open file handle plus
+in-memory indexes is a much less obviously well-defined operation than
+copying a `Table` array. Still a call for a human, not an autopilot
+guess, per GENERAL step 4.
+
+Also found while reading, not fixed here since step 4 gates the rest of
+this file's pipeline for this turn: `GetUniqueKey()`
+(`mdt.cxx:439`) still uses `sprintf` (ordinary modernization to
+`snprintf`, not a correctness bug — `y`/`x` are `INT`, so the worst
+case comfortably fits `CHR s[30]`); `MdtCompareKeysByIndex`/
+`MdtCompareGpByIndex`/`MdtCompareGpStarts` (`mdt.cxx:182-188,360-362`)
+compute `qsort` comparator results as a plain subtraction
+(`ThisA->Index - ThisB->Index`, etc.) of `GPTYPE`/`SIZE_T`-typed
+(unsigned) fields narrowed to `int` — the classic unsigned-subtraction-
+in-a-comparator bug, wrong for any pair far enough apart to wrap when
+narrowed, though not exercised by the repro above; worth a closer look
+alongside the copy-semantics fix.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable) before reprocessing via `/process src/mdt.hxx`.
+
+## src/fpt.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `FPT` owns a
+heap-allocated `FPREC* Table` array (`new FPREC[TableSize]` in
+`Init()`, `delete [] Table` in the destructor) but declares no copy
+constructor and no `operator=` at all — the same "no custom copy
+semantics whatsoever" shape as `mdt.hxx` this batch
+(`docs/AUTOPILOT_LOG.md#srcmdthxx`), not even a hand-written (if buggy)
+`operator=` like `attrlist.hxx`/`dfdt.hxx` had. The compiler-generated
+copy constructor and copy-assignment operator both do a member-wise
+shallow copy of `Table`.
+
+Confirmed real with a standalone repro, same shape as the others this
+batch: construct an `FPT`, open one file through it (`ffopen()`),
+copy-initialize a second (`FPT b = a;` — copy constructor), let `b` go
+out of scope, then let `a` be destroyed at end of scope. AddressSanitizer
+reported a `heap-use-after-free` in `FPREC::GetClosed()` called from
+`FPT::CloseAll()` called from `FPT::~FPT()`: `b`'s implicit shallow
+copy shared `a`'s `Table` pointer, `b`'s destructor `delete []`'d it
+first, and `a`'s destructor then read the same freed block while
+closing any still-open files. Unlike `mdt.hxx`, this one has a
+concrete, non-pointer live call site already in the tree:
+`src/idb.hxx:224` declares `FPT MainFpt;` as a plain (not pointer)
+member of `IDB` (Order 64, still pending) — if `IDB` is ever
+copy-constructed or assigned without `IDB` defining its own copy
+semantics first, `MainFpt` would be silently, shallowly copied right
+along with it. Worth flagging concretely when `idb.hxx` reaches its own
+turn.
+
+Fixing it requires adding `FPT(const FPT&);` and
+`FPT& operator=(const FPT&);` to `fpt.hxx` — deep-copying `Table`,
+`TotalEntries`, `MaximumEntries` — or `= delete`-ing both to make the
+class explicitly non-copyable. Given `FPT`'s `Table` entries each cache
+a live `FILE*` (`FPREC::FilePointer`), a "deep copy" would need to
+decide what a copied-but-still-open file handle even means (duplicate
+the fd? reopen from the file name? leave it closed?) — a design
+question, not just a mechanical copy, so this is a call for a human,
+not an autopilot guess, per GENERAL step 4.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable, and if deep-copy, a decision on open-`FILE*` semantics)
+before reprocessing via `/process src/fpt.hxx`.
+
+## src/nlist.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `NUMERICLIST` owns a
+heap-allocated `PNUMERICFLD table` array (`new NUMERICFLD[50*Ncoords]`
+in both constructors, `delete [] table` in the destructor) but declares
+no copy constructor and no `operator=` at all — the same "no custom
+copy semantics whatsoever" shape as `mdt.hxx`/`fpt.hxx` earlier this
+batch. The compiler-generated copy constructor and copy-assignment
+operator both do a member-wise shallow copy of `table`.
+
+Confirmed real with a standalone repro, same shape as the others this
+batch: default-construct a `NUMERICLIST`, copy-initialize a second
+(`NUMERICLIST b = a;` — copy constructor, not `operator=`, since one
+isn't declared either way), let `b` go out of scope, then let `a` be
+destroyed at end of scope. AddressSanitizer reported a
+`heap-use-after-free` in `NUMERICLIST::~NUMERICLIST()` (`nlist.cxx:879`):
+`b`'s implicit shallow copy shared `a`'s `table` pointer, `b`'s
+destructor `delete []`'d it first, and `a`'s destructor then read the
+same already-freed block. No confirmed copy-construction call site was
+found in the live tree (every site found — `src/index.cxx`,
+`src/numsearch.cxx`, `src/idb.cxx`, `src/intlist.cxx` — either
+default-constructs a plain `NUMERICLIST` or `new`'s an array of them in
+`src/nfldmgr.cxx:136`, never copy-constructs one), so this is latent
+rather than actively crashing today. One live subclass, though:
+`INTLIST` (`src/intlist.hxx:68`, Order 47, still pending) derives from
+`NUMERICLIST` without declaring its own copy constructor either, so
+copy-constructing an `INTLIST` would hit this transitively — worth
+flagging concretely when `intlist.hxx` reaches its own turn, the same
+way `STRLIST`/`FCT` deriving from `VLIST` was flagged before `vlist.hxx`
+was resolved.
+
+Fixing it requires adding `NUMERICLIST(const NUMERICLIST&);` and
+`NUMERICLIST& operator=(const NUMERICLIST&);` to `nlist.hxx` — deep-
+copying `table` (sized to the source's `MaxEntries`), `Count`,
+`Attribute`, `Pointer`, `MaxEntries`, `StartIndex`, `EndIndex`,
+`Relation`, `FileName`, `Ncoords` — or `= delete`-ing both to make the
+class explicitly non-copyable, mirroring the deep-copy-vs-non-copyable
+choice already resolved (case by case) for `reclist.hxx`/`attrlist.hxx`/
+`dfdt.hxx`/`mdt.hxx`/`fpt.hxx`. A call for a human, not an autopilot
+guess, per GENERAL step 4.
+
+Also found while reading, not fixed here since step 4 gates the rest of
+this file's pipeline for this turn: **both constructors leave
+`Attribute` and `Relation` (plain `INT` members) uninitialized** —
+`Ncoords`/`table`/`Count`/`MaxEntries`/`FileName`/`Pointer`/
+`StartIndex`/`EndIndex` are all set, but `Attribute`/`Relation` are
+not, matching the same "indeterminate primitive member" category
+already found (and fixed) in `RESULT`'s constructor
+(`docs/BUG_CATALOG.md#srcresultcxx`, `BUGFIX #1`) and `NUMERICFLD`'s
+(`docs/BUG_CATALOG.md#srcnfieldcxx`, `BUGFIX #1`) earlier this batch.
+Doesn't need a header change and can be fixed the next time this file
+is reprocessed, alongside the copy-semantics decision.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable) before reprocessing via `/process src/nlist.hxx`.
+
+## src/intlist.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `INTERVALLIST` (derives
+from `NUMERICLIST`, itself blocked this same batch at
+`docs/AUTOPILOT_LOG.md#srcnlisthxx`) owns its own heap-allocated
+`PINTERVALFLD table` array (`new INTERVALFLD[50*Ncoords]` in both
+constructors, `delete [] table` in the destructor) but declares no copy
+constructor and no `operator=` — the same "no custom copy semantics
+whatsoever" shape as `mdt.hxx`/`fpt.hxx`/`nlist.hxx` earlier this
+batch. This is `INTERVALLIST`'s own, first-party defect (it owns the
+array directly), not just an inherited risk from `NUMERICLIST` the way
+`DF`'s risk from `FCT` was — though it inherits *that* risk too, doubly:
+a compiler-generated copy would shallow-copy both `INTERVALLIST`'s own
+`table` and (via `NUMERICLIST`'s own compiler-generated copy
+constructor, since neither class declares one) the base class's
+`table` as well.
+
+Confirmed real with a standalone repro, same shape as the others this
+batch: default-construct an `INTERVALLIST`, copy-initialize a second
+(`INTERVALLIST b = a;`), let `b` go out of scope, then let `a` be
+destroyed at end of scope. AddressSanitizer reported a
+`heap-use-after-free` in `INTERVALLIST::~INTERVALLIST()`
+(`intlist.cxx:1180`): `b`'s implicit shallow copy shared `a`'s own
+`table` pointer, `b`'s destructor `delete []`'d it first, and `a`'s
+destructor then read the same already-freed block (the base class's
+separately-owned `table` would fail the identical way one level up, in
+`~NUMERICLIST()`, if destruction got that far). No confirmed
+copy-construction call site was found in the live tree (every site
+found in `src/index.cxx`/`src/numsearch.cxx`/`src/idb.cxx` either
+default-constructs a plain `INTERVALLIST` or assigns through its own
+methods), so this is latent rather than actively crashing today.
+
+Fixing it requires adding `INTERVALLIST(const INTERVALLIST&);` and
+`INTERVALLIST& operator=(const INTERVALLIST&);` to `intlist.hxx` —
+deep-copying `table` (sized to the source's `MaxEntries`) and every
+other member listed below — or `= delete`-ing both, mirroring the
+deep-copy-vs-non-copyable choice already resolved case by case for
+`reclist.hxx`/`attrlist.hxx`/`dfdt.hxx`/`mdt.hxx`/`fpt.hxx`. Either way,
+`NUMERICLIST`'s own copy-semantics decision (still pending) needs
+settling first, since `INTERVALLIST`'s base subobject would otherwise
+still be vulnerable to the identical bug even after `INTERVALLIST`'s
+own copy operations are fixed. A call for a human, not an autopilot
+guess, per GENERAL step 4.
+
+Also found while reading, not fixed here since step 4 gates the rest of
+this file's pipeline for this turn — a much larger-scale version of the
+`GlobalStart`-shadowing finding already documented (not fixed, same
+reason) at `docs/BUG_CATALOG.md#srcintfieldcxx`: **`INTERVALLIST`
+redeclares its own private copies of nearly every member `NUMERICLIST`
+already has** — `Count`, `Attribute`, `Pointer`, `MaxEntries`,
+`StartIndex`, `EndIndex`, `Relation`, `FileName`, `Ncoords` are all
+identically-named, identically-typed members shadowing the base
+class's own, plus `table` (a different, `INTERVALFLD`-typed, array).
+Every `INTERVALLIST` method reads/writes its own shadowed copies, never
+the inherited ones (which `NUMERICLIST` declares `private`, making them
+inaccessible to `INTERVALLIST` even if it wanted to reuse them) — so
+every `INTERVALLIST` instance allocates and fully initializes *two*
+separate, independent table arrays (the base's own 100-entry
+`NUMERICFLD[]`, entirely unused after construction, plus the derived
+class's real `INTERVALFLD[]`), wasting an allocation and ~1.2KB per
+instance. The `public` inheritance itself appears to contribute nothing
+functional beyond the (unused, since always shadowed) inherited method
+names — a real design/encapsulation problem, but fixing it means either
+making `NUMERICLIST`'s members `protected` (a header change to a
+different, already-blocked file) or dropping the inheritance entirely,
+both squarely a human design call, not a mechanical fix.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable, and ideally revisited alongside `nlist.hxx`'s own
+decision given the shadowing above) before reprocessing via
+`/process src/intlist.hxx`.
+
+## src/mergeunit.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `MERGEUNIT` owns four
+separate heap-allocated arrays (`GPTYPE *list`, `INT *Start`,
+`STRING *sistrings`, `CHR *Tag`, all `new`'d in the constructor and
+resized in `SetLoadLimit()`) but declares no copy constructor and no
+`operator=` at all — the same "no custom copy semantics whatsoever"
+shape as `mdt.hxx`/`fpt.hxx`/`nlist.hxx`/`intlist.hxx` earlier this
+batch.
+
+Confirmed real with a standalone repro — though it surfaced an even
+more severe, unconditional bug first (see below) before it could even
+reach the copy-construction scenario: default-construct a `MERGEUNIT`,
+copy-initialize a second (`MERGEUNIT b = a;`), let `b` go out of scope,
+then let `a` be destroyed at end of scope. AddressSanitizer aborted
+immediately on `a`'s own destruction (`~MERGEUNIT()`, `mergeunit.cxx:
+369`) with an `alloc-dealloc-mismatch`, before ever reaching a point
+where the copy-construction double-free could be observed directly —
+see below.
+
+**Also found while reading, not fixed here since step 4 gates the rest
+of this file's pipeline for this turn — and notably more severe than
+the copy-constructor question above, since it doesn't depend on
+copying at all:**
+
+- **Four `delete`/`delete[]` mismatches, all real, undefined behavior**
+  — `list`, `Tag`, and `Start` are each allocated with array `new`
+  (`new GPTYPE[...]`/`new CHR[...]`/`new INT[...]`) but freed with
+  scalar `delete` in `~MERGEUNIT()` (`mergeunit.cxx:369,371,372`; only
+  `sistrings` there correctly uses `delete []`) — `SetLoadLimit()`
+  (`mergeunit.cxx:308-311`) already frees all four correctly with
+  `delete []`, so the destructor is the outlier, not the norm. A fifth
+  local, `p = new CHR[size+1]` in `CacheLoad()`
+  (`mergeunit.cxx:192,220`), is freed the same wrong way. Confirmed
+  real twice over: first with a minimal isolated repro (`int* p = new
+  int[5]; delete p;`) proving this toolchain's ASan
+  `alloc-dealloc-mismatch` detector is active and catches exactly this
+  pattern (`alloc_dealloc_mismatch=1` is the default), then again by
+  the `MERGEUNIT` repro above, which crashed on this before the
+  copy-constructor question was even reached. This is **not**
+  copy-construction-dependent — it fires on the most basic
+  construct-then-destroy usage of the class, e.g. the live
+  `MERGEUNIT A[2];` at `src/index.cxx:2438` (Order 54, still pending).
+  It happens not to be an observed *production* crash today only
+  because `make smoke-test` passed cleanly with the non-sanitized
+  build — for POD-typed arrays like these, `operator delete` and
+  `operator delete[]` are often functionally interchangeable under a
+  given allocator even though the standard makes the mismatch
+  undefined — but it's real UB, confirmed under a sanitizer, on code
+  the production binary actually runs. Doesn't need a header change
+  (bodies only) and should be the very first thing fixed the next time
+  this file is reprocessed, independent of whatever the copy-semantics
+  decision turns out to be.
+- **Constructor leaves `Parent`/`fp`/`Map`/`ID`/`Gp` uninitialized** —
+  `Initialize()` is a mandatory second-phase constructor that sets all
+  but `Gp`, but `~MERGEUNIT()` already dereferences `Parent` (via
+  `Parent->ffclose(fp)`, guarded only by `if(fp)`) if a `MERGEUNIT` is
+  ever destroyed without `Initialize()` having been called first, which
+  would read `fp`/`Parent` as indeterminate values. No confirmed call
+  site was found that skips `Initialize()`, so this is latent, but
+  matches the same "indeterminate primitive/pointer member" category
+  fixed multiple times already this batch (`RESULT`, `NUMERICFLD`,
+  `SRCH_DATE`). Doesn't need a header change either.
+
+**Found in a different file while reading `MERGEUNIT`'s real callers,
+out of scope for this turn:** `src/index.cxx:773` does
+`A = new MERGEUNIT[sizeof(MERGEUNIT)*IndexNum];` — `new T[n]` allocates
+`n` *objects* of type `T`, not `n` bytes, so this allocates
+`sizeof(MERGEUNIT)` times more `MERGEUNIT` objects than intended (a
+classic "confused array-new with a byte count" bug). Belongs to
+`index.cxx`'s own turn (Order 54, still pending); noted here since it's
+directly relevant to how `MERGEUNIT` is used in practice.
+
+Fixing the copy-semantics question requires adding
+`MERGEUNIT(const MERGEUNIT&);` and
+`MERGEUNIT& operator=(const MERGEUNIT&);` to `mergeunit.hxx` — deep-
+copying all four arrays (sized to the source's current load limit) plus
+every scalar member — or `= delete`-ing both to make the class
+explicitly non-copyable (no confirmed copy-construction call site was
+found in the live tree, only default-construction via `MERGEUNIT
+A[2];`/`new MERGEUNIT[...]`, so non-copyable may be the simpler choice
+here, similar to `mdt.hxx`'s reasoning). A call for a human, not an
+autopilot guess, per GENERAL step 4.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable) before reprocessing via `/process src/mergeunit.hxx` —
+recommend fixing the delete/delete[] mismatches in that same pass given
+their severity.
+
+## src/thesaurus.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. Both `TH_PARENT_LIST` and
+`TH_ENTRY_LIST` own a heap-allocated array (`PTH_PARENT table`/
+`PTH_ENTRY table`, `new`'d in each constructor) but declare no copy
+constructor and no `operator=` at all — the same "no custom copy
+semantics whatsoever" shape as `mdt.hxx`/`fpt.hxx`/`nlist.hxx`/
+`intlist.hxx`/`mergeunit.hxx` earlier this batch, this time affecting
+two sibling classes in the same file at once. `THESAURUS` itself holds
+one of each as plain value members (`Parents`/`Children`), so it
+inherits the same risk transitively, though `THESAURUS` is only ever
+used via `new THESAURUS(...)`/pointers in the live tree (`src/Iindex.cxx`,
+`src/squery.cxx`), never copied by value.
+
+Confirmed real with a standalone repro, same shape as the others this
+batch: default-construct a `TH_PARENT_LIST`, copy-initialize a second
+(`TH_PARENT_LIST b = a;`), let `b` go out of scope, then let `a` be
+destroyed at end of scope. AddressSanitizer reported a
+`heap-use-after-free` in `TH_PARENT_LIST::~TH_PARENT_LIST()`
+(`thesaurus.cxx:215`): `b`'s implicit shallow copy shared `a`'s `table`
+pointer, `b`'s destructor `delete []`'d it first, and `a`'s destructor
+then read the same already-freed block (`TH_ENTRY_LIST` has the
+identical shape, unverified standalone but structurally the same code).
+No confirmed copy-construction call site was found in the live tree, so
+this specific defect is latent.
+
+**Also found while reading, not fixed here since step 4 gates the rest
+of this file's pipeline for this turn — the first of these is far more
+urgent than the copy-semantics question above, and confirmed actively
+reachable, not latent:**
+
+- **`AddEntry` has no bounds check against the hard-coded 100-entry
+  table — a real, confirmed heap buffer overflow** — both
+  `TH_PARENT_LIST::AddEntry()` and `TH_ENTRY_LIST::AddEntry()`
+  unconditionally do `table[Count] = New...; Count++;` against a table
+  allocated once at construction (`new TH_PARENT[100]`/
+  `new TH_ENTRY[100]`) with no `Resize()`/`Expand()` anywhere in this
+  file, unlike every sibling table-owning class this batch
+  (`ATTRLIST`, `DFDT`, `MDT`, ...), all of which grow their table when
+  full. `MaxEntries` is set to `100` in both constructors and never
+  read again anywhere in this file — confirmed by `grep`, not just
+  inspection. Confirmed with a standalone repro: adding 150 entries to
+  a `TH_PARENT_LIST` crashed with a `heap-buffer-overflow` under ASan,
+  writing past the 100-element allocation on the 101st `AddEntry()`
+  call. **Confirmed actively reachable, not latent**: the index-time
+  `THESAURUS` constructor (`src/Iindex.cxx:903`, live production code,
+  not the file's own `#ifdef MAIN` demo block) parses a
+  user-supplied synonym source file and calls `Parents.AddEntry()`/
+  `Children.AddEntry()` once per parent/child term with no upper bound
+  on the source file's size — any real thesaurus with more than 100
+  distinct parent terms, or more than 100 total child-term entries
+  across all parents, corrupts the heap today. The fix (grow `table`
+  when `Count == MaxEntries`, mirroring `ATTRLIST`'s/`DFDT`'s own
+  `Resize()` bodies) doesn't need a header change — `AddEntry()`'s
+  public signature is unaffected, only its internal implementation —
+  and should be the very first thing fixed the next time this file is
+  reprocessed, independent of the copy-semantics decision.
+- **`GetEntry()`'s bounds check is off by one, in all four overloads**
+  — `TH_PARENT_LIST`'s and `TH_ENTRY_LIST`'s `GetEntry(index, ...)` and
+  `GetEntry(index)` all guard with `if (index <= Count)`, not
+  `index < Count`; `Count` itself is the index of the next *unused*
+  slot (0-based throughout this file, e.g. `AddEntry`'s own
+  `table[Count] = ...; Count++;`), so `GetEntry(Count, ...)` silently
+  returns whatever indeterminate/never-written entry happens to be at
+  `table[Count]` instead of leaving the output untouched or signaling
+  "not found." Every live call site found (`THESAURUS::LoadParents()`/
+  `LoadChildren()`) only ever calls with `index` in `[0, Count-1]`, so
+  this specific slack isn't hit today, but it's a real off-by-one in a
+  public method. No header change needed.
+- **`TH_PARENT`'s and `TH_ENTRY`'s default constructors leave their
+  `INT4` members indeterminate** — `TH_PARENT::TH_PARENT() {}` doesn't
+  initialize `GlobalStart` (`Term`, a `STRING`, self-initializes to
+  empty regardless); `TH_ENTRY::TH_ENTRY() {}` doesn't initialize
+  either `GlobalStart` or `ParentPtr`. Same "indeterminate primitive
+  member" category already fixed multiple times this batch (`RESULT`,
+  `NUMERICFLD`, `SRCH_DATE`). Interacts with the `GetEntry` off-by-one
+  above: the one-past-the-end slot it can return is exactly one of
+  these never-explicitly-set entries. No header change needed.
+- **`TH_PARENT::Copy()` is declared and defined but its body is
+  empty** — `void TH_PARENT::Copy(const TH_PARENT& OtherValue) { }`
+  does nothing at all, unlike the adjacent (correct) `operator=` two
+  lines below it, which actually copies `GlobalStart`/`Term`. Not
+  called anywhere in the tree today (confirmed by search), so this is
+  dead code rather than an active bug, but worth either implementing to
+  match `operator=` or removing as redundant — a design call, though a
+  much smaller one than the others above, deferred here only because
+  step 4 gates the whole file this turn.
+
+Fixing the copy-semantics question requires adding
+`TH_PARENT_LIST(const TH_PARENT_LIST&);`/
+`TH_PARENT_LIST& operator=(const TH_PARENT_LIST&);` and the same pair
+for `TH_ENTRY_LIST`, to `thesaurus.hxx` — deep-copying each `table`
+(sized to the source's `MaxEntries`) plus `Count`/`MaxEntries` — or
+`= delete`-ing both pairs to make both classes explicitly non-copyable.
+No confirmed copy-construction call site exists for either today. A
+call for a human, not an autopilot guess, per GENERAL step 4.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable, for both `TH_PARENT_LIST` and `TH_ENTRY_LIST`) before
+reprocessing via `/process src/thesaurus.hxx` — recommend fixing the
+`AddEntry` buffer overflow in that same pass given its severity and
+confirmed reachability.
+
+## src/tokengen.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `TOKENGEN` owns a
+heap-allocated `CHR *InCharP` (`InString.NewCString()` in the
+constructor, `delete [] InCharP;` in the destructor) but declares no
+copy constructor and no `operator=` at all — the same "no custom copy
+semantics whatsoever" shape as `mdt.hxx`/`fpt.hxx`/`nlist.hxx`/
+`intlist.hxx`/`mergeunit.hxx` earlier this batch, this time a single
+owned pointer rather than a resizable table.
+
+Confirmed real with a standalone repro, same shape as the others this
+batch: construct a `TOKENGEN` from a real query string, copy-initialize
+a second (`TOKENGEN b = a;`), let `b` go out of scope, then let `a` be
+destroyed at end of scope. AddressSanitizer reported a **double-free**
+in `TOKENGEN::~TOKENGEN()` (`tokengen.cxx:69`): `b`'s implicit shallow
+copy shared `a`'s `InCharP` pointer, `b`'s destructor freed it first,
+and `a`'s destructor freed the same block again. No confirmed
+copy-construction call site was found in the live tree — every site
+(`src/squery.cxx`, `src/infix2rpn.cxx`, `Isearch-cgi/isrch_srch.cxx`,
+`Isearch-cgi/api_search.cxx`, `Isearch-cgi/isrch_html.cxx`) either
+heap-allocates via `new TOKENGEN(...)` or direct-initializes a local
+from a `STRING` argument, never copies one `TOKENGEN` from another — so
+this specific defect is latent.
+
+**Also found while reading, not fixed here since step 4 gates the rest
+of this file's pipeline for this turn:**
+
+- **Header not self-contained** — same defect as `src/fc.hxx`
+  `BUGFIX #1` and many others this project: `tokengen.hxx` declares
+  `STRING`/`STRLIST`-typed members and parameters with
+  `#include "string.hxx"`/`#include "strlist.hxx"` commented out.
+  Confirmed by compiling `tokengen.hxx` as the sole `#include` in a
+  translation unit: 4 errors. The fix (restore the two includes) was
+  drafted and verified during this turn, then reverted along with
+  everything else once the copy-constructor issue above was found,
+  matching how `reclist.hxx`'s analogous header-self-containment fix
+  was ultimately applied together with its copy-constructor fix during
+  its `/reprocess-blocked` pass rather than separately. Trivial to
+  redo; doesn't need a header change beyond restoring what was already
+  there.
+- **`nexttoken()`'s unmatched-quote/brace fallback corrupts the token
+  in two distinct, confirmed ways — real bugs in live search-query
+  parsing, not edge cases**: on a failed quote or brace match, both
+  branches do `token->EraseAfter(token->SearchReverse(CLOSING_CHAR));`
+  to discard whatever was spuriously accumulated during the failed
+  scan — but this only works when the token actually *contains* a
+  literal instance of `CLOSING_CHAR` to search for, which is true only
+  for the unstripped-quote case (`SearchReverse('"')` finds the opening
+  quote itself, since it was literally appended). For the
+  quote-*stripping* case and for braces, the opening delimiter is
+  either never appended (quotes, when `DoStripQuotes` is set) or the
+  wrong character is searched for (braces: searches for the *closing*
+  `'}'`, which by definition was never found in this branch, instead
+  of the opening `'{'`, which was). `SearchReverse` then returns `0`,
+  and `EraseAfter(0)` wipes the *entire* token — not just the failed
+  scan's contents, but any valid text accumulated before the delimiter
+  was even reached. Confirmed with two standalone repros: tokenizing
+  `prefix"unmatched rest` with quote-stripping enabled produced
+  `["nmatched", "rest"]` (losing `prefix` entirely *and* one extra
+  character, `u` — see the second bug below); tokenizing
+  `prefix{unmatched rest` produced `["unmatched", "rest"]` (losing
+  `prefix{` entirely). Fixing the erase call to search for the
+  character that's actually guaranteed to be present (`'{'` for
+  braces; conditionally `'"'` or nothing for quotes, needing its own
+  care) is a pure logic fix, no header change needed.
+- **Same unmatched-quote fallback also skips an extra character when
+  `DoStripQuotes` is set** — `BeginQuote = ++input;` when entering the
+  quote block already advances past the opening quote; the fallback's
+  `input = ++BeginQuote;` increments it a *second* time, skipping the
+  first real character after the quote (confirmed by the repro above:
+  `unmatched` came back as `nmatched`, missing its leading `u`). The
+  unstripped case doesn't pre-increment `BeginQuote`, so its own
+  `++BeginQuote` is correct; the two branches need to agree. No header
+  change needed.
+
+Fixing the copy-semantics question requires adding
+`TOKENGEN(const TOKENGEN&);` and `TOKENGEN& operator=(const TOKENGEN&);`
+to `tokengen.hxx` — deep-copying `InCharP` (a fresh
+`NewCString()`-style duplicate) plus `TokenList`/`DoStripQuotes`/
+`HaveParsed` — or `= delete`-ing both to make the class explicitly
+non-copyable (no confirmed copy-construction call site exists today,
+so non-copyable may be the simpler choice, similar to `mdt.hxx`'s
+reasoning). A call for a human, not an autopilot guess, per GENERAL
+step 4.
+
+Row set to `blocked`; needs a signature-change decision (deep-copy vs.
+non-copyable) before reprocessing via `/process src/tokengen.hxx` —
+recommend fixing the header self-containment and the two `nexttoken()`
+parsing bugs in that same pass given their severity (the parsing bugs
+affect real user search queries) and how trivial the header fix is.
+
+## src/squery.hxx
+
+**2026-08-07** — blocked at GENERAL step 4. `SQUERY` owns a
+heap-allocated `THESAURUS *Thesaurus` (`new THESAURUS(...)` in
+`OpenThesaurus()`, `delete Thesaurus;` in `CloseThesaurus()`) but
+declares no copy constructor — only `operator=`, and even that copies
+the pointer shallowly (see below) — so the compiler-generated copy
+constructor shallow-copies `Thesaurus` too, the same "owns a raw
+resource, no correct copy semantics" shape as `mdt.hxx`/`fpt.hxx`/
+`tokengen.hxx`/others earlier this batch.
+
+Confirmed real with a standalone repro: open a thesaurus on a `SQUERY`
+(`OpenThesaurus()`), copy-initialize a second (`SQUERY b = a;`), call
+`b.CloseThesaurus()` (frees `b`'s — really the shared — `THESAURUS`),
+then call `a.CloseThesaurus()`. AddressSanitizer reported a
+`heap-use-after-free` inside `THESAURUS::~THESAURUS()`
+(`squery.cxx:323`, via `~STRING()` destructing an already-freed
+`THESAURUS`'s member): `b`'s implicit shallow copy shared `a`'s
+`Thesaurus` pointer, so the second `CloseThesaurus()` operated on
+already-freed memory. No confirmed copy-construction call site was
+found in the live tree (every site — `src/Isearch.cxx`, `src/index.cxx`,
+`src/idb.cxx`, `src/vidb.cxx`, `Isearch-cgi/api_search.cxx`, others —
+default-constructs a plain `SQUERY` or takes one by `const&`), so this
+specific defect is latent.
+
+**Also found while reading, not fixed here since step 4 gates the rest
+of this file's pipeline for this turn — both are the *same root cause*
+as the copy-constructor gap above, just reached through different
+paths, so worth fixing together:**
+
+- **`operator=` copies `Thesaurus` shallowly too** —
+  `Thesaurus = OtherSquery.Thesaurus;` aliases the source's pointer
+  instead of doing anything resembling a copy, with no thought given to
+  what should happen to `this`'s *previous* `Thesaurus` (leaked, since
+  it's overwritten without being freed first) or to the fact that two
+  `SQUERY`s now share one `THESAURUS*` that only one `CloseThesaurus()`
+  call can safely free. Unlike the copy-constructor gap, fixing this
+  doesn't strictly need a header change (`operator=`'s signature is
+  unchanged) — but there's no obvious "correct" deep-copy semantics
+  for an open thesaurus's file handles (same open question already
+  facing `mdt.hxx`'s `FILE*`/`fpt.hxx`'s cached `FILE*`s), so the
+  cleanest fix is probably to simply not copy `Thesaurus` on assignment
+  at all — deferred here so it can be decided alongside the
+  copy-constructor question rather than piecemeal.
+- **`~SQUERY()` never frees `Thesaurus`** — the destructor body is
+  empty; only `CloseThesaurus()` (a separate, caller-must-remember-to-
+  call method) frees it. Any `SQUERY` that calls `OpenThesaurus()` and
+  is then destroyed without an explicit matching `CloseThesaurus()`
+  leaks the `THESAURUS` (and, transitively, its open file handles). No
+  confirmed leak site found (every live `OpenThesaurus()` caller
+  appears to pair it with `CloseThesaurus()`), so latent rather than
+  confirmed, but a straightforward RAII fix (`delete Thesaurus;` in the
+  destructor, safe even when null) once the ownership question above
+  is settled.
+
+Also noted, cosmetic and harmless (the include guard makes it a no-op,
+confirmed by the fact this file already compiles today): `squery.hxx`
+`#include`s itself (`squery.hxx:71`, among its many other real
+`#include`s) — almost certainly a stray copy-paste, worth deleting
+whenever this file is next touched, but not a functional bug.
+
+Fixing the copy-semantics question requires adding
+`SQUERY(const SQUERY&);` to `squery.hxx` and deciding, together with
+the `operator=` fix above, what a copied `SQUERY` should do with an
+open `Thesaurus` — most likely "nothing" (a copy starts with no
+thesaurus of its own, since there's no defined meaning for sharing or
+duplicating open synonym-file state) — or `= delete`-ing copy
+construction entirely to make the class explicitly non-copyable (no
+confirmed copy-construction call site exists today, so this may be the
+simpler choice). A call for a human, not an autopilot guess, per
+GENERAL step 4.
+
+Row set to `blocked`; needs a signature-change decision (add a correct
+copy constructor vs. `= delete` it, and fix `operator=`'s `Thesaurus`
+handling to match) before reprocessing via `/process src/squery.hxx` —
+recommend fixing the destructor leak and removing the self-include in
+that same pass.

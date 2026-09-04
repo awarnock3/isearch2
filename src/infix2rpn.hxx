@@ -34,6 +34,8 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef INFIX2RPN_HXX
 #define INFIX2RPN_HXX
@@ -54,16 +56,30 @@ enum operators { NOP, LeftParen, BoolOR, BoolAND, BoolNOT, ProxNEAR
 #endif
 , DEFAULT};
 
+// Translates an infix boolean query string (terms, AND/OR/ANDNOT/NEAR,
+// parens) into space-separated RPN (via the shunting-yard algorithm,
+// STRSTACK as the operator stack) suitable for SQUERY's RPN-based
+// OPSTACK. Two adjacent terms with no operator between them get an
+// implicit DefaultOp inserted (see ProcessOp(DEFAULT, ...)).
 class INFIX2RPN {
 
 public:
   INFIX2RPN();
   INFIX2RPN(const STRING &StrInput, STRING *StrOutput);
+  // Op sets the default operator (see DefaultOp/SetDefaultOp) used
+  // between two adjacent terms with no explicit operator between them;
+  // longer than MAX_OP_LEN-1 falls back to "AND" (see SetDefaultOp()).
   INFIX2RPN(const STRING &StrInput, STRING *StrOutput, const CHR *Op);
   void        Parse(const STRING &StrInput, STRING *StrOutput);
+  // n-1 operators for n terms is the only balance check performed (no
+  // unary NOT/other exotic operators); true right after a Parse() that
+  // balanced that way, meaningless before any Parse() call.
   GDT_BOOLEAN InputParsedOK(void);
   GDT_BOOLEAN GetErrorMessage(STRING *Error) const;
+  // Op longer than MAX_OP_LEN-1 (7) characters falls back to "AND"
+  // rather than truncating or overflowing DefaultOp.
   void        SetDefaultOp(const CHR *Op);
+  // Caller-owned buffer; must be at least MAX_OP_LEN bytes.
   void        GetDefaultOp(CHR *Op);
 
 private:
@@ -79,3 +95,4 @@ private:
 
 
 #endif //INFIX2RPN_HXX
+

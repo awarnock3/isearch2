@@ -43,6 +43,9 @@ Description:	Class DFD - Data Field Definition
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef DFD_HXX
 #define DFD_HXX
 
@@ -52,9 +55,17 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "attr.hxx"
 #include "attrlist.hxx"
 
+// A Data Field Definition: a file number plus an ATTRLIST of
+// Z39.50/GILS attributes -- field name and field type (see
+// SetFieldName/SetFieldType below) are themselves stored as attributes
+// in that list rather than as their own members (the commented-out
+// `STRING FieldName;` below is superseded, pre-ATTRLIST-era storage,
+// not a bug -- every accessor already goes through Attributes).
 class DFD {
 public:
   DFD();
+  // Deep-copies OtherDfd's FileNumber and Attributes; safe under
+  // self-assignment.
   DFD& operator=(const DFD& OtherDfd);
   void SetFieldName(const STRING& NewFieldName);
   void GetFieldName(STRING *StringBuffer) const;

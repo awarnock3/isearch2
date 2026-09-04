@@ -39,16 +39,31 @@ Version:	1.00
 Description:	Class OPERATOR - Query Operator
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
+// ISEARCH2-CLEANUP: processed 2026-08-06
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #ifndef OPERATOR_HXX
 #define OPERATOR_HXX
-/*
-#include "defs.hxx"
-#include "string.hxx"
-#include "opobj.hxx"
-*/
+
+#include "defs.hxx"   // BUGFIX #1: was commented out; INT/TypeOperator below need it.
+#include "string.hxx" // BUGFIX #1: was commented out; OPOBJ's interface needs it.
+#include "opobj.hxx"  // BUGFIX #1: was commented out; base class.
+
+// A query operator (AND/OR/ANDNOT) node for the RPN expression stack,
+// distinguished from OPERAND (search terms/result sets) by GetOpType()
+// returning TypeOperator. Fully concrete, unlike OPERAND/TERMOBJ: it
+// implements every OPOBJ pure virtual itself.
 class OPERATOR : public OPOBJ {
 public:
+	// BUGFIX #2: un-hides OPOBJ::operator=(const OPOBJ&) -- same
+	// "-Woverloaded-virtual" pattern already fixed for TERMOBJ
+	// (src/termobj.hxx). Even though OPERATOR declares its own
+	// operator=(const OPOBJ&) override just below, that's still not
+	// OPERATOR's *own* copy-assignment operator by the standard's
+	// definition (the parameter type isn't OPERATOR), so the compiler
+	// still generates an implicit operator=(const OPERATOR&) that hides
+	// it from ordinary lookup.
+	using OPOBJ::operator=;
 	OPERATOR();
 	INT GetOpType() const { return TypeOperator; };
 	INT GetOperandType() const { return 0; };

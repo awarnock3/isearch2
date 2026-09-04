@@ -33,6 +33,9 @@ POSSIBILITY OF DAMAGE, AND ON ANY THEORY OF LIABILITY, ARISING OUT OF OR
 IN CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE. 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #include "gdt.h"
 #include "defs.hxx"
 #include "string.hxx"
@@ -54,7 +57,7 @@ GDT_BOOLEAN STRSTACK::Pop(STRING *Value) {
 		StackList.GetEntry(CurrIndex--, Value);
 		return GDT_TRUE;
 	}
-	else 
+	else
 		return GDT_FALSE;
 }
 

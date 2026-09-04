@@ -5,6 +5,13 @@ Description:	Class STOPWORD - Stop word list
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+// No callers anywhere in the current tree, and stopword.o isn't in
+// src/Makefile's production OBJ list either -- dead code, though still
+// processed per the standard pipeline.
+
 #include <stdlib.h>
 #include <ctype.h>
 #include <string.h>
@@ -87,12 +94,27 @@ INT STOPWORD::ImportFromTextFile(
 		INT n;
 		while (fgets(WordBuffer, 1024, Fp)) {
 		  //			while (!isalnum(WordBuffer[n=(strlen(WordBuffer)-1)])) {
-			while (!IsAlnum(WordBuffer[n=(strlen(WordBuffer)-1)])) {
-				WordBuffer[n] = '\0';
+			// BUGFIX #1 (docs/BUG_CATALOG.md#srcstopwordcxx): the original
+			// `while (!IsAlnum(WordBuffer[n=(strlen(WordBuffer)-1)]))`
+			// computed strlen()-1 on an unsigned size_t; once the trimming
+			// below reduced the line to an empty string (e.g. a blank or
+			// all-punctuation line), strlen()-1 underflowed, truncating to
+			// n==-1, indexing WordBuffer[-1] out of bounds forever (an
+			// infinite loop as well as a stack-buffer-underflow, since
+			// WordBuffer[-1]='\0' never becomes alnum). Confirmed with a
+			// standalone repro before fixing. Guard on the length instead.
+			n = strlen(WordBuffer);
+			while (n > 0 && !IsAlnum(WordBuffer[n-1])) {
+				WordBuffer[--n] = '\0';
 			}
 			//			while ( (!isalnum(WordBuffer[0])) && (WordBuffer[0] != '\0') ) {
+			// BUGFIX #2: strcpy()'s source and destination overlap here
+			// (shifting the buffer left by one byte); the C standard
+			// leaves strcpy() undefined behavior for overlapping ranges.
+			// Confirmed via a real ASan strcpy-param-overlap report before
+			// fixing. memmove() is explicitly overlap-safe.
 			while ( (!IsAlnum(WordBuffer[0])) && (WordBuffer[0] != '\0') ) {
-				strcpy(WordBuffer, WordBuffer + 1);
+				memmove(WordBuffer, WordBuffer + 1, strlen(WordBuffer));
 			}
 			if (WordBuffer[0] != '\0') {
 				Strlist.AddEntry(WordBuffer);

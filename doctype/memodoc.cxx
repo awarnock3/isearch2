@@ -106,6 +106,9 @@ ________________________________________________________________________________
 
 ************************************************************************/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 /*-@@@
 File:		memodoc.cxx
 Version:	$Revision: 1.6 $
@@ -141,6 +144,11 @@ void MEMODOC::ParseRecords (const RECORD& FileRecord)
 }
 
 
+// Reads NewRecord's bytes off disk (or, if RecordEnd is unset, treats
+// the whole file as a single record -- see BUGFIX #1), splits them
+// into "TAG: value" pairs via the file-local parse_tags(), and adds
+// one DF field per pair to NewRecord's DFT. Untagged trailing text
+// (after the 4-char section break) becomes a single "Memo-Body" field.
 void MEMODOC::ParseFields (PRECORD NewRecord)
 {
   STRING fn;
@@ -157,7 +165,16 @@ void MEMODOC::ParseFields (PRECORD NewRecord)
     {
       fseek (fp, 0L, SEEK_END);
       RecStart = 0;
-      RecEnd = ftell (fp) - 1;
+      // BUGFIX #1 (docs/BUG_CATALOG.md#doctypememodoccxx): this used to
+      // be `ftell(fp) - 1`, the same off-by-one truncation already
+      // fixed in doctype/colondoc.cxx's BUGFIX #1 and
+      // doctype/marcdump.cxx's BUGFIX #2 -- confirmed via a before/
+      // after test-revert to drop the last byte of every record read
+      // through this fallback. GPTYPE is also unsigned (UINT4,
+      // src/defs.hxx), so for a genuinely empty file the old `- 1`
+      // underflowed RecEnd to UINT_MAX -- see BUGFIX #2 below
+      // (parse_tags()'s loop bound) for what that fed into.
+      RecEnd = ftell (fp);
     }
   fseek (fp, (long)RecStart, SEEK_SET);
   GPTYPE RecLength = RecEnd - RecStart;
@@ -167,7 +184,7 @@ void MEMODOC::ParseFields (PRECORD NewRecord)
   RecBuffer[ActualLength] = '\0';
 
   PCHR *tags = parse_tags (RecBuffer, ActualLength);
-  if (tags == NULL || tags[0] == NULL)
+  if (tags == nullptr || tags[0] == nullptr)
     {
       STRING doctype;
       NewRecord->GetDocumentType(&doctype);
@@ -194,18 +211,39 @@ void MEMODOC::ParseFields (PRECORD NewRecord)
   for (PCHR * tags_ptr = tags; *tags_ptr; tags_ptr++)
     {
       PCHR p = tags_ptr[1];
-      if (p == NULL)
-	p = &RecBuffer[RecLength]; // End of buffer
+      // BUGFIX #4 (docs/BUG_CATALOG.md#doctypememodoccxx): this used to
+      // be `&RecBuffer[RecLength]` (the buffer's allocated capacity),
+      // not ActualLength (how much fread() actually returned) -- same
+      // fix as doctype/colondoc.cxx's BUGFIX #3, for the same reason.
+      if (p == nullptr)
+	p = &RecBuffer[ActualLength]; // End of buffer
       // eg "Author:"
       int off = strlen (*tags_ptr) + 1;
       INT val_start = (*tags_ptr + off) - RecBuffer;
       // Skip while space after the ':'
       while (isspace (RecBuffer[val_start]))
 	val_start++, off++;
-      // Also leave off the \n
-      INT val_len = (p - *tags_ptr) - off - 1;
+      INT val_len = (p - *tags_ptr) - off;
+      // BUGFIX #5 (docs/BUG_CATALOG.md#doctypememodoccxx): this used to
+      // unconditionally subtract 1 more here ("leave off the \n"),
+      // assuming a trailing newline always sits just before `p` -- true
+      // for every interior field, but not for the last field's
+      // end-of-buffer fallback above when the file doesn't end with
+      // '\n'. Same fix as doctype/colondoc.cxx's BUGFIX #1b, confirmed
+      // here the same way: a before/after test-revert showed a file
+      // ending "...Jane Doe" with no trailing newline coming back as
+      // "Jane Do", one byte short.
+      if (val_len > 0 && p[-1] == '\n')
+	val_len--;
+      // BUGFIX #6 (docs/BUG_CATALOG.md#doctypememodoccxx): this checked
+      // RecBuffer[val_len + val_start], one byte *past* the value's
+      // actual last character (val_start + val_len - 1) -- same
+      // off-by-one already fixed in doctype/colondoc.cxx's BUGFIX #2,
+      // and (per that entry) one of a pair with BUGFIX #7 below that
+      // silently canceled each other out in the common case, masking
+      // both until traced through by hand.
       // Strip potential trailing while space
-      while (val_len > 0 && isspace (RecBuffer[val_len + val_start]))
+      while (val_len > 0 && isspace (RecBuffer[val_start + val_len - 1]))
 	val_len--;
 
       if ((*tags_ptr)[0] == '\0')
@@ -215,7 +253,15 @@ void MEMODOC::ParseFields (PRECORD NewRecord)
       dfd.SetFieldName (FieldName);
       Db->DfdtAddEntry (dfd);
       fc.SetFieldStart (val_start);
-      fc.SetFieldEnd (val_start + val_len);
+      // BUGFIX #7 (docs/BUG_CATALOG.md#doctypememodoccxx): this used to
+      // be `SetFieldEnd(val_start + val_len)`, one past the correct
+      // *inclusive* end index -- same fix as doctype/colondoc.cxx's
+      // BUGFIX #4, for the same reason (matches doctype/sgmlnorm.cxx's/
+      // doctype/sgmltag.cxx's own `val_start + val_len - 1`, and
+      // src/index.cxx derives a field's length as
+      // `GetFieldEnd() - GetFieldStart() + 1`, which only works for an
+      // inclusive end).
+      fc.SetFieldEnd (val_start + val_len - 1);
       PFCT pfct = new FCT ();
       pfct->AddEntry (fc);
       df.SetFct (*pfct);
@@ -274,17 +320,36 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
   /* You should allocate these as you need them, but for now... */
   max_num_tags = TAG_GROW_SIZE;
   t = new PCHR [max_num_tags];
-  for (GPTYPE i = 0; i < len - 4; i++)
+  // BUGFIX #2 (docs/BUG_CATALOG.md#doctypememodoccxx): this was
+  // `i < len - 4`; len is GPTYPE (unsigned UINT4, src/defs.hxx), so for
+  // any record under 4 bytes (e.g. a genuinely empty one, easily
+  // reached via BUGFIX #1's fallback above) `len - 4` underflowed to
+  // just under UINT_MAX, and the loop body's `b[i+1]`/`b[i+2]`/`b[i+3]`
+  // reads ran straight past RecBuffer's real allocation on its very
+  // first iteration -- confirmed via a before/after test-revert under
+  // ASan (heap-buffer-overflow). Rewritten as `i + 4 < len`, an exactly
+  // equivalent comparison for every len that doesn't underflow, since
+  // it never subtracts from the unsigned len at all.
+  for (GPTYPE i = 0; i + 4 < len; i++)
     {
       if (b[i] == '\r' || b[i] == '\v')
  	continue; // Skip over
       if (State == DONE)
 	break;
+      // BUGFIX #3 (docs/BUG_CATALOG.md#doctypememodoccxx): the last
+      // disjunct below used to check `b[i+2] == '-'`, not `b[i+3]`,
+      // unlike every other line here (each consistently checks
+      // `b[i+N]` against all four separator chars for its own N) --
+      // a copy-paste typo. Since b[i+2] was already required to be one
+      // of the four separator chars by the line above, whenever it was
+      // specifically '-', this whole disjunct was satisfied regardless
+      // of b[i+3]'s actual value, letting a run like "__-X" (X being
+      // anything at all) wrongly match as a 4-char section break.
       else if (State == HUNTING &&
 	 (b[i]   == '_' || b[i]   == '-' || b[i]   == '+' || b[i]   == '=') &&
 	 (b[i+1] == '_' || b[i+1] == '-' || b[i+1] == '+' || b[i+1] == '=') &&
 	 (b[i+2] == '_' || b[i+2] == '-' || b[i+2] == '+' || b[i+2] == '=') &&
-	 (b[i+3] == '_' || b[i+2] == '-' || b[i+3] == '+' || b[i+3] == '='))
+	 (b[i+3] == '_' || b[i+3] == '-' || b[i+3] == '+' || b[i+3] == '='))
 	{
 	  b[i] = '\0'; // Empty tag name
 	  t[tc++] = &b[i];
@@ -312,10 +377,10 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
   	      // allocate more space
   	      max_num_tags += TAG_GROW_SIZE;
 	      PCHR *New = new PCHR [max_num_tags];
-	      if (New == NULL)
+	      if (New == nullptr)
 		{
 		  delete [] t;
-		  return NULL; // NO MORE CORE!
+		  return nullptr; // NO MORE CORE!
 		}
 	      memcpy(New, t, tc*sizeof(PCHR));
  	      delete [] t;
@@ -331,6 +396,6 @@ static PCHR *parse_tags (PCHR b, GPTYPE len)
 	State = CONTINUING;
 */
     }
-  t[tc] = (PCHR) NULL;
+  t[tc] = (PCHR) nullptr;
   return t;
 }

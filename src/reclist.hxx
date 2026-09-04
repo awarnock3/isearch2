@@ -42,14 +42,29 @@ Author:		Nassib Nassar, nrn@cnidr.org
 
 #ifndef RECLIST_HXX
 #define RECLIST_HXX
-/*
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
+// BUGFIX #1: was commented out; INT (defs.hxx) and RECORD/PRECORD
+// (record.hxx) below need it. string.hxx isn't restored alongside them
+// -- nothing in this header uses STRING directly, and record.hxx
+// already brings it in transitively for anything that does.
 #include "defs.hxx"
-#include "string.hxx"
 #include "record.hxx"
-*/
+
+// A resizable array of RECORD entries used to build up a database's
+// record list. GetEntry() is 1-based (Index==1 is the first entry) --
+// RECLIST's own convention, independent of STRING's.
 class RECLIST {
 public:
 	RECLIST();
+	// BUGFIX #2: RECLIST owned a heap-allocated Table array but declared
+	// no copy constructor or operator=, so the compiler-generated ones
+	// did a shallow pointer copy -- confirmed to double-free Table under
+	// ASan. Both now deep-copy Table (sized to the source's MaxEntries),
+	// TotalEntries, and MaxEntries. See docs/BUG_CATALOG.md.
+	RECLIST(const RECLIST& OtherReclist);
+	RECLIST& operator=(const RECLIST& OtherReclist);
 	void AddEntry(const RECORD& RecordEntry);
 	void GetEntry(const INT Index, PRECORD RecordEntry) const;
 	void Expand();

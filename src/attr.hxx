@@ -42,12 +42,20 @@ Description:	Class ATTR - Attribute
 Author:		Nassib Nassar, nrn@cnidr.org
 @@@*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef ATTR_HXX
 #define ATTR_HXX
 
 #include "defs.hxx"
 #include "string.hxx"
 
+// A single Z39.50/GILS-style search attribute: an attribute-set id, an
+// attribute type (Use/Relation/Position/Structure/Truncation/
+// Completeness, per the protocol), and its value -- stored as STRING
+// regardless of which SetAttrValue overload set it, so GetAttrValue()
+// (INT) parses it back out via STRING::GetInt().
 class ATTR {
 public:
   ATTR();
@@ -59,6 +67,7 @@ public:
   void  SetAttrValue(const STRING& NewAttrValue);
   void  GetAttrValue(PSTRING StringBuffer) const;
   void  SetAttrValue(const INT NewAttrValue);
+  // Parses the stored value as an integer (0 if it isn't one).
   INT   GetAttrValue() const;
   ~ATTR();
 private:

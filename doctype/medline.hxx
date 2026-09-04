@@ -6,6 +6,9 @@ Author:		Edward C. Zimmermann, edz@bsn.com
 Copyright:	Basis Systeme netzwerk, Munich
 @@@-*/
 
+// ISEARCH2-CLEANUP: processed 2026-08-08
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
+
 #ifndef MEDLINE_HXX
 #define MEDLINE_HXX
 
@@ -14,7 +17,11 @@ Copyright:	Basis Systeme netzwerk, Munich
 # include "doctype.hxx"
 #endif
 
-// Generic Medline format
+// A MEDLINE-format DOCTYPE: tag-prefixed lines ("AB  - value", 2-4
+// letter tag + mandatory ' '/'-' separator), value continues across
+// following lines until the next tag. See the "What"/format comment
+// above the file-local parse_tags() in medline.cxx for the exact
+// grammar.
 class MEDLINE :  public DOCTYPE {
 public:
 	MEDLINE(PIDBOBJ DbParent);

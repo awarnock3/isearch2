@@ -58,11 +58,22 @@ Author:		Nassib Nassar, nrn@cnidr.org
 #include "fct.hxx"
 #include "df.hxx"
 #include "dfd.hxx"
+// ISEARCH2-CLEANUP: processed 2026-08-07
+// See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
-
+// Data Field Definitions Table: an ordered, resizable array of DFD
+// entries, one per indexed field, tracking each field's assigned file
+// number and attributes.
 class DFDT {
 public:
   DFDT();
+  // BUGFIX #1: DFDT owned a heap-allocated Table array but declared no
+  // copy constructor, so the compiler-generated one did a shallow
+  // pointer copy -- confirmed to double-free Table under ASan.
+  // Deep-copies Table (sized to the source's MaxEntries), TotalEntries,
+  // MaxEntries, and Changed, mirroring operator='s own logic. See
+  // docs/BUG_CATALOG.md.
+  DFDT(const DFDT& OtherDfdt);
   DFDT& operator=(const DFDT& OtherDfdt);
   void  Initialize();
   void  LoadTable(const STRING& FileName);
@@ -70,6 +81,11 @@ public:
   void  AddEntry(const DFD& DfdRecord);
   void  FastAddEntry(const DFD& DfdRecord);
   void  GetEntry(const INT Index, PDFD DfdRecord) const;
+  // Leaves *DfdRecord untouched if FieldName isn't found -- same
+  // convention as GetEntry() above (see BUGFIX #3 in source: this used
+  // to try to signal "not found" by nulling the DfdRecord parameter
+  // itself, which is a by-value pointer and has no effect the caller
+  // can observe).
   void  GetDfdRecord(const STRING& FieldName, PDFD DfdRecord) const;
   INT   GetNewFileNumber() const;
   void  Expand();
