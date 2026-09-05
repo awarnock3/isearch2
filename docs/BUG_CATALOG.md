@@ -3997,6 +3997,31 @@ category of this batch's non-index-parser files.
    (85 warnings, unchanged); `make tests`/`make tests-asan`/`make
    smoke-test` all still pass.
 
+4. **Added 2026-09-05, while adding a `doctype` field to
+   `Isearch-cgi`'s `/v1/api/databases` response: `GetGlobalDocType()`
+   unconditionally returned the hardcoded literal `"VIRTUAL"`,
+   regardless of what the wrapped database(s) actually are, instead of
+   delegating to the real per-database `IDB::GetGlobalDocType()`
+   (`src/idb.cxx:1513`) the way every other `VIDB` method in this file
+   delegates to `c_dblist[i]`.** Dormant since before this file was
+   marked `done` on 2026-08-09 -- every existing caller
+   (`src/Iutil.cxx:449`, `src/Iindex.cxx:689`) uses a plain `IDB`/
+   `IDBC` directly, never `VIDB`, so nothing exercised this path until
+   `Isearch-cgi/api_endpoints.cxx`'s `HandleDatabases()` became the
+   first caller to invoke it through a `VIDB`. Confirmed live: indexing
+   a scratch database with `Iindex -t html` and calling `isrch_api`'s
+   `/v1/api/databases` directly returned `"doctype":"VIRTUAL"` before
+   the fix, `"doctype":"HTML"` after. Fixed by reporting
+   `c_dblist[0]`'s real doctype directly for the common case (an
+   ordinary, non-`.vdb` database opened through `VIDB` has exactly one
+   entry in `c_dblist`); for a genuine multi-database `.vdb` aggregate,
+   the shared doctype is reported only if every sub-database agrees --
+   otherwise `"VIRTUAL"` is kept as an explicit "mixed doctypes"
+   sentinel rather than guessing at intended behavior for that case.
+   `BUGFIX #4` in source. Re-verified `vidb.cxx` still compiles clean
+   under `-Wall -Wextra` via direct `g++ -c`; full engine + CGI rebuild
+   and a direct `isrch_api` invocation confirmed the corrected output.
+
 **Not otherwise pursued:** `c_inconsistent_doctypes` is set to
 `GDT_FALSE` once in `Initialize()` and never set `GDT_TRUE` anywhere,
 making the `if(c_inconsistent_doctypes) return GDT_FALSE;` check in
@@ -4014,7 +4039,13 @@ self-contained is not applicable here (it depends on `idb.hxx`/
 `dtreg.hxx` by design, as a `VIDB` fundamentally needs `IDB`), but
 `vidb.cxx` was confirmed to compile clean under `-Wall -Wextra` via
 direct `g++ -c`, and the existing (unaffected, `vidb.cxx` isn't linked)
-suite was re-run to confirm no regression elsewhere.
+suite was re-run to confirm no regression elsewhere. `BUGFIX #4`
+(2026-09-05) is the exception to this section's original "no live
+integration test" note -- it was confirmed live via a direct
+`isrch_api` CGI invocation against a scratch-indexed database, as
+described above, since by that point `Isearch-cgi/api_endpoints.cxx`
+already provided a real caller path into `VIDB` through the full
+`DTREG` chain.
 
 Modernization: the 2 code-level `NULL` uses converted to `nullptr`. No
 `sprintf` calls present. Added a class-level doc comment.

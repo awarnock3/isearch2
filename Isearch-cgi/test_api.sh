@@ -87,6 +87,12 @@ for entry in dbs:
     names.append(entry["name"])
     if "doctype" in entry:
         assert isinstance(entry["doctype"], str) and entry["doctype"], entry
+        if entry["name"] == "XMLtest":
+            # Regression check for VIDB::GetGlobalDocType() (BUGFIX #4,
+            # docs/BUG_CATALOG.md#srcvidbhxx): it used to unconditionally
+            # return the literal "VIRTUAL" no matter what the database's
+            # real configured doctype was.
+            assert entry["doctype"] != "VIRTUAL", entry
 assert "XMLtest" in names, names
 '
 

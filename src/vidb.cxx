@@ -426,7 +426,37 @@ VIDB::GetTotalRecords() const {
 
 void 
 VIDB::GetGlobalDocType(STRING *StringBuffer) const {
-  *StringBuffer = "VIRTUAL";
+  // BUGFIX #4 (docs/BUG_CATALOG.md#srcvidbhxx): this unconditionally
+  // returned the literal "VIRTUAL" regardless of what the wrapped
+  // database(s) actually are, never delegating to the real per-database
+  // IDB::GetGlobalDocType() (src/idb.cxx) the way every other VIDB method
+  // in this file delegates to c_dblist[i]. Dormant since before this file
+  // was marked "done" -- every existing caller (Iutil.cxx, Iindex.cxx)
+  // uses a plain IDB/IDBC directly, never VIDB, so nothing exercised this
+  // path until Isearch-cgi/api_endpoints.cxx's HandleDatabases() became
+  // the first caller to invoke it through a VIDB. Fixed: an ordinary
+  // (non-".vdb") database opened through VIDB has exactly one entry in
+  // c_dblist, so report that entry's real doctype directly. A genuine
+  // multi-database ".vdb" aggregate reports the shared doctype only if
+  // every sub-database agrees; otherwise "VIRTUAL" is kept as an explicit
+  // "mixed doctypes" sentinel rather than guessing at intended behavior.
+  *StringBuffer = "";
+  if (c_dbcount <= 0) {
+    return;
+  }
+
+  STRING FirstDocType, ThisDocType;
+  c_dblist[0]->GetGlobalDocType(&FirstDocType);
+
+  for (INT i = 1; i < c_dbcount; i++) {
+    c_dblist[i]->GetGlobalDocType(&ThisDocType);
+    if (!ThisDocType.Equals(FirstDocType)) {
+      *StringBuffer = "VIRTUAL";
+      return;
+    }
+  }
+
+  *StringBuffer = FirstDocType;
 }
 
 
