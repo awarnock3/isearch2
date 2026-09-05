@@ -133,7 +133,8 @@ OSNAME=`uname -s`
 OSVER=`uname -r`
 OS=$(OSNAME)_$(OSVER)
 
-all: isearch isearch-cgi isearch-tui done
+# all: isearch isearch-cgi isearch-tui done
+all: isearch isearch-cgi done
 
 isearch::
 	`if [ ! -f src/conf.h ] ; \
