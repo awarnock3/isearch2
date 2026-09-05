@@ -14,6 +14,9 @@
 #	Iindex	- command line indexing utility
 #	Isearch	- command line searching utility
 #	Iutil - command line utilities for Isearch databases
+#	Iget - command line document retrieval utility
+#       zsearch - XML command line searching utility
+#       zpresent - XML command line document retrieval utility
 #
 SHELL=/bin/sh
 
