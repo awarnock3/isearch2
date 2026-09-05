@@ -1,0 +1,25 @@
+var searchData=
+[
+  ['search_5fend_0',['SEARCH_END',['../datesearch_8cxx.html#abee9c0f655c342c88841d12d3298e385',1,'datesearch.cxx']]],
+  ['search_5fstart_1',['SEARCH_START',['../datesearch_8cxx.html#a9dedb813a240b0d72c12fb78e0295ab7',1,'datesearch.cxx']]],
+  ['separator_2',['Separator',['../Iindex_8cxx.html#a077a3d628920aecbf805ffd136772342',1,'Iindex.cxx']]],
+  ['sgmlrecordsyntax_3',['SgmlRecordSyntax',['../defs_8cxx.html#a1ee260d784815e692ecd1b2a32ec62a0',1,'SgmlRecordSyntax:&#160;defs.cxx'],['../defs_8hxx.html#a1ee260d784815e692ecd1b2a32ec62a0',1,'SgmlRecordSyntax:&#160;defs.cxx']]],
+  ['sgmlrecordsyntaxoid_4',['SgmlRecordSyntaxOID',['../defs_8cxx.html#a7c5f6e983a2251facce85a0edd783d9a',1,'SgmlRecordSyntaxOID:&#160;defs.cxx'],['../defs_8hxx.html#a7c5f6e983a2251facce85a0edd783d9a',1,'SgmlRecordSyntaxOID:&#160;defs.cxx']]],
+  ['shortformat_5',['shortformat',['../marc_8cxx.html#a3cf8320f87ca7dd3b4598391b28c3917',1,'marc.cxx']]],
+  ['size_6',['Size',['../structtagPATO__BUFFER.html#a41bacd7f733a114b1ac858d2b5e1782c',1,'tagPATO_BUFFER']]],
+  ['stasattributeset_7',['StasAttributeSet',['../defs_8cxx.html#af301459d55097f61d570a135766c78ef',1,'StasAttributeSet:&#160;defs.cxx'],['../defs_8hxx.html#af301459d55097f61d570a135766c78ef',1,'StasAttributeSet:&#160;defs.cxx']]],
+  ['state_8',['State',['../structitem__tag.html#a572de73ae1d885f32901238228dbf73e',1,'item_tag']]],
+  ['state_9',['state',['../classDIF.html#a7ffd96badab3346b8d2c5bef6030aac8',1,'DIF']]],
+  ['status_10',['status',['../classDIF.html#ae0db9328af5e19c45425a7bf9265f3c5',1,'DIF']]],
+  ['stoplist_11',['stoplist',['../sw_8hxx.html#a27aee7a16a3b38e64b5c454aef9be793',1,'sw.hxx']]],
+  ['stopwordsize_12',['StopWordSize',['../index_8cxx.html#a88f09b807d3a2761877c0b8519c5bbea',1,'index.cxx']]],
+  ['strict_5fmatch_13',['STRICT_MATCH',['../datesearch_8cxx.html#af08746efc687ae540768d0f434e48814',1,'datesearch.cxx']]],
+  ['stringcomplength_14',['StringCompLength',['../defs_8hxx.html#ac479306460251abe42c22c59b560d79b',1,'defs.hxx']]],
+  ['subfcodes_15',['subfcodes',['../structmarc__field.html#a3ccad4e152e58a4bfc93e89b2d9e576d',1,'marc_field']]],
+  ['subfcount_16',['SubFCount',['../structmarc__leader__over.html#aee50637fbe68d3b0dea75ec02ee00588',1,'marc_leader_over']]],
+  ['subfield_17',['subfield',['../structParseEntry.html#a83a2668b9a4feb3bb65108ac12f8261e',1,'ParseEntry::subfield'],['../structmde.html#ade700004c4328ef506f1ecd869cf444f',1,'mde::subfield'],['../structmarc__field.html#acfe53df779a593d0588a9ff6150cb0a2',1,'marc_field::subfield']]],
+  ['subfields_18',['subfields',['../structDISP__FORMAT.html#aafea2f6d278eebb228d25e96cc0a09ac',1,'DISP_FORMAT']]],
+  ['subfsep_19',['subfsep',['../structDISP__FORMAT.html#a0658168b810e9a81ae0cb76d95f15556',1,'DISP_FORMAT']]],
+  ['sutrsrecordsyntax_20',['SutrsRecordSyntax',['../defs_8cxx.html#a5a1a17964fe4979e8e49f744a22d6fd4',1,'SutrsRecordSyntax:&#160;defs.cxx'],['../defs_8hxx.html#a5a1a17964fe4979e8e49f744a22d6fd4',1,'SutrsRecordSyntax:&#160;defs.cxx']]],
+  ['sutrsrecordsyntaxoid_21',['SutrsRecordSyntaxOID',['../defs_8cxx.html#a876f2be7ee2cb109e2cc338e82636aa5',1,'SutrsRecordSyntaxOID:&#160;defs.cxx'],['../defs_8hxx.html#a876f2be7ee2cb109e2cc338e82636aa5',1,'SutrsRecordSyntaxOID:&#160;defs.cxx']]]
+];

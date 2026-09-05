@@ -1,0 +1,28 @@
+var searchData=
+[
+  ['rcache_0',['RCACHE',['../classRCACHE.html#aac219c47b179d01a8e89af3fd732976a',1,'RCACHE']]],
+  ['read_1',['Read',['../classDF.html#a45d1813cb92a1c2ad2987b9d8cf4aa2c',1,'DF::Read()'],['../classDFT.html#a606d0eb4812bb4adfc24631e064c1878',1,'DFT::Read()'],['../classFC.html#a6efcbcd04c31acdb6abcf619429673e4',1,'FC::Read()'],['../classFCT.html#a1b0917e3fd8e57bcf03d4dcc83108d58',1,'FCT::Read()'],['../classRECORD.html#ae54b19f058e5687f0ed71b0de6d7ef2b',1,'RECORD::Read()']]],
+  ['readfile_2',['ReadFile',['../classSTRING.html#ac99453d9fc89d644afdde798b43e4600',1,'STRING::ReadFile(const STRING &amp;FileName)'],['../classSTRING.html#a119f326d1e8af3e9b38e0e25ff430115',1,'STRING::ReadFile(const CHR *FileName)']]],
+  ['readmarc_3',['ReadMARC',['../marclib_8cxx.html#a4677f533bc02d33733c59dc7f4d4b12a',1,'ReadMARC(int file, char *buffer, int buffsize):&#160;marclib.cxx'],['../marclib_8hxx.html#a4677f533bc02d33733c59dc7f4d4b12a',1,'ReadMARC(int file, char *buffer, int buffsize):&#160;marclib.cxx']]],
+  ['readnewline_4',['readNewLine',['../classDIF.html#a419dbfe7adfe8684c505a152439bdb61',1,'DIF']]],
+  ['readword_5',['readWord',['../classDIF.html#a93330059e25f32a7cea177ad31484669',1,'DIF']]],
+  ['reclist_6',['RECLIST',['../classRECLIST.html#a5d1903897b3cd910a548d8c3b46276a4',1,'RECLIST::RECLIST()'],['../classRECLIST.html#affec1f571e4797cf31b564f857414fed',1,'RECLIST::RECLIST(const RECLIST &amp;OtherReclist)']]],
+  ['record_7',['RECORD',['../classRECORD.html#ac00c59c5584d55a79255a456895c0824',1,'RECORD::RECORD()'],['../classRECORD.html#a61143ca346be8568cd834edd328ab62a',1,'RECORD::RECORD(STRING &amp;NewPathName, STRING &amp;NewFileName)']]],
+  ['referbib_8',['REFERBIB',['../classREFERBIB.html#a92ab6480bf197da5bc1aaa8be944ccc0',1,'REFERBIB']]],
+  ['registry_9',['REGISTRY',['../classREGISTRY.html#ac684c39336f8c2af6bf601a37084524a',1,'REGISTRY::REGISTRY(const STRING &amp;Title)'],['../classREGISTRY.html#ab756178fa7605db3f2b22c34039fa64d',1,'REGISTRY::REGISTRY(const CHR *Title)']]],
+  ['removedeleted_10',['RemoveDeleted',['../classMDT.html#a3e09e90254a6107297b7cd0c2f5d3c69',1,'MDT']]],
+  ['removefileextension_11',['RemoveFileExtension',['../common_8cxx.html#a7e3eb433867c3a34842087f94a114d05',1,'RemoveFileExtension(STRING *PathName):&#160;common.cxx'],['../common_8hxx.html#a7e3eb433867c3a34842087f94a114d05',1,'RemoveFileExtension(STRING *PathName):&#160;common.cxx']]],
+  ['removefilename_12',['RemoveFileName',['../common_8cxx.html#a957e2019fedad15bacf2a653d12ec5ed',1,'RemoveFileName(STRING *PathName):&#160;common.cxx'],['../common_8hxx.html#a957e2019fedad15bacf2a653d12ec5ed',1,'RemoveFileName(STRING *PathName):&#160;common.cxx']]],
+  ['removepath_13',['RemovePath',['../common_8cxx.html#abe40d53ec1eabc830cd81e614d40961c',1,'RemovePath(STRING *FileName):&#160;common.cxx'],['../common_8hxx.html#abe40d53ec1eabc830cd81e614d40961c',1,'RemovePath(STRING *FileName):&#160;common.cxx']]],
+  ['rename_14',['rename',['../common_8cxx.html#a3f4d7f6f183180b1aa0817ab34763fa3',1,'rename(const STRING From, const STRING To):&#160;common.cxx'],['../common_8hxx.html#a3f4d7f6f183180b1aa0817ab34763fa3',1,'rename(const STRING From, const STRING To):&#160;common.cxx']]],
+  ['replace_15',['Replace',['../classSTRING.html#ab2b67ccadef83e4b78e15afecf509457',1,'STRING::Replace(const CHR *CStringSearch, const CHR *CStringReplace)'],['../classSTRING.html#a38631307d1e01fe9d6becfb3dacab4b2',1,'STRING::Replace(const CHR *CStringSearch, const STRING &amp;CStringReplace)']]],
+  ['replacewithspace_16',['ReplaceWithSpace',['../classDOCTYPE.html#a799e3d60cf701ff90c9680b8a0983f2e',1,'DOCTYPE::ReplaceWithSpace()'],['../classTAGLIST.html#a68e2f635cfafafea02daaf2dc03e2eea',1,'TAGLIST::ReplaceWithSpace()'],['../classIDB.html#a2e52c0e6a757a7a46c9259d9dc870524',1,'IDB::ReplaceWithSpace()']]],
+  ['rescan_17',['rescan',['../marclib_8cxx.html#a55d9941999e520c7614bb3ca5259aac5',1,'marclib.cxx']]],
+  ['resethitposition_18',['ResetHitPosition',['../classNUMERICLIST.html#af465b94782127a256d4f8eb6c5722e33',1,'NUMERICLIST']]],
+  ['resize_19',['Resize',['../classATTRLIST.html#a44a76d18264e7d47d295fd316fc89886',1,'ATTRLIST::Resize()'],['../classDFDT.html#a8263b2d88c19dd40c5e4e4defec45d08',1,'DFDT::Resize()'],['../classDFT.html#ab6bcb60a75aad3b359c6a363bf2f4d5b',1,'DFT::Resize()'],['../classINTERVALLIST.html#a95f845c94f4e269cc61c4bc63e77eaff',1,'INTERVALLIST::Resize()'],['../classIRSET.html#abfbe689bf160373a53b2a43165ce067d',1,'IRSET::Resize()'],['../classMDT.html#a4e512c42409786dd607c717ce99db2e4',1,'MDT::Resize()'],['../classNUMERICLIST.html#afc9c97b79f1f5a9db93ff6ae8fce8859',1,'NUMERICLIST::Resize()'],['../classRECLIST.html#a0d6a7f0254cbaab2d2c77f319d5ea6c9',1,'RECLIST::Resize()'],['../classRSET.html#a3e4dd0c6178d6c13b634e6928d03921a',1,'RSET::Resize()']]],
+  ['result_20',['RESULT',['../classRESULT.html#a4c7816df30c036d5e955c48db9c9dc6d',1,'RESULT']]],
+  ['retrieve_21',['Retrieve',['../classGLIST.html#a45705667247a163e3a1f5e98a6f1818a',1,'GLIST']]],
+  ['reverse_22',['Reverse',['../classOPSTACK.html#a9a8954889b351f1ea6e042c15f1b4e30',1,'OPSTACK::Reverse()'],['../classVLIST.html#a349cda5e080ffc92e24ea501ccef7d5c',1,'VLIST::Reverse()']]],
+  ['rset_23',['RSET',['../classRSET.html#a1927ae6b3a41c25fd16a8f500531aade',1,'RSET::RSET()'],['../classRSET.html#a44300ac815dd36e57a96c8da2b6d8dd2',1,'RSET::RSET(const RSET &amp;OtherRset)']]],
+  ['rsetor_24',['RsetOr',['../classINDEX.html#a1a1e9cdee3b7fe2b1fc5a928f444561e',1,'INDEX']]]
+];

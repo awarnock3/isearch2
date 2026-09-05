@@ -1,0 +1,26 @@
+var classMDTREC =
+[
+    [ "MDTREC", "classMDTREC.html#a30be0f57ab8f43d4a6862b9d2932c1ff", null ],
+    [ "~MDTREC", "classMDTREC.html#a61d4f265fd31eff13c981190093c1ce0", null ],
+    [ "FlipBytes", "classMDTREC.html#ad3101ad0c5aaf7c4248abfabfc4acf20", null ],
+    [ "GetDeleted", "classMDTREC.html#a22c11678bff712a8864719e66c512d64", null ],
+    [ "GetDocumentType", "classMDTREC.html#ad19b4ce52e33809add62d5318524ecd2", null ],
+    [ "GetFileName", "classMDTREC.html#a797dd465ae6c382251299fdb9f4df27c", null ],
+    [ "GetFullFileName", "classMDTREC.html#abdfe21c5c6cbceb6c524e2d7882f683c", null ],
+    [ "GetGlobalFileEnd", "classMDTREC.html#a8b685a43c99e04a406b025c82de05f0a", null ],
+    [ "GetGlobalFileStart", "classMDTREC.html#ad41f2009c18b1816427dc9bcff9dc7e3", null ],
+    [ "GetKey", "classMDTREC.html#a136b8f82d7d5fc3eb6d2d84552b05790", null ],
+    [ "GetLocalRecordEnd", "classMDTREC.html#a8255f7be56f3e844f4aa473e43082edd", null ],
+    [ "GetLocalRecordStart", "classMDTREC.html#a8c2dcdb4b2d75fad6ad364f4a8aaaf14", null ],
+    [ "GetPathName", "classMDTREC.html#a336e5ee8048e2fe4f51ee44ac7acad94", null ],
+    [ "operator=", "classMDTREC.html#a5ec0b45828043561399ee72e50eefe88", null ],
+    [ "SetDeleted", "classMDTREC.html#a9b7daf818d355d481b9fc4f831252c93", null ],
+    [ "SetDocumentType", "classMDTREC.html#acb54b0168057fc5f0af8e3e92a5d8016", null ],
+    [ "SetFileName", "classMDTREC.html#a14a44e9fe88511f9f97304e08451a424", null ],
+    [ "SetGlobalFileEnd", "classMDTREC.html#a347363889ed2fc4582f71dbdc2d22fb8", null ],
+    [ "SetGlobalFileStart", "classMDTREC.html#af726baed1e6c660112aea1c8a6362839", null ],
+    [ "SetKey", "classMDTREC.html#af709f84be0302e4a636497e00bf487f5", null ],
+    [ "SetLocalRecordEnd", "classMDTREC.html#ad8a08cf081cf9be2fa4661bd65d5245f", null ],
+    [ "SetLocalRecordStart", "classMDTREC.html#af3efe68b0c9cf263f6f80574373ca8f8", null ],
+    [ "SetPathName", "classMDTREC.html#a4770b39342c038e079880ffe547d000d", null ]
+];

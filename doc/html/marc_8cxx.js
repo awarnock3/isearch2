@@ -1,0 +1,25 @@
+var marc_8cxx =
+[
+    [ "DISP_FORMAT", "structDISP__FORMAT.html", "structDISP__FORMAT" ],
+    [ "BADFILE", "marc_8cxx.html#a8c4ea18db10ab7c90ebbf26a49a27cb5", null ],
+    [ "FALSE", "marc_8cxx.html#aa93f0eb578d23995850d61f7d61c55c1", null ],
+    [ "FIELDBUFSIZE", "marc_8cxx.html#a7c8a96689b7c0c308c44c7c07c914af8", null ],
+    [ "MENUHT", "marc_8cxx.html#a5bedc7f9c2e22f720b4cfd5802fddb26", null ],
+    [ "READONLY", "marc_8cxx.html#a4fe050ad41ce8823deb2010f9c75ae85", null ],
+    [ "RECBUFSIZE", "marc_8cxx.html#a389560d7961f29541d1b14e26a3a3b4e", null ],
+    [ "SEEK_CUR", "marc_8cxx.html#a4c8d0b76b470ba65a43ca46a88320f39", null ],
+    [ "TRUE", "marc_8cxx.html#aa8cecfc5c5c054d2875c03e77b7be15d", null ],
+    [ "format_field", "marc_8cxx.html#aa1e085ea6d9bbcde2c24d426902b8db4", null ],
+    [ "outputline", "marc_8cxx.html#a7b2281dec74cca397e0502754bb6c703", null ],
+    [ "OutputString", "marc_8cxx.html#a7e2094372c8e9a71db2ac28d27a7f41a", null ],
+    [ "defaultformat", "marc_8cxx.html#a8bb48f6a8f957d13300451a27b0d7825", null ],
+    [ "evaluationformat", "marc_8cxx.html#aa944b8914e35305151b93e854bd6c4c9", null ],
+    [ "fieldbuffer", "marc_8cxx.html#a9ed7a0bb7118c840e573563338cfcea8", null ],
+    [ "htmlformat", "marc_8cxx.html#a086f9919fee5d5a15efdb423d0f62d75", null ],
+    [ "linebuffer", "marc_8cxx.html#af9b0286e9e4663f40b3841d177de019f", null ],
+    [ "marcformat", "marc_8cxx.html#a6a23c4e72d9e2f8a51e12050a825dc5e", null ],
+    [ "recbuffer", "marc_8cxx.html#ab4d377946287db1c55a9e71ff9270e59", null ],
+    [ "RememberKey", "marc_8cxx.html#a244ebf9e3927c9609a6d2f9ff1a40af5", null ],
+    [ "shortformat", "marc_8cxx.html#a3cf8320f87ca7dd3b4598391b28c3917", null ],
+    [ "titleformat", "marc_8cxx.html#ab346254be04522b93168cf2e3e04c2ff", null ]
+];

@@ -1,0 +1,28 @@
+var memcntl_8hxx =
+[
+    [ "MemBlock", "structMemBlock.html", "structMemBlock" ],
+    [ "BITMAPMEM", "memcntl_8hxx.html#a19af1b6e773735c2d57a1139191f0a25", null ],
+    [ "BORDERDATMEM", "memcntl_8hxx.html#ae42f501fa0010c34dc706881a7c1dec3", null ],
+    [ "BORDERMEM", "memcntl_8hxx.html#a17eecbf3b7bb0e23d1ec69aa190a8684", null ],
+    [ "FREEOBJMEM", "memcntl_8hxx.html#afd9adff02c58f9be74e3299fab54888b", null ],
+    [ "GADGETMEM", "memcntl_8hxx.html#ad6a67cc109ac95d6aa6fd3cac0a42c89", null ],
+    [ "GADINFOMEM", "memcntl_8hxx.html#ae86ee6d5e41fc2b6cc8d5c20239b25ba", null ],
+    [ "GENERALMEM", "memcntl_8hxx.html#ae9096c4c18077123fbfd0bda43178120", null ],
+    [ "IMAGEDATMEM", "memcntl_8hxx.html#a6f19f0b98439a30b6b8750eaf74b43a6", null ],
+    [ "IMAGEMEM", "memcntl_8hxx.html#a08ac58f964fd3d4864ce9b648735eddd", null ],
+    [ "ITEXTMEM", "memcntl_8hxx.html#a09305a62697b239fcdd68ac2089e8ee3", null ],
+    [ "MEMF_CLEAR", "memcntl_8hxx.html#a28d812cf7d707b89163a431674f2170e", null ],
+    [ "MEMF_PUBLIC", "memcntl_8hxx.html#a417dab4a919c6d008929312d24655ad9", null ],
+    [ "MENUINFOMEM", "memcntl_8hxx.html#a4c165d2344fb7364e90a9b2abeffec95", null ],
+    [ "MENUITEMMEM", "memcntl_8hxx.html#a278f97aa49f29917658e63e4bc3b2f5f", null ],
+    [ "MENUMEM", "memcntl_8hxx.html#ace656fe408c3354338930ff1fed0cbd2", null ],
+    [ "NEWSCREENMEM", "memcntl_8hxx.html#aea9a6860b3c11d60e97ec56f5b25ecf2", null ],
+    [ "NEWWINDOWMEM", "memcntl_8hxx.html#a786b82a26a151a395b2d47245244cb8a", null ],
+    [ "PROPINFOMEM", "memcntl_8hxx.html#aebbd9a3504168be6fca4776270fa902c", null ],
+    [ "SCREENINFOMEM", "memcntl_8hxx.html#afa76a5632b859771919602eb9d6792a6", null ],
+    [ "STRINGINFOMEM", "memcntl_8hxx.html#ad73ac521468f7d171e1c797ba15f560c", null ],
+    [ "TEXTMEM", "memcntl_8hxx.html#a2f4269c8f277f36d7a62f5af438ccf2e", null ],
+    [ "WININFOMEM", "memcntl_8hxx.html#a9d0d2c669d34e401f6362bc414d8477f", null ],
+    [ "AllocSafe", "memcntl_8hxx.html#aedb68ef2280f94875b1a8ec9b68600b8", null ],
+    [ "FreeSafe", "memcntl_8hxx.html#a4233ce7067f68df379c0ac1d03728571", null ]
+];

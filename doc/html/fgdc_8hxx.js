@@ -1,0 +1,27 @@
+var fgdc_8hxx =
+[
+    [ "FGDC", "classFGDC.html", "classFGDC" ],
+    [ "MD_Element", "classMD__Element.html", "classMD__Element" ],
+    [ "BRIEF_MAGIC", "fgdc_8hxx.html#ac7a2e18a5d93ed3c694b052a7e11e283", null ],
+    [ "BSN_EXTENSIONS", "fgdc_8hxx.html#a43c32478ef6881d2d93eaac982cf202f", null ],
+    [ "FGDC_ACCEPT_EMPTY_TAGS", "fgdc_8hxx.html#a12aa160a45b4a754b417586f8ee4ed92", null ],
+    [ "FGDC_HTML_EXTENSION", "fgdc_8hxx.html#a143ee217a1fadf2ef752c43139fd03f4", null ],
+    [ "FGDC_HTML_EXTENSION_UC", "fgdc_8hxx.html#a0da4fdaf4e3cd015f3fec16039070ae7", null ],
+    [ "FGDC_SGML_EXTENSION", "fgdc_8hxx.html#abf0a9024562dd7d39c886270f1af1f44", null ],
+    [ "FGDC_SGML_EXTENSION_UC", "fgdc_8hxx.html#aba25f31c521e20b0a635b523e9df6401", null ],
+    [ "FGDC_TEXT_EXTENSION", "fgdc_8hxx.html#a08cdb2a9c57c83f428ece696a57187ac", null ],
+    [ "FGDC_TEXT_EXTENSION_UC", "fgdc_8hxx.html#a1f4463ab825b739cd75ee60383a4a076", null ],
+    [ "FGDC_XML_EXTENSION", "fgdc_8hxx.html#aa8fc6dc2896201e1ad115c7277ecf952", null ],
+    [ "FGDC_XML_EXTENSION_UC", "fgdc_8hxx.html#ae7619f789af061d3dee8885cb9f07186", null ],
+    [ "MAXNESTINGLEN", "fgdc_8hxx.html#a7eac3858e0cd33c7b5d532c80b0f1299", null ],
+    [ "SHORT_FGDC_HTML_EXTENSION", "fgdc_8hxx.html#a3303b243a31f7517f052555b785fa31b", null ],
+    [ "SHORT_FGDC_HTML_EXTENSION_UC", "fgdc_8hxx.html#ada1cadfa2e5fadc38d46e6b59623e315", null ],
+    [ "SHORT_FGDC_SGML_EXTENSION", "fgdc_8hxx.html#a92775406159891f38677616a391e5680", null ],
+    [ "SHORT_FGDC_SGML_EXTENSION_UC", "fgdc_8hxx.html#ac15f18e9af6905f440822f2f2e0db0d5", null ],
+    [ "SHORT_FGDC_TEXT_EXTENSION", "fgdc_8hxx.html#acdc29852321d6e1256cf29bd9417bf3f", null ],
+    [ "SHORT_FGDC_TEXT_EXTENSION_UC", "fgdc_8hxx.html#a404fc67792dd0017fecf25dd16463b80", null ],
+    [ "SHORT_FGDC_XML_EXTENSION", "fgdc_8hxx.html#ade9cffb22b29debe3d81ed13667698c9", null ],
+    [ "SHORT_FGDC_XML_EXTENSION_UC", "fgdc_8hxx.html#a01c5c11ab6c88607d0744630902cb5e9", null ],
+    [ "PFGDC", "fgdc_8hxx.html#a117cf57b7ff6bda785a28b0402a6af21", null ],
+    [ "PMD_Element", "fgdc_8hxx.html#a8893e457fc20c600df431690076ba4ed", null ]
+];
