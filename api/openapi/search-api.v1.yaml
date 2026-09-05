@@ -180,7 +180,9 @@ paths:
       tags: [databases]
       operationId: listDatabases
       summary: List configured databases
-      description: Returns known database roots available for querying.
+      description: >-
+        Returns known database roots available for querying, each with its
+        configured Isearch document type (doctype) when determinable.
       security: []
       responses:
         '200':
@@ -950,7 +952,22 @@ paths:
         databases:
           type: array
           items:
-            type: string
+            $ref: '#/components/schemas/DatabaseInfo'
+    DatabaseInfo:
+      type: object
+      additionalProperties: false
+      required:
+      - name
+      properties:
+        name:
+          type: string
+          description: Database name, usable as the `{database}` path segment.
+        doctype:
+          type: string
+          description: >-
+            The database's configured global Isearch document type (e.g.
+            `html`, `usmarc`, `mailfolder`). Omitted if the database could
+            not be opened to determine its doctype.
     Problem:
       type: object
       additionalProperties: false

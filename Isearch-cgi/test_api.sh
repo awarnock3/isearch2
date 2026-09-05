@@ -72,6 +72,24 @@ run_get "/v1/api/capabilities" ""
 assert_status "200" "$RESPONSE_STATUS" "capabilities endpoint"
 printf '%s' "$RESPONSE_BODY" | python3 -c 'import json, sys; json.load(sys.stdin)'
 
+# 2b) GET /v1/api/databases -> each entry has "name", XMLtest also has "doctype"
+run_get "/v1/api/databases" ""
+assert_status "200" "$RESPONSE_STATUS" "databases endpoint"
+printf '%s' "$RESPONSE_BODY" | python3 -c '
+import json, sys
+d = json.load(sys.stdin)
+dbs = d["databases"]
+assert isinstance(dbs, list) and len(dbs) > 0, d
+names = []
+for entry in dbs:
+    assert isinstance(entry, dict), entry
+    assert "name" in entry and isinstance(entry["name"], str) and entry["name"], entry
+    names.append(entry["name"])
+    if "doctype" in entry:
+        assert isinstance(entry["doctype"], str) and entry["doctype"], entry
+assert "XMLtest" in names, names
+'
+
 # 3) GET /v1/api/XMLtest/search?q=dust -> matching_record_count > 0
 run_get "/v1/api/XMLtest/search" "q=dust"
 assert_status "200" "$RESPONSE_STATUS" "GET /search dust"

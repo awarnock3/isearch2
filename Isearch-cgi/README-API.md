@@ -10,6 +10,24 @@ The API endpoints are:
 - `/api/v1/databases`
 - `/api/v1/search` (GET and POST JSON)
 
+## Databases response
+
+`/api/v1/databases` returns each configured database as an object, not a
+bare string:
+
+```json
+{
+  "databases": [
+    { "name": "XMLtest", "doctype": "xml" },
+    { "name": "patents", "doctype": "usmarc" }
+  ]
+}
+```
+
+`doctype` reflects the database's configured global Isearch document type
+(`IDB`/`VIDB::GetGlobalDocType`) and is omitted for a database entry that
+could not be opened to determine it; `name` is always present.
+
 ## Search request options
 
 Both GET `/api/v1/search` and POST `/api/v1/search` support path-style

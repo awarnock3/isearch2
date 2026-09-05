@@ -11,6 +11,7 @@
 #include "api_fetch.hxx"
 #include "api_response.hxx"
 #include "cgi-util.hxx"
+#include "vidb.hxx"
 
 static bool HasSuffix(const CHR *value, const CHR *suffix)
 {
@@ -103,7 +104,27 @@ void HandleDatabases(const ApiConfig& cfg)
     if (i > 0) {
       cout << ",";
     }
+    // Best-effort doctype lookup: open each database with VIDB (same
+    // helper ExecuteFetch/ExecuteSearch use) just to read its configured
+    // global doctype. A database that fails to open (corrupt, missing
+    // files, etc.) still gets listed by name -- "doctype" is simply
+    // omitted for that entry rather than aborting the whole listing.
+    STRING doctype;
+    VIDB *pdb = new VIDB(cfg.db_path, names[i]);
+    if (pdb != nullptr) {
+      if (pdb->GetTotalRecords() > 0) {
+        pdb->GetGlobalDocType(&doctype);
+      }
+      delete pdb;
+    }
+
+    cout << "{\"name\":";
     WriteJsonEscaped(names[i]);
+    if (doctype.GetLength() > 0) {
+      cout << ",\"doctype\":";
+      WriteJsonEscaped(doctype);
+    }
+    cout << "}";
   }
   cout << "]";
   cout << "}" << endl;
