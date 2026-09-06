@@ -90,7 +90,7 @@ for entry in dbs:
         if entry["name"] == "XMLtest":
             # Regression check for VIDB::GetGlobalDocType() (BUGFIX #4,
             # docs/BUG_CATALOG.md#srcvidbhxx): it used to unconditionally
-            # return the literal "VIRTUAL" no matter what the database's
+            # return the literal "VIRTUAL" no matter what the databases
             # real configured doctype was.
             assert entry["doctype"] != "VIRTUAL", entry
 assert "XMLtest" in names, names
