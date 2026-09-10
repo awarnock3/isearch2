@@ -23,7 +23,7 @@
 | 19 | src/marclib.hxx | done | 2026-08-07 | [src/marclib.hxx](BUG_CATALOG.md#srcmarclibhxx) |
 | 20 | src/md5.hxx | done | 2026-08-07 | [src/md5.hxx](BUG_CATALOG.md#srcmd5hxx) |
 | 21 | src/reclist.hxx | done | 2026-08-07 | [src/reclist.hxx](BUG_CATALOG.md#srcreclisthxx) |
-| 22 | src/conf.h | done | 2026-08-07 | [src/conf.h](BUG_CATALOG.md#srcconfh) |
+| 22 | src/conf.h | generated | | Removed from git upstream 2026-09-05 (autoconf-generated from conf.h.in via ./configure, no longer checked in) — see [src/conf.h](BUG_CATALOG.md#srcconfh) for prior findings; do not hand-edit |
 | 23 | src/confwin.h | done | 2026-08-07 | [src/confwin.h](BUG_CATALOG.md#srcconfwinh) |
 | 24 | src/gdt.h | done | 2026-08-07 | [src/gdt.h](BUG_CATALOG.md#srcgdth) |
 | 25 | src/defs.hxx | done | 2026-08-07 | [src/defs.hxx](BUG_CATALOG.md#srcdefshxx) |
@@ -180,7 +180,7 @@
 | 176 | src/termobj.cxx | done | 2026-08-09 | [src/termobj.cxx](BUG_CATALOG.md#srctermobjcxx) |
 | 177 | src/thesaurus.cxx | done | 2026-08-09 | [src/thesaurus.cxx](BUG_CATALOG.md#srcthesauruscxx) |
 | 178 | src/tokengen.cxx | done | 2026-08-09 | [src/tokengen.cxx](BUG_CATALOG.md#srctokengencxx) |
-| 179 | src/vidb.cxx | done | 2026-08-09 | [src/vidb.hxx](BUG_CATALOG.md#srcvidbhxx) |
+| 179 | src/vidb.cxx | done | 2026-09-10 | [src/vidb.hxx](BUG_CATALOG.md#srcvidbhxx) |
 | 180 | src/vlist.cxx | done | 2026-08-09 | [src/vlist.cxx](BUG_CATALOG.md#srcvlistcxx) |
 | 181 | src/zpresent.cxx | done | 2026-08-09 | [src/zpresent.cxx](BUG_CATALOG.md#srczpresentcxx) |
 | 182 | src/zsearch.cxx | done | 2026-08-09 | [src/zsearch.cxx](BUG_CATALOG.md#srczsearchcxx) |
@@ -247,7 +247,7 @@
 | 243 | Isearch-cgi/api_endpoints.hxx | done | 2026-08-16 | [Isearch-cgi/api_endpoints.hxx](BUG_CATALOG.md#isearch-cgiapi_endpointshxx-isearch-cgiapi_endpointscxx) |
 | 244 | Isearch-cgi/api_search.hxx | done | 2026-08-10 | [Isearch-cgi/api_search.hxx](BUG_CATALOG.md#isearch-cgiapi_searchhxx-isearch-cgiapi_searchcxx) |
 | 245 | Isearch-cgi/api_config.cxx | done | 2026-08-10 | [Isearch-cgi/api_config.cxx](BUG_CATALOG.md#isearch-cgiapi_confighxx-isearch-cgiapi_configcxx) |
-| 246 | Isearch-cgi/api_endpoints.cxx | done | 2026-08-16 | [Isearch-cgi/api_endpoints.hxx](BUG_CATALOG.md#isearch-cgiapi_endpointshxx-isearch-cgiapi_endpointscxx) |
+| 246 | Isearch-cgi/api_endpoints.cxx | done | 2026-09-10 | [Isearch-cgi/api_endpoints.hxx](BUG_CATALOG.md#isearch-cgiapi_endpointshxx-isearch-cgiapi_endpointscxx) |
 | 247 | Isearch-cgi/api_request.cxx | done | 2026-08-16 | [Isearch-cgi/api_request.hxx](BUG_CATALOG.md#isearch-cgiapi_requesthxx-isearch-cgiapi_requestcxx) |
 | 248 | Isearch-cgi/api_response.cxx | done | 2026-08-16 | [Isearch-cgi/api_response.hxx](BUG_CATALOG.md#isearch-cgiapi_responsehxx-isearch-cgiapi_responsecxx) |
 | 249 | Isearch-cgi/api_search.cxx | done | 2026-08-16 | [Isearch-cgi/api_search.hxx](BUG_CATALOG.md#isearch-cgiapi_searchhxx-isearch-cgiapi_searchcxx) |

@@ -114,3 +114,16 @@ doctype/dtconf
 __pycache__/
 *.pyc
 
+# Isearch2 cleanup: upstream removed these from git tracking 2026-09-05
+# ("Remove generated files from repo") -- they're ./configure/build
+# output (conf.h from conf.h.in, Makefile.000/config.status from the
+# configure run itself, dtreg.cxx/.hxx from doctype/dtconf.cxx), all
+# regenerated automatically the next time `make` runs. Untracked but not
+# yet gitignored upstream, so added here to match; see
+# docs/PROCESSING_STATUS.md's src/conf.h row for the reasoning.
+config.status
+src/Makefile.000
+src/conf.h
+src/dtreg.cxx
+src/dtreg.hxx
+

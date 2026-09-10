@@ -43,7 +43,7 @@ Author:         Kevin Gamiel, kgamiel@cnidr.org
                 Archie Warnock, warnock@awcubed.com
 @@@*/
 
-// ISEARCH2-CLEANUP: processed 2026-08-09
+// ISEARCH2-CLEANUP: processed 2026-09-10
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include <sys/stat.h>
