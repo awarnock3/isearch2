@@ -10083,6 +10083,31 @@ end-to-end against the real `isrch_api` binary and a real
 fetch` request for a real record key returned `200` with the correct
 filename/content, and a bogus record key correctly returned `404`.
 
+**Reopened 2026-09-10 by `/sync-upstream`**: upstream added a `doctype`
+field to `HandleDatabases()`'s `/v1/api/databases` listing, opening each
+listed database through [`VIDB`](#srcvidbhxx) (same helper
+`ExecuteFetch()`/`ExecuteSearch()` already use) and calling its
+`GetGlobalDocType()` — best-effort, gated on `GetTotalRecords() > 0` so
+a database that fails to open just gets its `doctype` field omitted
+rather than aborting the listing. This is the same change that exposed
+`src/vidb.cxx`'s dormant `BUGFIX #4` (`GetGlobalDocType()` hardcoded to
+`"VIRTUAL"`) — see [`src/vidb.hxx`](#srcvidbhxx) for that fix itself.
+**Zero bugs found** in this file's own code: `pdb` is deleted on every
+path out of the `if` block, `doctype` is freshly re-declared each loop
+iteration (no stale value bleeding into a later entry), and the JSON is
+well-formed whether or not `doctype` is present. Confirmed live against
+the real `isrch_api` binary and a real `Iindex -t html`-built scratch
+database: `/v1/api/databases` returned
+`{"name":"testdb","doctype":"HTML"}`, matching `src/vidb.hxx`'s own fix
+verification. Added a new `tests/Isearch-cgi/test_api_endpoints.cxx`
+case confirming the best-effort omission path itself (a `.mdt` file
+with no real database behind it lists its name with no `doctype` field,
+and doesn't crash); the real-database happy path is covered by the live
+confirmation above rather than a permanent fixture, same scope note as
+this file's own `HandleFetch()` entry just above. `make tests`/`make
+tests-asan` pass clean (838 test cases, 3085 assertions — up from
+837/3080, this new case's own coverage).
+
 Modernized the 4 new code-level `NULL` uses in `HandleFetch()` to
 `nullptr`. Added a `HandleCapabilities()` test for the new `"S"`/
 `record_syntaxes`/`record_syntax` fields, plus 4 new `HandleFetch()`

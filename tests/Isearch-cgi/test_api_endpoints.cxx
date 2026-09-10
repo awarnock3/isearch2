@@ -140,6 +140,22 @@ TEST_CASE("HandleDatabases lists only .mdt-suffixed stems, excluding a bare '.md
 	ClearApiEnv();
 }
 
+TEST_CASE("HandleDatabases omits doctype for a database that can't really be opened", "[api_endpoints]") {
+	TempDbDir dir;
+	dir.TouchFile("mydb.mdt");
+
+	ClearApiEnv();
+	setenv("ISEARCH_DB_PATH", dir.path.c_str(), 1);
+	ApiConfig cfg = LoadApiConfig();
+	CoutCapture cap;
+	HandleDatabases(cfg);
+	std::string out = cap.str();
+	REQUIRE(out.find("Status: 200") != std::string::npos);
+	REQUIRE(out.find("\"mydb\"") != std::string::npos);
+	REQUIRE(out.find("\"doctype\"") == std::string::npos);
+	ClearApiEnv();
+}
+
 TEST_CASE("HandleDatabases reports an empty list for a database-free directory", "[api_endpoints]") {
 	TempDbDir dir;
 	ClearApiEnv();

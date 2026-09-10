@@ -1,4 +1,4 @@
-// ISEARCH2-CLEANUP: processed 2026-08-16
+// ISEARCH2-CLEANUP: processed 2026-09-10
 // See docs/PROCESSING_STATUS.md and docs/BUG_CATALOG.md.
 
 #include "api_endpoints.hxx"
